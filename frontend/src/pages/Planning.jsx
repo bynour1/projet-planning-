@@ -1,0 +1,701 @@
+import { useEffect, useState, useCallback } from 'react';
+import axios from 'axios';
+import {
+  format, startOfWeek, addDays, addWeeks, subWeeks,
+  startOfMonth, endOfMonth, eachDayOfInterval, endOfWeek,
+  isSameMonth, isToday as isTodayFn, addMonths, subMonths, parseISO,
+} from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { useAuth }   from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
+import ConfirmDialog from '../components/ConfirmDialog';
+import AddressAutocomplete from '../components/AddressAutocomplete';
+
+const DAYS_FR = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+
+// ── Helper : lien Google Maps ──────────────────────────────────
+function googleMapsUrl(addr) {
+  if (!addr) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
+}
+function MapLink({ addr, style = {} }) {
+  if (!addr) return null;
+  return (
+    <a
+      href={googleMapsUrl(addr)}
+      target="_blank"
+      rel="noreferrer"
+      title={`Voir "${addr}" sur Google Maps`}
+      onClick={e => e.stopPropagation()}
+      style={{
+        fontSize: 10, color: '#0284c7', textDecoration: 'none',
+        display: 'inline-flex', alignItems: 'center', gap: 2,
+        ...style,
+      }}
+      onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+      onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+    >
+      📍 {addr} <span style={{ opacity: 0.5 }}>↗</span>
+    </a>
+  );
+}
+const TYPE_COLORS = {
+  ponctuel:  { bg:'#dbeafe', border:'#3b82f6', text:'#1d4ed8' },
+  reunion:   { bg:'#dcfce7', border:'#22c55e', text:'#15803d' },
+  formation: { bg:'#fef9c3', border:'#eab308', text:'#854d0e' },
+  conges:    { bg:'#fee2e2', border:'#ef4444', text:'#b91c1c' },
+  autre:     { bg:'#f3e8ff', border:'#a855f7', text:'#7e22ce' },
+};
+
+// Clino Mobile event color (distinct from planning/calendar)
+const CLINO_COLOR = { bg:'#d1fae5', border:'#059669', text:'#065f46' };
+
+/* ── helpers ──────────────────────────────────────────────── */
+function toRaw(d) {
+  if (!d) return '';
+  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  if (typeof d === 'string' && d.includes('/')) {
+    const [dd,mm,yyyy] = d.split('/'); return `${yyyy}-${mm}-${dd}`;
+  }
+  try { return format(new Date(d),'yyyy-MM-dd'); } catch { return ''; }
+}
+function fmtDisplay(d) {
+  if (!d) return '—';
+  try {
+    const raw = toRaw(d);
+    if (!raw) return d;
+    return format(parseISO(raw),'dd/MM/yyyy');
+  } catch { return d; }
+}
+
+/* ── Planning modal ─────────────────────────────────────────── */
+function PlanningModal({ event, medecins, techniciens, onSave, onClose }) {
+  const init = event || {};
+  const [f, setF] = useState({
+    titre: init.titre||'', date: toRaw(init.date)||'',
+    heure_debut: init.heure_debut||'', heure_fin: init.heure_fin||'',
+    adresse: init.adresse||'', medecin_id: init.medecin_id||'', technicien_id: init.technicien_id||'',
+  });
+  const [saving, setSaving] = useState(false);
+  const s = (k,v) => setF(p=>({...p,[k]:v}));
+  async function save() {
+    if (!f.date) return;
+    setSaving(true);
+    try {
+      if (init.id) await axios.put(`/api/planning/${init.id}`, f);
+      else         await axios.post('/api/planning', f);
+      onSave();
+    } catch(e){ alert(e.response?.data?.message||'Erreur'); }
+    finally { setSaving(false); }
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{init.id?'✏️ Modifier':'➕ Nouvelle intervention'}</h3>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="form-group"><label>Titre</label>
+            <input className="input" placeholder="Titre de l'intervention" value={f.titre} onChange={e=>s('titre',e.target.value)}/></div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+            <div className="form-group"><label>Date *</label>
+              <input className="input" type="date" value={f.date} onChange={e=>s('date',e.target.value)} required/></div>
+            <div className="form-group"><label>Adresse</label>
+              <AddressAutocomplete value={f.adresse} onChange={v=>s('adresse',v)} placeholder="Adresse de l'intervention" /></div>
+            <div className="form-group"><label>Heure début</label>
+              <input className="input" type="time" value={f.heure_debut} onChange={e=>s('heure_debut',e.target.value)}/></div>
+            <div className="form-group"><label>Heure fin</label>
+              <input className="input" type="time" value={f.heure_fin} onChange={e=>s('heure_fin',e.target.value)}/></div>
+          </div>
+          <div className="form-group"><label>Médecin</label>
+            <select className="input" value={f.medecin_id} onChange={e=>s('medecin_id',e.target.value)}>
+              <option value="">— Sélectionner —</option>
+              {medecins.map(m=><option key={m.id} value={m.id}>{m.prenom} {m.nom}</option>)}
+            </select></div>
+          <div className="form-group"><label>Technicien</label>
+            <select className="input" value={f.technicien_id} onChange={e=>s('technicien_id',e.target.value)}>
+              <option value="">— Sélectionner —</option>
+              {techniciens.map(t=><option key={t.id} value={t.id}>{t.prenom} {t.nom}</option>)}
+            </select></div>
+          {!init.id && <div style={{padding:'8px 12px',background:'#e0f2fe',borderRadius:8,fontSize:12,color:'#0284c7'}}>
+            📧 Notification email envoyée à tous les utilisateurs.</div>}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-outline" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving||!f.date}>
+            {saving?<span className="spinner" style={{width:16,height:16}}/>:'💾 Enregistrer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Event (calendar) modal ─────────────────────────────────── */
+function EventModal({ event, onSave, onClose }) {
+  const init = event || {};
+  const [f, setF] = useState({
+    titre: init.titre||'', type: init.type||'ponctuel',
+    date_debut: init.date_debut?.slice(0,16)||'', date_fin: init.date_fin?.slice(0,16)||'',
+    lieu: init.lieu||'', recurrence: init.recurrence||'none',
+  });
+  const [saving, setSaving] = useState(false);
+  const s = (k,v) => setF(p=>({...p,[k]:v}));
+  async function save() {
+    if (!f.titre||!f.date_debut) return;
+    setSaving(true);
+    try {
+      if (init.id) await axios.put(`/api/events/${init.id}`, f);
+      else         await axios.post('/api/events', f);
+      onSave();
+    } catch(e){ alert(e.response?.data?.message||'Erreur'); }
+    finally { setSaving(false); }
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{init.id?'✏️ Modifier':'➕ Nouvel événement'}</h3>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="form-group"><label>Titre *</label>
+            <input className="input" placeholder="Titre" value={f.titre} onChange={e=>s('titre',e.target.value)}/></div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+            <div className="form-group"><label>Type</label>
+              <select className="input" value={f.type} onChange={e=>s('type',e.target.value)}>
+                {[['ponctuel','Ponctuel'],['reunion','Réunion'],['formation','Formation'],['conges','Congés'],['autre','Autre']].map(([v,l])=>
+                  <option key={v} value={v}>{l}</option>)}
+              </select></div>
+            <div className="form-group"><label>Récurrence</label>
+              <select className="input" value={f.recurrence} onChange={e=>s('recurrence',e.target.value)}>
+                <option value="none">Aucune</option>
+                <option value="weekly">Hebdomadaire</option>
+                <option value="monthly">Mensuelle</option>
+              </select></div>
+            <div className="form-group"><label>Début *</label>
+              <input className="input" type="datetime-local" value={f.date_debut} onChange={e=>s('date_debut',e.target.value)}/></div>
+            <div className="form-group"><label>Fin</label>
+              <input className="input" type="datetime-local" value={f.date_fin} onChange={e=>s('date_fin',e.target.value)}/></div>
+          </div>
+          <div className="form-group"><label>Lieu</label>
+            <AddressAutocomplete value={f.lieu} onChange={v=>s('lieu',v)} placeholder="Lieu de l'événement (ex: iset rades...)" searchLocation /></div>
+          {!init.id && <div style={{padding:'8px 12px',background:'#fef9c3',borderRadius:8,fontSize:12,color:'#92400e'}}>
+            📧 Notification email envoyée à tous les utilisateurs.</div>}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-outline" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving||!f.titre||!f.date_debut}>
+            {saving?<span className="spinner" style={{width:16,height:16}}/>:'💾 Enregistrer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Today banner ────────────────────────────────────────────── */
+function TodayBanner({ pe, ce }) {
+  const today = format(new Date(),'yyyy-MM-dd');
+  const tp = pe.filter(e=>e.date===today).sort((a,b)=>(a.heure_debut||'').localeCompare(b.heure_debut||''));
+  const tc = ce.filter(e=>e.date_debut?.slice(0,10)===today);
+  if (!tp.length && !tc.length) return null;
+  return (
+    <div style={{padding:'9px 20px',background:'linear-gradient(90deg,#0ea5e9,#10b981)',color:'#fff',display:'flex',alignItems:'center',gap:10,flexShrink:0,flexWrap:'wrap'}}>
+      <span style={{fontWeight:700,fontSize:13}}>📅 Aujourd'hui</span>
+      {tp.map(e=>(
+        <span key={'tp'+e.id} style={{background:'rgba(255,255,255,.2)',padding:'2px 10px',borderRadius:20,fontSize:12}}>
+          📋 {e.heure_debut?e.heure_debut+' ':''}{e.titre||'Intervention'}{e.medecin_nom?' · '+e.medecin_nom:''}
+        </span>
+      ))}
+      {tc.map(e=>(
+        <span key={'tc'+e.id} style={{background:'rgba(255,255,255,.2)',padding:'2px 10px',borderRadius:20,fontSize:12}}>
+          📅 {e.titre}{e.lieu?' · '+e.lieu:''}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/* ── WEEK view ───────────────────────────────────────────────── */
+function WeekView({weekStart,pe,ce,isAdmin,medecins,techniciens,onRefresh,toast}){
+  const weekEnd=addDays(weekStart,6);
+  const [modal,setModal]=useState(null);
+  const [confirm,setConfirm]=useState(null);
+  const days=Array.from({length:7},(_,i)=>{
+    const d=addDays(weekStart,i); const key=format(d,'yyyy-MM-dd');
+    return {d,label:DAYS_FR[i],key,pEvts:pe.filter(e=>e.date===key),cEvts:ce.filter(e=>e.date_debut?.slice(0,10)===key)};
+  });
+  async function del(item){
+    try{
+      if(item._t==='p') await axios.delete(`/api/planning/${item.id}`);
+      else               await axios.delete(`/api/events/${item.id}`);
+      setConfirm(null); onRefresh(); toast('Supprimé','success');
+    }catch{ toast('Erreur','error'); }
+  }
+  return (<>
+    <div style={{flex:1,overflowX:'auto',overflowY:'auto'}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(150px,1fr))',minWidth:1050,height:'100%'}}>
+        {days.map(({d,label,key,pEvts,cEvts})=>(
+          <div key={key} style={{borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column'}}>
+            <div style={{padding:'10px 12px',borderBottom:'1px solid var(--border)',background:isTodayFn(d)?'#fff7ed':'var(--surface)',position:'sticky',top:0,zIndex:1}}>
+              <div style={{fontSize:11,fontWeight:700,color:'var(--text-3)',textTransform:'uppercase'}}>{label}</div>
+              <div style={{fontSize:20,fontWeight:800,color:isTodayFn(d)?'var(--warn)':'var(--text)'}}>{format(d,'d')}</div>
+              {(pEvts.length+cEvts.length)>0&&<div style={{fontSize:10,color:'var(--text-3)'}}>{pEvts.length+cEvts.length} item(s)</div>}
+            </div>
+            <div style={{flex:1,padding:6,display:'flex',flexDirection:'column',gap:4,overflowY:'auto'}}>
+              {pEvts.map(ev=>(
+                <div key={'p'+ev.id} onClick={()=>isAdmin&&setModal({t:'p',data:ev})}
+                  style={{background:'#e0f2fe',borderRadius:8,padding:'7px 9px',borderLeft:'3px solid #0ea5e9',cursor:isAdmin?'pointer':'default'}}>
+                  <div style={{fontSize:11,fontWeight:700,color:'#0284c7'}}>📋 {ev.heure_debut?ev.heure_debut+' ':''}{ev.titre||'Intervention'}</div>
+                  {ev.medecin_nom&&<div style={{fontSize:10,color:'var(--text-2)'}}>👨‍⚕️ {ev.medecin_nom}</div>}
+                  {ev.technicien_nom&&<div style={{fontSize:10,color:'var(--text-2)'}}>🔧 {ev.technicien_nom}</div>}
+                  {ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:10}}/>}
+                  {isAdmin&&<button className="btn btn-ghost" style={{padding:'1px 4px',fontSize:10,color:'var(--danger)',marginTop:2}}
+                    onClick={e=>{e.stopPropagation();setConfirm({t:'p',id:ev.id});}}>✕</button>}
+                </div>
+              ))}
+              {cEvts.map(ev=>{const c=TYPE_COLORS[ev.type]||TYPE_COLORS.autre; return(
+                <div key={'c'+ev.id} onClick={()=>isAdmin&&setModal({t:'e',data:ev})}
+                  style={{background:c.bg,borderRadius:8,padding:'7px 9px',borderLeft:`3px solid ${c.border}`,cursor:isAdmin?'pointer':'default'}}>
+                  <div style={{fontSize:11,fontWeight:700,color:c.text}}>📅 {ev.titre}</div>
+                  {ev.lieu&&<MapLink addr={ev.lieu} style={{fontSize:10}}/>}
+                  {isAdmin&&<button className="btn btn-ghost" style={{padding:'1px 4px',fontSize:10,color:'var(--danger)',marginTop:2}}
+                    onClick={e=>{e.stopPropagation();setConfirm({t:'e',id:ev.id});}}>✕</button>}
+                </div>
+              );})}
+              {isAdmin&&(
+                <div style={{display:'flex',gap:3}}>
+                  <button className="btn btn-ghost" style={{fontSize:10,opacity:.5,padding:'2px 5px'}}
+                    onClick={()=>setModal({t:'p',data:{date:key}})}>+ Interv.</button>
+                  <button className="btn btn-ghost" style={{fontSize:10,opacity:.5,padding:'2px 5px'}}
+                    onClick={()=>setModal({t:'e',data:{date_debut:key+'T08:00'}})}>+ Évén.</button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+    {modal?.t==='p'&&<PlanningModal event={modal.data} medecins={medecins} techniciens={techniciens}
+      onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
+    {modal?.t==='e'&&<EventModal event={modal.data}
+      onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
+    {confirm&&<ConfirmDialog title="Supprimer?" message="Action irréversible." danger
+      onConfirm={()=>del(confirm)} onCancel={()=>setConfirm(null)}/>}
+  </>);
+}
+
+/* ── MONTH view ─────────────────────────────────────────────── */
+function MonthView({current,pe,ce,isAdmin,medecins,techniciens,onRefresh,toast}){
+  const [selected,setSelected]=useState(null);
+  const [modal,setModal]=useState(null);
+  const days=eachDayOfInterval({
+    start:startOfWeek(startOfMonth(current),{weekStartsOn:1}),
+    end:  endOfWeek(endOfMonth(current),{weekStartsOn:1}),
+  });
+  const gp=d=>pe.filter(e=>e.date===format(d,'yyyy-MM-dd'));
+  const gc=d=>ce.filter(e=>e.date_debut?.slice(0,10)===format(d,'yyyy-MM-dd'));
+  const sp=selected?pe.filter(e=>e.date===selected):[];
+  const sc=selected?ce.filter(e=>e.date_debut?.slice(0,10)===selected):[];
+  async function del(item){
+    try{
+      if(item._t==='p') await axios.delete(`/api/planning/${item.id}`);
+      else               await axios.delete(`/api/events/${item.id}`);
+      onRefresh(); toast('Supprimé','success');
+    }catch{ toast('Erreur','error'); }
+  }
+  return(
+    <div style={{flex:1,display:'flex',overflow:'hidden'}}>
+      <div style={{flex:1,overflowY:'auto',padding:12}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',marginBottom:4}}>
+          {DAYS_FR.map(d=><div key={d} style={{textAlign:'center',fontSize:11,fontWeight:700,color:'var(--text-3)',padding:'4px 0',textTransform:'uppercase'}}>{d}</div>)}
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>
+          {days.map(day=>{
+            const key=format(day,'yyyy-MM-dd');
+            const pEvts=gp(day); const cEvts=gc(day); const total=pEvts.length+cEvts.length;
+            const today=isTodayFn(day); const sel=selected===key; const inMon=isSameMonth(day,current);
+            return(
+              <div key={key} onClick={()=>setSelected(sel?null:key)} style={{
+                minHeight:72,padding:5,borderRadius:8,cursor:'pointer',
+                background:sel?'var(--primary-lt)':today?'#fff7ed':'var(--surface)',
+                border:`1px solid ${sel?'var(--primary)':today?'var(--warn)':'var(--border)'}`,
+                opacity:inMon?1:.4,transition:'all .1s',
+              }}>
+                <div style={{fontSize:12,fontWeight:today?800:500,color:today?'var(--warn)':'var(--text)',marginBottom:2}}>{format(day,'d')}</div>
+                {pEvts.slice(0,1).map(ev=>(
+                  <div key={'p'+ev.id} style={{fontSize:10,padding:'1px 4px',borderRadius:3,mb:1,background:'#e0f2fe',color:'#0284c7',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',borderLeft:'2px solid #0ea5e9',marginBottom:2}}>
+                    📋 {ev.titre||'Intervention'}
+                  </div>
+                ))}
+                {cEvts.slice(0,1).map(ev=>{const c=TYPE_COLORS[ev.type]||TYPE_COLORS.autre;return(
+                  <div key={'c'+ev.id} style={{fontSize:10,padding:'1px 4px',borderRadius:3,background:c.bg,color:c.text,fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',borderLeft:`2px solid ${c.border}`,marginBottom:2}}>
+                    {ev.titre}
+                  </div>
+                );})}
+                {total>2&&<div style={{fontSize:9,color:'var(--text-3)'}}>+{total-2}</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {selected&&(
+        <div style={{width:290,borderLeft:'1px solid var(--border)',padding:14,overflowY:'auto',background:'var(--surface)',flexShrink:0}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+            <span style={{fontWeight:700,fontSize:14}}>{format(parseISO(selected),'d MMMM yyyy',{locale:fr})}</span>
+            <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>setSelected(null)}>✕</button>
+          </div>
+          {sp.length===0&&sc.length===0&&<p style={{fontSize:13,color:'var(--text-3)',textAlign:'center',marginTop:20}}>Aucun événement</p>}
+          {sp.map(ev=>(
+            <div key={'sp'+ev.id} style={{background:'#e0f2fe',borderRadius:8,padding:'10px 12px',borderLeft:'3px solid #0ea5e9',marginBottom:8}}>
+              <div style={{fontWeight:600,fontSize:13,color:'#0284c7'}}>📋 {ev.titre||'Intervention'}</div>
+              {ev.heure_debut&&<div style={{fontSize:11,color:'var(--text-2)'}}>⏰ {ev.heure_debut}{ev.heure_fin?' → '+ev.heure_fin:''}</div>}
+              {ev.medecin_nom&&<div style={{fontSize:11,color:'var(--text-2)'}}>👨‍⚕️ {ev.medecin_nom}</div>}
+              {ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:11}}/>}
+              {isAdmin&&<div style={{display:'flex',gap:4,marginTop:6}}>
+                <button className="btn btn-outline btn-sm" style={{fontSize:11}} onClick={()=>setModal({t:'p',data:ev})}>✏️</button>
+                <button className="btn btn-danger btn-sm" style={{fontSize:11}} onClick={()=>del({...ev,_t:'p'})}>🗑</button>
+              </div>}
+            </div>
+          ))}
+          {sc.map(ev=>{const c=TYPE_COLORS[ev.type]||TYPE_COLORS.autre;return(
+            <div key={'sc'+ev.id} style={{background:c.bg,borderRadius:8,padding:'10px 12px',borderLeft:`3px solid ${c.border}`,marginBottom:8}}>
+              <div style={{fontWeight:600,fontSize:13,color:c.text}}>📅 {ev.titre}</div>
+              <div style={{fontSize:11,color:'var(--text-2)',display:'flex',flexWrap:'wrap',gap:6,alignItems:'center'}}>
+                🕐 {format(parseISO(ev.date_debut),'HH:mm',{locale:fr})}
+                {ev.lieu&&<MapLink addr={ev.lieu} style={{fontSize:11}}/>}
+              </div>
+              {isAdmin&&<div style={{display:'flex',gap:4,marginTop:6}}>
+                <button className="btn btn-outline btn-sm" style={{fontSize:11}} onClick={()=>setModal({t:'e',data:ev})}>✏️</button>
+                <button className="btn btn-danger btn-sm" style={{fontSize:11}} onClick={()=>del({...ev,_t:'e'})}>🗑</button>
+              </div>}
+            </div>
+          );})}
+          {isAdmin&&<div style={{display:'flex',gap:6,marginTop:8}}>
+            <button className="btn btn-primary btn-sm" style={{flex:1,fontSize:12}} onClick={()=>setModal({t:'p',data:{date:selected}})}>+ Interv.</button>
+            <button className="btn btn-outline btn-sm" style={{flex:1,fontSize:12}} onClick={()=>setModal({t:'e',data:{date_debut:selected+'T08:00'}})}>+ Évén.</button>
+          </div>}
+        </div>
+      )}
+      {modal?.t==='p'&&<PlanningModal event={modal.data} medecins={medecins} techniciens={[]}
+        onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
+      {modal?.t==='e'&&<EventModal event={modal.data}
+        onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
+    </div>
+  );
+}
+
+/* ── LIST view ───────────────────────────────────────────────── */
+function ListView({pe,ce,isAdmin,medecins,techniciens,onRefresh,toast}){
+  const [modal,setModal]=useState(null);
+  const [confirm,setConfirm]=useState(null);
+  const all=[
+    ...pe.map(e=>({...e,_t:'p'})),
+    ...ce.map(e=>({...e,_t:'e',date:e.date_debut?.slice(0,10)})),
+  ].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  async function del(item){
+    try{
+      if(item._t==='p') await axios.delete(`/api/planning/${item.id}`);
+      else               await axios.delete(`/api/events/${item.id}`);
+      setConfirm(null); onRefresh(); toast('Supprimé','success');
+    }catch{ toast('Erreur','error'); }
+  }
+  return(
+    <div style={{flex:1,overflowY:'auto',padding:20}}>
+      {all.length===0
+        ?<div className="empty-state"><div className="empty-icon">📋</div><p>Aucun événement</p></div>
+        :<div className="table-wrap"><table>
+          <thead><tr>
+            <th>Type</th><th>Titre</th><th>Date</th><th>Horaire</th>
+            <th>Médecin / Lieu</th><th>Technicien / Adresse</th>
+            {isAdmin&&<th>Actions</th>}
+          </tr></thead>
+          <tbody>
+            {all.map(ev=>{
+              if(ev._t==='p') return(
+                <tr key={'p'+ev.id}>
+                  <td><span className="badge badge-blue">📋 Intervention</span></td>
+                  <td style={{fontWeight:600}}>{ev.titre||'—'}</td>
+                  <td>{fmtDisplay(ev.date)}</td>
+                  <td>{ev.heure_debut?`${ev.heure_debut}${ev.heure_fin?' → '+ev.heure_fin:''}`:'—'}</td>
+                  <td>{ev.medecin_nom||'—'}</td>
+                  <td>{ev.technicien_nom||'—'}{ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:11,display:'block',marginTop:2}}/>}</td>
+                  {isAdmin&&<td><div style={{display:'flex',gap:4}}>
+                    <button className="btn btn-outline btn-sm" onClick={()=>setModal({t:'p',data:ev})}>✏️</button>
+                    <button className="btn btn-danger btn-sm" onClick={()=>setConfirm(ev)}>🗑</button>
+                  </div></td>}
+                </tr>
+              );
+              const c=TYPE_COLORS[ev.type]||TYPE_COLORS.autre;
+              return(
+                <tr key={'e'+ev.id}>
+                  <td><span className="badge" style={{background:c.bg,color:c.text}}>📅 {ev.type}</span></td>
+                  <td style={{fontWeight:600}}>{ev.titre}</td>
+                  <td>{fmtDisplay(ev.date_debut?.slice(0,10))}</td>
+                  <td>{ev.date_debut?format(parseISO(ev.date_debut),'HH:mm',{locale:fr}):'—'}</td>
+                  <td>{ev.lieu?<MapLink addr={ev.lieu} style={{fontSize:12}}/>:'—'}</td><td>—</td>
+                  {isAdmin&&<td><div style={{display:'flex',gap:4}}>
+                    <button className="btn btn-outline btn-sm" onClick={()=>setModal({t:'e',data:ev})}>✏️</button>
+                    <button className="btn btn-danger btn-sm" onClick={()=>setConfirm(ev)}>🗑</button>
+                  </div></td>}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table></div>
+      }
+      {modal?.t==='p'&&<PlanningModal event={modal.data} medecins={medecins} techniciens={[]}
+        onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
+      {modal?.t==='e'&&<EventModal event={modal.data}
+        onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
+      {confirm&&<ConfirmDialog title="Supprimer?" message="Action irréversible." danger
+        onConfirm={()=>del(confirm)} onCancel={()=>setConfirm(null)}/>}
+    </div>
+  );
+}
+
+/* ── MAIN ────────────────────────────────────────────────────── */
+export default function Planning({ toast }) {
+  const { user } = useAuth();
+  const { on }   = useSocket();
+  const isAdmin  = user?.role==='administrateur';
+
+  const [view,      setView]     = useState('week');
+  const [weekStart, setWeekStart]= useState(startOfWeek(new Date(),{weekStartsOn:1}));
+  const [monthDate, setMonthDate]= useState(new Date());
+  const [pe,  setPe]  = useState([]);
+  const [ce,  setCe]  = useState([]);
+  const [cl,  setCl]  = useState([]); // clino mobile events
+  const [med, setMed] = useState([]);
+  const [tec, setTec] = useState([]);
+  const [ents, setEnts] = useState([]);
+  const [modal, setModal] = useState(null);
+  const [filters, setFilters] = useState({ medecin_id: '', technicien_id: '', entreprise: '', search: '' });
+  const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+
+  const loadAll = useCallback(async()=>{
+    try{
+      const [pr,cr,clr]=await Promise.all([
+        axios.get('/api/planning'),
+        axios.get('/api/events'),
+        axios.get('/api/clino'),
+      ]);
+      setPe(pr.data); setCe(cr.data);
+      // Normalize clino: map date field and normalize heure
+      setCl(clr.data.map(c=>({
+        ...c,
+        _t: 'clino',
+        date: c.date ? String(c.date).slice(0,10) : '',
+      })));
+    }catch{ toast?.('Erreur chargement','error'); }
+    finally{ setLoading(false); }
+  },[]);
+
+  useEffect(()=>{loadAll();},[loadAll,tick]);
+
+  useEffect(()=>{
+    const op=on('planning_refresh',()=>setTick(t=>t+1));
+    const oc=on('calendar_refresh',()=>setTick(t=>t+1));
+    return ()=>{op?.();oc?.();};
+  },[on]);
+
+  useEffect(()=>{
+    Promise.all([
+      axios.get('/api/users/by-role/medecin'),
+      axios.get('/api/users/by-role/technicien'),
+      axios.get('/api/entreprises').catch(() => ({ data: [] })),
+    ]).then(([m,t,e])=>{
+      setMed(m.data || []);
+      setTec(t.data || []);
+      setEnts(e.data || []);
+    });
+  },[]);
+
+  const weekEnd=addDays(weekStart,6);
+  const filterWeek=arr=>arr.filter(e=>{const d=toRaw(e.date||e.date_debut?.slice(0,10)||'');return d>=format(weekStart,'yyyy-MM-dd')&&d<=format(weekEnd,'yyyy-MM-dd');});
+
+  const filteredPe = pe.filter(e => {
+    if (filters.medecin_id && String(e.medecin_id) !== filters.medecin_id) return false;
+    if (filters.technicien_id && String(e.technicien_id) !== filters.technicien_id) return false;
+    if (filters.entreprise) {
+      const q = filters.entreprise.toLowerCase();
+      const match = (e.titre || '').toLowerCase().includes(q) || (e.adresse || '').toLowerCase().includes(q);
+      if (!match) return false;
+    }
+    if (filters.search) {
+      const s = filters.search.toLowerCase();
+      const match = (e.titre || '').toLowerCase().includes(s) ||
+                    (e.adresse || '').toLowerCase().includes(s) ||
+                    (e.medecin_nom || '').toLowerCase().includes(s) ||
+                    (e.technicien_nom || '').toLowerCase().includes(s);
+      if (!match) return false;
+    }
+    return true;
+  });
+
+  const hasActiveFilters = Boolean(filters.medecin_id || filters.technicien_id || filters.entreprise || filters.search);
+
+  if(loading) return <div className="loading-center"><div className="spinner"/></div>;
+
+  return(
+    <div style={{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}}>
+      <TodayBanner pe={pe} ce={ce}/>
+
+      {/* Toolbar */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 20px',borderBottom:'1px solid var(--border)',background:'var(--surface)',flexShrink:0,flexWrap:'wrap',gap:10}}>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          {view==='week'&&<>
+            <button className="btn btn-outline btn-sm" onClick={()=>setWeekStart(w=>subWeeks(w,1))}>Prev</button>
+            <button className="btn btn-outline btn-sm" onClick={()=>setWeekStart(w=>addWeeks(w,1))}>Next</button>
+          </>}
+          {view==='month'&&<>
+            <button className="btn btn-outline btn-sm" onClick={()=>setMonthDate(d=>subMonths(d,1))}>Prev</button>
+            <button className="btn btn-outline btn-sm" onClick={()=>setMonthDate(d=>addMonths(d,1))}>Next</button>
+          </>}
+          <div style={{display:'flex',gap:6,alignItems:'center',marginLeft:8}}>
+            <span style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#0284c7'}}>
+              <span style={{width:10,height:10,background:'#e0f2fe',border:'2px solid #0ea5e9',borderRadius:2,display:'inline-block'}}/> Intervention
+            </span>
+            <span style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#854d0e'}}>
+              <span style={{width:10,height:10,background:'#fef9c3',border:'2px solid #eab308',borderRadius:2,display:'inline-block'}}/> Calendrier
+            </span>
+            <span style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#065f46'}}>
+              <span style={{width:10,height:10,background:'#d1fae5',border:'2px solid #059669',borderRadius:2,display:'inline-block'}}/> Clino Mobile
+            </span>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:6}}>
+          {/* Export buttons */}
+          <div style={{display:'flex',gap:4}}>
+            <button className="btn btn-outline btn-sm" onClick={() => {
+              import('../utils/exportUtils').then(({exportToPDF}) => {
+                exportToPDF(filteredPe, [
+                  {header:'Date',key:'date'},
+                  {header:'Titre',key:'titre'},
+                  {header:'Médecin',key:'medecin_nom'},
+                  {header:'Heure',key:'heure_debut'},
+                  {header:'Adresse',key:'adresse'},
+                ], 'Planning GMT Ariana');
+              });
+            }} title="Exporter PDF">📄 PDF</button>
+            <button className="btn btn-outline btn-sm" onClick={() => {
+              import('../utils/exportUtils').then(({exportToExcel}) => {
+                exportToExcel(filteredPe, [
+                  {header:'Date',key:'date'},
+                  {header:'Titre',key:'titre'},
+                  {header:'Médecin',key:'medecin_nom'},
+                  {header:'Heure début',key:'heure_debut'},
+                  {header:'Heure fin',key:'heure_fin'},
+                  {header:'Adresse',key:'adresse'},
+                ], 'Planning_GMT_Ariana');
+              });
+            }} title="Exporter Excel">📊 Excel</button>
+            <button className="btn btn-outline btn-sm" onClick={() => {
+              import('../utils/exportUtils').then(({exportToICS}) => exportToICS(filteredPe));
+            }} title="Exporter Calendar">📅 .ics</button>
+          </div>
+          <div style={{display:'flex',gap:2,background:'var(--bg)',borderRadius:8,padding:3}}>
+            {[['week','📅 Semaine'],['month','📆 Mois'],['list','📋 Liste']].map(([v,l])=>(
+              <button key={v} className={`btn btn-sm ${view===v?'btn-primary':'btn-ghost'}`}
+                onClick={()=>setView(v)} style={{padding:'4px 10px',fontSize:12}}>{l}</button>
+            ))}
+          </div>
+          {isAdmin&&<>
+            <button className="btn btn-primary btn-sm" onClick={()=>setModal({t:'p'})}>+ Intervention</button>
+            <button className="btn btn-outline btn-sm" onClick={()=>setModal({t:'e'})}>+ Événement</button>
+          </>}
+        </div>
+      </div>
+
+      {/* Advanced Filter Bar (Médecin, Technicien, Entreprise, Recherche) */}
+      <div style={{display:'flex',gap:10,padding:'10px 20px',background:'var(--surface2)',borderBottom:'1px solid var(--border)',flexShrink:0,flexWrap:'wrap',alignItems:'center'}}>
+        <span style={{fontSize:13,fontWeight:700,color:'var(--text)',display:'flex',alignItems:'center',gap:4}}>
+          🏷️ Filtres :
+        </span>
+
+        {/* Filter by Doctor */}
+        <select
+          className="input"
+          style={{width:'auto',fontSize:12,padding:'5px 10px',height:32,borderRadius:8}}
+          value={filters.medecin_id}
+          onChange={e=>setFilters(f=>({...f,medecin_id:e.target.value}))}
+        >
+          <option value="">👨‍⚕️ Tous les médecins</option>
+          {med.map(m=><option key={m.id} value={m.id}>{m.prenom} {m.nom}</option>)}
+        </select>
+
+        {/* Filter by Technician */}
+        <select
+          className="input"
+          style={{width:'auto',fontSize:12,padding:'5px 10px',height:32,borderRadius:8}}
+          value={filters.technicien_id}
+          onChange={e=>setFilters(f=>({...f,technicien_id:e.target.value}))}
+        >
+          <option value="">🔧 Tous les techniciens</option>
+          {tec.map(t=><option key={t.id} value={t.id}>{t.prenom} {t.nom}</option>)}
+        </select>
+
+        {/* Filter by Company */}
+        {ents.length > 0 ? (
+          <select
+            className="input"
+            style={{width:'auto',fontSize:12,padding:'5px 10px',height:32,borderRadius:8}}
+            value={filters.entreprise}
+            onChange={e=>setFilters(f=>({...f,entreprise:e.target.value}))}
+          >
+            <option value="">🏢 Toutes les entreprises</option>
+            {ents.map(ent=><option key={ent.id} value={ent.nom}>{ent.nom}</option>)}
+          </select>
+        ) : (
+          <input
+            className="input"
+            type="text"
+            placeholder="🏢 Entreprise..."
+            style={{width:160,fontSize:12,padding:'5px 10px',height:32,borderRadius:8}}
+            value={filters.entreprise}
+            onChange={e=>setFilters(f=>({...f,entreprise:e.target.value}))}
+          />
+        )}
+
+        {/* Search input */}
+        <input
+          className="input"
+          type="text"
+          placeholder="🔍 Recherche mot-clé..."
+          style={{width:180,fontSize:12,padding:'5px 10px',height:32,borderRadius:8}}
+          value={filters.search}
+          onChange={e=>setFilters(f=>({...f,search:e.target.value}))}
+        />
+
+        {hasActiveFilters && (
+          <>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={()=>setFilters({medecin_id:'',technicien_id:'',entreprise:'',search:''})}
+              style={{fontSize:12,padding:'4px 8px',color:'var(--danger)'}}
+              title="Réinitialiser tous les filtres"
+            >
+              ✕ Réinitialiser
+            </button>
+            <span className="badge badge-blue" style={{fontSize:11}}>
+              {filteredPe.length} intervention{filteredPe.length > 1 ? 's' : ''} trouvée{filteredPe.length > 1 ? 's' : ''}
+            </span>
+          </>
+        )}
+      </div>
+
+      {view==='week'&&<WeekView weekStart={weekStart} pe={filterWeek(filteredPe)} ce={filterWeek(ce.map(e=>({...e,date:e.date_debut?.slice(0,10)})))} cl={filterWeek(cl)} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast}/>}
+      {view==='month'&&<MonthView current={monthDate} pe={filteredPe} ce={ce} cl={cl} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast}/>}
+      {view==='list'&&<ListView pe={filteredPe} ce={ce} cl={cl} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast}/>}
+
+      {modal?.t==='p'&&<PlanningModal event={null} medecins={med} techniciens={tec}
+        onSave={()=>{setModal(null);setTick(t=>t+1);toast('Intervention créée ✓ — Email envoyé 📧','success');}} onClose={()=>setModal(null)}/>}
+      {modal?.t==='e'&&<EventModal event={null}
+        onSave={()=>{setModal(null);setTick(t=>t+1);toast('Événement créé ✓ — Email envoyé 📧','success');}} onClose={()=>setModal(null)}/>}
+    </div>
+  );
+}
+

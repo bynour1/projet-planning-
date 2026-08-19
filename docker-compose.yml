@@ -1,0 +1,93 @@
+version: '3.9'
+
+services:
+  # ─── MySQL ─────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: planning-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASS:-rootpass}
+      MYSQL_DATABASE:      ${DB_NAME:-planning}
+      MYSQL_USER:          ${DB_USER:-planninguser}
+      MYSQL_PASSWORD:      ${DB_PASS:-rootpass}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/planning.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./migration.sql:/docker-entrypoint-initdb.d/02-migration.sql:ro
+    healthcheck:
+      test: ["CMD","mysqladmin","ping","-h","localhost","-u","root","-p${DB_PASS:-rootpass}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - planning-net
+
+  # ─── Backend ───────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: planning-backend
+    restart: unless-stopped
+    environment:
+      PORT:          8083
+      JWT_SECRET:    ${JWT_SECRET:-secret_planning_2024}
+      DB_HOST:       mysql
+      DB_PORT:       3306
+      DB_NAME:       ${DB_NAME:-planning}
+      DB_USER:       ${DB_USER:-planninguser}
+      DB_PASS:       ${DB_PASS:-rootpass}
+      EMAIL_SERVICE: ${EMAIL_SERVICE:-gmail}
+      EMAIL_USER:    ${EMAIL_USER:-}
+      EMAIL_PASS:    ${EMAIL_PASS:-}
+      FRONTEND_URL:  http://localhost:5173
+      NODE_ENV:      production
+    ports:
+      - "8083:8083"
+    volumes:
+      - uploads_data:/app/uploads   # ← persist uploaded files
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:8083/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - planning-net
+
+  # ─── Frontend ──────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: planning-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - planning-net
+
+volumes:
+  mysql_data:
+    driver: local
+  uploads_data:
+    driver: local
+
+networks:
+  planning-net:
+    driver: bridge

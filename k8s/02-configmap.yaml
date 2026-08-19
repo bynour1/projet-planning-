@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: planning-config
+  namespace: planning-medical
+data:
+  PORT:          "8083"
+  DB_HOST:       "mysql-service"
+  DB_PORT:       "3306"
+  DB_NAME:       "planning"
+  DB_USER:       "planninguser"
+  EMAIL_SERVICE: "gmail"
+  FRONTEND_URL:  "http://frontend-service"
+  NODE_ENV:      "production"
