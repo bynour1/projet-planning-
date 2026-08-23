@@ -1,8 +1,17 @@
 {
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "https://projet-planning.onrender.com/api/$1"
+    },
+    {
+      "source": "/socket.io/(.*)",
+      "destination": "https://projet-planning.onrender.com/socket.io/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
 }
+

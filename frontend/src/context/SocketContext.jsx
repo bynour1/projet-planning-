@@ -18,7 +18,8 @@ export function SocketProvider({ children }) {
       return;
     }
 
-    const socket = io('/', {
+    const socketUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://projet-planning.onrender.com' : '/');
+    const socket = io(socketUrl, {
       auth: { token },
       transports: ['websocket', 'polling'],
     });
