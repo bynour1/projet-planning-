@@ -32,6 +32,9 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     const { data } = await axios.post('/api/auth/login', { email, password });
+    if (data.requires2FA) {
+      return data;
+    }
     localStorage.setItem('pm_token', data.token);
     axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
     setToken(data.token);

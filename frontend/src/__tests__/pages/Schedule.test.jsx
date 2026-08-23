@@ -8,7 +8,9 @@ import Schedule from '../../pages/Schedule';
 
 beforeEach(() => { vi.clearAllMocks(); });
 
-const TODAY = new Date().toISOString().slice(0,10);
+import { format } from 'date-fns';
+
+const TODAY = format(new Date(), 'yyyy-MM-dd');
 
 const PLANNING_DATA = [
   { id:1, titre:'ECG Patient', date: TODAY, heure_debut:'08:00', heure_fin:'10:00', adresse:'Rue de la Paix, Tunis', medecin_nom:'Dr Benali', technicien_nom:'Y. Hamdi', commentaire:'Apporter matériel' },

@@ -13,13 +13,16 @@ const PLANNING_RES = { data: [{ id:1, titre:'ECG', date:'2026-05-20', heure_debu
 const USERS_RES  = { data: [MOCK_ADMIN, MOCK_MEDECIN] };
 
 function setupMocks(user = MOCK_ADMIN) {
-  if (user.role === 'administrateur') {
-    axios.get.mockResolvedValueOnce(USERS_RES);    // /api/users
-  }
-  axios.get.mockResolvedValueOnce(EVENTS_RES);     // /api/events
-  axios.get.mockResolvedValueOnce(PLANNING_RES);   // /api/planning
-  axios.get.mockResolvedValueOnce(EMPTY_RES);      // /api/clino
-  axios.get.mockResolvedValueOnce(PLANNING_RES);   // /api/planning/mine
+  axios.get.mockImplementation(url => {
+    if (url === '/api/users') return Promise.resolve(USERS_RES);
+    if (url === '/api/events') return Promise.resolve(EVENTS_RES);
+    if (url === '/api/planning') return Promise.resolve(PLANNING_RES);
+    if (url === '/api/clino') return Promise.resolve(EMPTY_RES);
+    if (url === '/api/planning/mine') return Promise.resolve(PLANNING_RES);
+    if (url === '/api/stats/monthly') return Promise.resolve({ data: [] });
+    if (url === '/api/stats/by-medecin') return Promise.resolve({ data: [] });
+    return Promise.resolve({ data: [] });
+  });
 }
 
 describe('Dashboard — Admin', () => {
@@ -50,12 +53,9 @@ describe('Dashboard — Admin', () => {
 
 describe('Dashboard — Medecin', () => {
   it('does not show Users stat for medecin', async () => {
-    axios.get.mockResolvedValueOnce(EVENTS_RES);
-    axios.get.mockResolvedValueOnce(PLANNING_RES);
-    axios.get.mockResolvedValueOnce(EMPTY_RES);
-    axios.get.mockResolvedValueOnce(PLANNING_RES);
+    setupMocks(MOCK_MEDECIN);
     renderWithProviders(<Dashboard toast={mockToast} />, { user: MOCK_MEDECIN });
-    await waitFor(() => expect(screen.getByText(/Interventions/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/Interventions/).length).toBeGreaterThanOrEqual(1));
     expect(screen.queryByText('Utilisateurs')).not.toBeInTheDocument();
   });
 });

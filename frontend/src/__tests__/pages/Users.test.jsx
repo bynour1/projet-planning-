@@ -27,7 +27,7 @@ describe('Users page', () => {
     renderWithProviders(<Users toast={mockToast} />);
     await waitFor(() => {
       expect(screen.getByText('Total')).toBeInTheDocument();
-      expect(screen.getByText('Médecins')).toBeInTheDocument();
+      expect(screen.getAllByText('Médecins').length).toBeGreaterThanOrEqual(1);
     });
   });
 

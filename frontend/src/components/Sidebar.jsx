@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useTheme } from '../hooks/useTheme';
+import PWAInstallBanner from './PWAInstallBanner';
 
 const ICONS = {
   dashboard:   '⊞',
@@ -24,7 +26,7 @@ function getInitials(nom, prenom) {
   return `${(prenom?.[0]||'').toUpperCase()}${(nom?.[0]||'').toUpperCase()}`;
 }
 
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen, onCloseMobile }) {
   const { user, logout }  = useAuth();
   const { onlineUsers }   = useSocket();
   const navigate          = useNavigate();
@@ -34,46 +36,57 @@ export default function Sidebar() {
   const isChauffeur = user?.role === 'chauffeur';
   const navClass = ({ isActive }) => `nav-item${isActive ? ' active' : ''}`;
 
-  return (
-    <aside className="sidebar">
-      {/* Logo GMT Ariana */}
-      <div className="sidebar-logo">
-        <img
-          src="/logo-gmt.png"
-          alt="GMT Ariana"
-          style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '2px solid var(--border)' }}
-          onError={e => { e.currentTarget.style.display='none'; }}
-        />
-        <span>GMT Ariana</span>
-      </div>
+  function handleLinkClick() {
+    if (onCloseMobile) onCloseMobile();
+  }
 
-      <nav className="sidebar-nav">
-        <button onClick={() => window.dispatchEvent(new CustomEvent('open-global-search'))}
-          style={{margin:'8px 8px 4px',width:'calc(100% - 16px)',display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background:'var(--bg)',border:'1.5px solid var(--border)',borderRadius:10,cursor:'pointer',color:'var(--text-2)',fontSize:13}}>
-          🔍 Rechercher... <span style={{marginLeft:'auto',fontSize:11,opacity:.6}}>Ctrl+K</span>
-        </button>
-        <span className="nav-section-label">Navigation</span>
+  return (
+    <>
+      {mobileOpen && (
+        <div className="sidebar-backdrop" onClick={onCloseMobile} />
+      )}
+      <aside className={`sidebar${mobileOpen ? ' mobile-open' : ''}`}>
+        {/* Logo GMT Ariana */}
+        <div className="sidebar-logo">
+          <img
+            src="/logo-gmt.png"
+            alt="GMT Ariana"
+            style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '2px solid var(--border)' }}
+            onError={e => { e.currentTarget.style.display='none'; }}
+          />
+          <span>GMT Ariana</span>
+          <button className="sidebar-mobile-close" onClick={onCloseMobile} aria-label="Fermer">✕</button>
+        </div>
+
+        <nav className="sidebar-nav">
+          <button onClick={() => { window.dispatchEvent(new CustomEvent('open-global-search')); handleLinkClick(); }}
+            style={{margin:'8px 8px 4px',width:'calc(100% - 16px)',display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background:'var(--bg)',border:'1.5px solid var(--border)',borderRadius:10,cursor:'pointer',color:'var(--text-2)',fontSize:13}}>
+            🔍 Rechercher... <span style={{marginLeft:'auto',fontSize:11,opacity:.6}}>Ctrl+K</span>
+          </button>
+          <PWAInstallBanner />
+          <span className="nav-section-label">Navigation</span>
 
         {/* Dashboard — masqué pour chauffeur */}
         {!isChauffeur && (
-          <NavLink to="/dashboard" className={navClass}>
+          <NavLink to="/dashboard" className={navClass} onClick={handleLinkClick}>
             <span className="icon">{ICONS.dashboard}</span> Tableau de bord
           </NavLink>
         )}
 
         {/* Planning — visible par TOUS */}
-        <NavLink to="/planning" className={navClass}>
+        <NavLink to="/planning" className={navClass} onClick={handleLinkClick}>
           <span className="icon">{ICONS.planning}</span> Planning
+        </NavLink>
+
+        {/* Clino Mobile — visible par Chauffeur, Médecin, Tech, Admin */}
+        <NavLink to="/clino" className={navClass} onClick={handleLinkClick}>
+          <span className="icon">{ICONS.clino}</span> Clino Mobile
         </NavLink>
 
         {/* Pages masquées pour chauffeur */}
         {!isChauffeur && (
           <>
-            <NavLink to="/clino" className={navClass}>
-              <span className="icon">{ICONS.clino}</span> Clino Mobile
-            </NavLink>
-
-            <NavLink to="/chat" className={navClass}>
+            <NavLink to="/chat" className={navClass} onClick={handleLinkClick}>
               <span className="icon">{ICONS.chat}</span>
               Chat
               {onlineUsers.length > 0 && (
@@ -83,11 +96,11 @@ export default function Sidebar() {
               )}
             </NavLink>
 
-            <NavLink to="/routines" className={navClass}>
+            <NavLink to="/routines" className={navClass} onClick={handleLinkClick}>
               <span className="icon">{ICONS.routines}</span> Mes Routines
             </NavLink>
 
-            <NavLink to="/entreprises" className={navClass}>
+            <NavLink to="/entreprises" className={navClass} onClick={handleLinkClick}>
               <span className="icon">{ICONS.entreprises}</span> Entreprises
             </NavLink>
           </>
@@ -97,21 +110,17 @@ export default function Sidebar() {
         {isAdmin && (
           <>
             <span className="nav-section-label">Administration</span>
-            <NavLink to="/users" className={navClass}>
+            <NavLink to="/users" className={navClass} onClick={handleLinkClick}>
               <span className="icon">{ICONS.users}</span> Utilisateurs
             </NavLink>
           </>
         )}
 
-        {/* Settings — masqué pour chauffeur */}
-        {!isChauffeur && (
-          <>
-            <span className="nav-section-label">Compte</span>
-            <NavLink to="/settings" className={navClass}>
-              <span className="icon">{ICONS.settings}</span> Paramètres
-            </NavLink>
-          </>
-        )}
+        {/* Settings — visible par TOUS pour configurer Face ID / Empreinte */}
+        <span className="nav-section-label">Compte</span>
+        <NavLink to="/settings" className={navClass} onClick={handleLinkClick}>
+          <span className="icon">{ICONS.settings}</span> Paramètres
+        </NavLink>
       </nav>
 
       <div className="sidebar-footer">
@@ -147,5 +156,6 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

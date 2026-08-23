@@ -9,13 +9,26 @@ const db        = require('./config/db');
 const app    = express();
 const server = http.createServer(app);
 
+// ─── CORS configuration ─────────────────────────────────────────
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
+  .split(',')
+  .map(s => s.trim());
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, server-to-server) or in whitelist
+    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+};
+
 // ─── Socket.IO ────────────────────────────────────────────────
 const io = new Server(server, {
-  cors: {
-    origin:      process.env.FRONTEND_URL || 'http://localhost:5173',
-    methods:     ['GET', 'POST'],
-    credentials: true,
-  },
+  cors: corsOptions,
 });
 
 // Socket auth middleware
@@ -47,12 +60,13 @@ io.on('connection', (socket) => {
 
   // ── send_message ───────────────────────────────────────────
   socket.on('send_message', async (data) => {
-    const content = data?.content?.trim();
+    const content = typeof data === 'string' ? data.trim() : data?.content?.trim();
     if (!content) return;
+    const type = data?.type || 'text';
     try {
       const [result] = await db.query(
-        'INSERT INTO messages (user_id, nom, role, content) VALUES (?,?,?,?)',
-        [user.id, `${user.prenom} ${user.nom}`, user.role, content]
+        'INSERT INTO messages (user_id, nom, role, content, type) VALUES (?,?,?,?,?)',
+        [user.id, `${user.prenom} ${user.nom}`, user.role, content, type]
       );
       const [rows] = await db.query('SELECT * FROM messages WHERE id = ?', [result.insertId]);
       io.emit('new_message', rows[0]);
@@ -104,10 +118,7 @@ io.on('connection', (socket) => {
 app.set('io', io);
 
 // ─── Express Middleware ───────────────────────────────────────
-app.use(cors({
-  origin:      process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true,
-}));
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

@@ -28,20 +28,17 @@ export const mockSocketContext = (overrides = {}) => ({
 import * as AuthModule   from '../context/AuthContext';
 import * as SocketModule from '../context/SocketContext';
 
-export function mockContexts(user = MOCK_ADMIN, socketOverrides = {}) {
-  if (!vi.isMockFunction(AuthModule.useAuth) || AuthModule.useAuth.__pmAutoMock) {
-    vi.spyOn(AuthModule, 'useAuth').mockReturnValue(mockAuthContext(user));
-    AuthModule.useAuth.__pmAutoMock = true;
-  }
-  if (!vi.isMockFunction(SocketModule.useSocket) || SocketModule.useSocket.__pmAutoMock) {
-    vi.spyOn(SocketModule, 'useSocket').mockReturnValue(mockSocketContext(socketOverrides));
-    SocketModule.useSocket.__pmAutoMock = true;
-  }
+export function mockContexts(user = MOCK_ADMIN, socketOverrides = {}, authOverrides = {}) {
+  vi.spyOn(AuthModule, 'useAuth').mockReturnValue({ ...mockAuthContext(user), ...authOverrides });
+  AuthModule.useAuth.__pmAutoMock = true;
+
+  vi.spyOn(SocketModule, 'useSocket').mockReturnValue(mockSocketContext(socketOverrides));
+  SocketModule.useSocket.__pmAutoMock = true;
 }
 
 // ── Custom render that injects providers ───────────────────────
-export function renderWithProviders(ui, { user = MOCK_ADMIN, socketOverrides = {} } = {}) {
-  mockContexts(user, socketOverrides);
+export function renderWithProviders(ui, { user = MOCK_ADMIN, socketOverrides = {}, authOverrides = {} } = {}) {
+  mockContexts(user, socketOverrides, authOverrides);
   return render(ui);
 }
 

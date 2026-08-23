@@ -19,8 +19,10 @@ const PLANNING_DATA = [
 function setup(user = MOCK_ADMIN) {
   axios.get.mockResolvedValueOnce({ data: CLINO_DATA });   // /api/clino
   axios.get.mockResolvedValueOnce({ data: PLANNING_DATA }); // /api/planning
-  if (user.role === 'administrateur')
+  if (user.role === 'administrateur') {
     axios.get.mockResolvedValueOnce({ data: [MOCK_MEDECIN] }); // by-role/medecin
+    axios.get.mockResolvedValueOnce({ data: [] }); // by-role/technicien
+  }
   return renderWithProviders(<Clino toast={mockToast} />, { user });
 }
 
@@ -30,7 +32,7 @@ describe('Clino Mobile page', () => {
     await waitFor(() => expect(screen.getByText(/Clino Mobile/)).toBeInTheDocument());
   });
 
-  it('lists clino interventions', async () => {
+  it('lists clino programmes', async () => {
     setup();
     await waitFor(() => expect(screen.getByText('Rue de la Liberté, Tunis')).toBeInTheDocument());
     expect(screen.getByText('Avenue Bourguiba')).toBeInTheDocument();
@@ -43,12 +45,12 @@ describe('Clino Mobile page', () => {
 
   it('shows add button for admin', async () => {
     setup(MOCK_ADMIN);
-    await waitFor(() => expect(screen.getByText('+ Intervention')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('+ Programme')).toBeInTheDocument());
   });
 
   it('hides add button for medecin', async () => {
     setup(MOCK_MEDECIN);
-    await waitFor(() => expect(screen.queryByText('+ Intervention')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('+ Programme')).not.toBeInTheDocument());
   });
 
   it('shows programme tab', async () => {
@@ -71,11 +73,11 @@ describe('Clino Mobile page', () => {
     expect(screen.queryByText('Rue de la Liberté, Tunis')).not.toBeInTheDocument();
   });
 
-  it('opens modal on + Intervention click', async () => {
+  it('opens modal on + Programme click', async () => {
     setup(MOCK_ADMIN);
-    await waitFor(() => screen.getByText('+ Intervention'));
-    await userEvent.click(screen.getByText('+ Intervention'));
-    expect(screen.getByText(/Nouvelle intervention Clino/i)).toBeInTheDocument();
+    await waitFor(() => screen.getByText('+ Programme'));
+    await userEvent.click(screen.getByText('+ Programme'));
+    expect(screen.getByText(/Nouveau programme Clino/i)).toBeInTheDocument();
   });
 
   it('shows delete confirmation dialog', async () => {

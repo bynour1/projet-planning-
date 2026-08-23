@@ -10,34 +10,16 @@ import { useAuth }   from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AddressAutocomplete from '../components/AddressAutocomplete';
+import NavigationSelector from '../components/NavigationSelector';
+import SignaturePadModal from '../components/SignaturePadModal';
+import CalendarSyncModal from '../components/CalendarSyncModal';
 
 const DAYS_FR = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
 
-// ── Helper : lien Google Maps ──────────────────────────────────
-function googleMapsUrl(addr) {
-  if (!addr) return null;
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
-}
+// ── Helper : Sélecteur Navigation GPS ───────────────────────────
 function MapLink({ addr, style = {} }) {
   if (!addr) return null;
-  return (
-    <a
-      href={googleMapsUrl(addr)}
-      target="_blank"
-      rel="noreferrer"
-      title={`Voir "${addr}" sur Google Maps`}
-      onClick={e => e.stopPropagation()}
-      style={{
-        fontSize: 10, color: '#0284c7', textDecoration: 'none',
-        display: 'inline-flex', alignItems: 'center', gap: 2,
-        ...style,
-      }}
-      onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
-      onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
-    >
-      📍 {addr} <span style={{ opacity: 0.5 }}>↗</span>
-    </a>
-  );
+  return <NavigationSelector addr={addr} style={style} />;
 }
 const TYPE_COLORS = {
   ponctuel:  { bg:'#dbeafe', border:'#3b82f6', text:'#1d4ed8' },
@@ -59,13 +41,16 @@ function toRaw(d) {
   }
   try { return format(new Date(d),'yyyy-MM-dd'); } catch { return ''; }
 }
-function fmtDisplay(d) {
-  if (!d) return '—';
+
+function fmtDisplay(dateStr) {
+  if (!dateStr) return '—';
   try {
-    const raw = toRaw(d);
-    if (!raw) return d;
-    return format(parseISO(raw),'dd/MM/yyyy');
-  } catch { return d; }
+    const raw = toRaw(dateStr);
+    if (!raw) return dateStr;
+    return format(parseISO(raw), 'dd/MM/yyyy');
+  } catch {
+    return dateStr;
+  }
 }
 
 /* ── Planning modal ─────────────────────────────────────────── */
@@ -92,31 +77,31 @@ function PlanningModal({ event, medecins, techniciens, onSave, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e=>e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{init.id?'✏️ Modifier':'➕ Nouvelle intervention'}</h3>
+          <h3>{init.id ? '✏️ Modifier le programme' : '➕ Nouveau programme'}</h3>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
-          <div className="form-group"><label>Titre</label>
-            <input className="input" placeholder="Titre de l'intervention" value={f.titre} onChange={e=>s('titre',e.target.value)}/></div>
+          <div className="form-group"><label>Titre du programme</label>
+            <input className="input" placeholder="Titre (ex: Visite médicale, Consultation...)" value={f.titre} onChange={e=>s('titre',e.target.value)}/></div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
             <div className="form-group"><label>Date *</label>
               <input className="input" type="date" value={f.date} onChange={e=>s('date',e.target.value)} required/></div>
-            <div className="form-group"><label>Adresse</label>
-              <AddressAutocomplete value={f.adresse} onChange={v=>s('adresse',v)} placeholder="Adresse de l'intervention" /></div>
+            <div className="form-group"><label>Adresse / Lieu</label>
+              <AddressAutocomplete value={f.adresse} onChange={v=>s('adresse',v)} placeholder="Adresse du programme" /></div>
             <div className="form-group"><label>Heure début</label>
               <input className="input" type="time" value={f.heure_debut} onChange={e=>s('heure_debut',e.target.value)}/></div>
             <div className="form-group"><label>Heure fin</label>
               <input className="input" type="time" value={f.heure_fin} onChange={e=>s('heure_fin',e.target.value)}/></div>
           </div>
-          <div className="form-group"><label>Médecin</label>
+          <div className="form-group"><label>Médecin (optionnel)</label>
             <select className="input" value={f.medecin_id} onChange={e=>s('medecin_id',e.target.value)}>
-              <option value="">— Sélectionner —</option>
-              {medecins.map(m=><option key={m.id} value={m.id}>{m.prenom} {m.nom}</option>)}
+              <option value="">— Aucun médecin (Optionnel) —</option>
+              {medecins?.map(m=><option key={m.id} value={m.id}>👨‍⚕️ Dr. {m.prenom} {m.nom}</option>)}
             </select></div>
-          <div className="form-group"><label>Technicien</label>
+          <div className="form-group"><label>Technicien (optionnel)</label>
             <select className="input" value={f.technicien_id} onChange={e=>s('technicien_id',e.target.value)}>
-              <option value="">— Sélectionner —</option>
-              {techniciens.map(t=><option key={t.id} value={t.id}>{t.prenom} {t.nom}</option>)}
+              <option value="">— Aucun technicien (Optionnel) —</option>
+              {techniciens?.map(t=><option key={t.id} value={t.id}>🔧 {t.prenom} {t.nom}</option>)}
             </select></div>
           {!init.id && <div style={{padding:'8px 12px',background:'#e0f2fe',borderRadius:8,fontSize:12,color:'#0284c7'}}>
             📧 Notification email envoyée à tous les utilisateurs.</div>}
@@ -156,33 +141,35 @@ function EventModal({ event, onSave, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e=>e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{init.id?'✏️ Modifier':'➕ Nouvel événement'}</h3>
+          <h3>{init.id?'✏️ Modifier l\'événement':'➕ Nouvel événement'}</h3>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
           <div className="form-group"><label>Titre *</label>
-            <input className="input" placeholder="Titre" value={f.titre} onChange={e=>s('titre',e.target.value)}/></div>
+            <input className="input" placeholder="Titre de l'événement" value={f.titre} onChange={e=>s('titre',e.target.value)} required/></div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
             <div className="form-group"><label>Type</label>
               <select className="input" value={f.type} onChange={e=>s('type',e.target.value)}>
-                {[['ponctuel','Ponctuel'],['reunion','Réunion'],['formation','Formation'],['conges','Congés'],['autre','Autre']].map(([v,l])=>
-                  <option key={v} value={v}>{l}</option>)}
+                <option value="ponctuel">Ponctuel</option>
+                <option value="reunion">Réunion</option>
+                <option value="formation">Formation</option>
+                <option value="conges">Congés</option>
+                <option value="autre">Autre</option>
               </select></div>
             <div className="form-group"><label>Récurrence</label>
               <select className="input" value={f.recurrence} onChange={e=>s('recurrence',e.target.value)}>
                 <option value="none">Aucune</option>
+                <option value="daily">Quotidienne</option>
                 <option value="weekly">Hebdomadaire</option>
                 <option value="monthly">Mensuelle</option>
               </select></div>
-            <div className="form-group"><label>Début *</label>
-              <input className="input" type="datetime-local" value={f.date_debut} onChange={e=>s('date_debut',e.target.value)}/></div>
-            <div className="form-group"><label>Fin</label>
+            <div className="form-group"><label>Date début *</label>
+              <input className="input" type="datetime-local" value={f.date_debut} onChange={e=>s('date_debut',e.target.value)} required/></div>
+            <div className="form-group"><label>Date fin</label>
               <input className="input" type="datetime-local" value={f.date_fin} onChange={e=>s('date_fin',e.target.value)}/></div>
           </div>
-          <div className="form-group"><label>Lieu</label>
-            <AddressAutocomplete value={f.lieu} onChange={v=>s('lieu',v)} placeholder="Lieu de l'événement (ex: iset rades...)" searchLocation /></div>
-          {!init.id && <div style={{padding:'8px 12px',background:'#fef9c3',borderRadius:8,fontSize:12,color:'#92400e'}}>
-            📧 Notification email envoyée à tous les utilisateurs.</div>}
+          <div className="form-group"><label>Lieu / Adresse</label>
+            <AddressAutocomplete value={f.lieu} onChange={v=>s('lieu',v)} placeholder="Lieu de l'événement" /></div>
         </div>
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onClose}>Annuler</button>
@@ -196,17 +183,18 @@ function EventModal({ event, onSave, onClose }) {
 }
 
 /* ── Today banner ────────────────────────────────────────────── */
-function TodayBanner({ pe, ce }) {
+function TodayBanner({ pe, ce, cl = [] }) {
   const today = format(new Date(),'yyyy-MM-dd');
   const tp = pe.filter(e=>e.date===today).sort((a,b)=>(a.heure_debut||'').localeCompare(b.heure_debut||''));
   const tc = ce.filter(e=>e.date_debut?.slice(0,10)===today);
-  if (!tp.length && !tc.length) return null;
+  const tcl = cl.filter(e=>e.date===today);
+  if (!tp.length && !tc.length && !tcl.length) return null;
   return (
     <div style={{padding:'9px 20px',background:'linear-gradient(90deg,#0ea5e9,#10b981)',color:'#fff',display:'flex',alignItems:'center',gap:10,flexShrink:0,flexWrap:'wrap'}}>
       <span style={{fontWeight:700,fontSize:13}}>📅 Aujourd'hui</span>
       {tp.map(e=>(
         <span key={'tp'+e.id} style={{background:'rgba(255,255,255,.2)',padding:'2px 10px',borderRadius:20,fontSize:12}}>
-          📋 {e.heure_debut?e.heure_debut+' ':''}{e.titre||'Intervention'}{e.medecin_nom?' · '+e.medecin_nom:''}
+          📋 {e.heure_debut?e.heure_debut+' ':''}{e.titre||'Programme'}{e.medecin_nom?' · '+e.medecin_nom:''}{e.technicien_nom?' · 🔧 '+e.technicien_nom:''}
         </span>
       ))}
       {tc.map(e=>(
@@ -214,46 +202,85 @@ function TodayBanner({ pe, ce }) {
           📅 {e.titre}{e.lieu?' · '+e.lieu:''}
         </span>
       ))}
+      {tcl.map(e=>(
+        <span key={'tcl'+e.id} style={{background:'rgba(255,255,255,.25)',padding:'2px 10px',borderRadius:20,fontSize:12,border:'1px solid rgba(255,255,255,.4)'}}>
+          🚗 Clino {e.heure?String(e.heure).slice(0,5)+' ':''}{e.medecin_nom?' · '+e.medecin_nom:''}{e.technicien_nom?' · 🔧 '+e.technicien_nom:''}{e.adresse?' · '+e.adresse:''}
+        </span>
+      ))}
     </div>
   );
 }
 
 /* ── WEEK view ───────────────────────────────────────────────── */
-function WeekView({weekStart,pe,ce,isAdmin,medecins,techniciens,onRefresh,toast}){
+function WeekView({weekStart,pe,ce,cl = [],isAdmin,medecins,techniciens,onRefresh,toast,onSign}){
   const weekEnd=addDays(weekStart,6);
   const [modal,setModal]=useState(null);
   const [confirm,setConfirm]=useState(null);
   const days=Array.from({length:7},(_,i)=>{
     const d=addDays(weekStart,i); const key=format(d,'yyyy-MM-dd');
-    return {d,label:DAYS_FR[i],key,pEvts:pe.filter(e=>e.date===key),cEvts:ce.filter(e=>e.date_debut?.slice(0,10)===key)};
+    return {
+      d,
+      label:DAYS_FR[i],
+      key,
+      pEvts:pe.filter(e=>e.date===key),
+      cEvts:ce.filter(e=>e.date_debut?.slice(0,10)===key),
+      clEvts:cl.filter(e=>e.date===key),
+    };
   });
   async function del(item){
     try{
-      if(item._t==='p') await axios.delete(`/api/planning/${item.id}`);
-      else               await axios.delete(`/api/events/${item.id}`);
-      setConfirm(null); onRefresh(); toast('Supprimé','success');
-    }catch{ toast('Erreur','error'); }
+      const type = item._t || item.t;
+      if(type === 'p') await axios.delete(`/api/planning/${item.id}`);
+      else if(type === 'cl' || type === 'clino') await axios.delete(`/api/clino/${item.id}`);
+      else await axios.delete(`/api/events/${item.id}`);
+      onRefresh(); toast('Supprimé avec succès','success');
+    }catch(err){
+      console.error(err);
+      toast('Erreur lors de la suppression','error');
+    }finally{
+      setConfirm(null);
+    }
   }
   return (<>
     <div style={{flex:1,overflowX:'auto',overflowY:'auto'}}>
       <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(150px,1fr))',minWidth:1050,height:'100%'}}>
-        {days.map(({d,label,key,pEvts,cEvts})=>(
+        {days.map(({d,label,key,pEvts,cEvts,clEvts})=>(
           <div key={key} style={{borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column'}}>
             <div style={{padding:'10px 12px',borderBottom:'1px solid var(--border)',background:isTodayFn(d)?'#fff7ed':'var(--surface)',position:'sticky',top:0,zIndex:1}}>
               <div style={{fontSize:11,fontWeight:700,color:'var(--text-3)',textTransform:'uppercase'}}>{label}</div>
               <div style={{fontSize:20,fontWeight:800,color:isTodayFn(d)?'var(--warn)':'var(--text)'}}>{format(d,'d')}</div>
-              {(pEvts.length+cEvts.length)>0&&<div style={{fontSize:10,color:'var(--text-3)'}}>{pEvts.length+cEvts.length} item(s)</div>}
+              {(pEvts.length+cEvts.length+clEvts.length)>0&&<div style={{fontSize:10,color:'var(--text-3)'}}>{pEvts.length+cEvts.length+clEvts.length} item(s)</div>}
             </div>
             <div style={{flex:1,padding:6,display:'flex',flexDirection:'column',gap:4,overflowY:'auto'}}>
               {pEvts.map(ev=>(
                 <div key={'p'+ev.id} onClick={()=>isAdmin&&setModal({t:'p',data:ev})}
                   style={{background:'#e0f2fe',borderRadius:8,padding:'7px 9px',borderLeft:'3px solid #0ea5e9',cursor:isAdmin?'pointer':'default'}}>
-                  <div style={{fontSize:11,fontWeight:700,color:'#0284c7'}}>📋 {ev.heure_debut?ev.heure_debut+' ':''}{ev.titre||'Intervention'}</div>
+                  <div style={{fontSize:11,fontWeight:700,color:'#0284c7'}}>📋 {ev.heure_debut?ev.heure_debut+' ':''}{ev.titre||'Programme'}</div>
                   {ev.medecin_nom&&<div style={{fontSize:10,color:'var(--text-2)'}}>👨‍⚕️ {ev.medecin_nom}</div>}
                   {ev.technicien_nom&&<div style={{fontSize:10,color:'var(--text-2)'}}>🔧 {ev.technicien_nom}</div>}
                   {ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:10}}/>}
-                  {isAdmin&&<button className="btn btn-ghost" style={{padding:'1px 4px',fontSize:10,color:'var(--danger)',marginTop:2}}
-                    onClick={e=>{e.stopPropagation();setConfirm({t:'p',id:ev.id});}}>✕</button>}
+                  <div style={{display:'flex',gap:4,marginTop:3,alignItems:'center'}}>
+                    <button className="btn btn-ghost" style={{padding:'1px 5px',fontSize:10,color:'#0284c7',fontWeight:600}}
+                      title="Valider & Signer sur site" onClick={e=>{e.stopPropagation();onSign?.(ev);}}>✍️ Signer</button>
+                    {isAdmin&&<button className="btn btn-ghost" style={{padding:'1px 4px',fontSize:10,color:'var(--danger)',marginLeft:'auto'}}
+                      onClick={e=>{e.stopPropagation();setConfirm({_t:'p',t:'p',id:ev.id,titre:ev.titre});}}>✕</button>}
+                  </div>
+                </div>
+              ))}
+              {clEvts.map(ev=>(
+                <div key={'cl'+ev.id}
+                  style={{background:CLINO_COLOR.bg,borderRadius:8,padding:'7px 9px',borderLeft:`3px solid ${CLINO_COLOR.border}`}}>
+                  <div style={{fontSize:11,fontWeight:700,color:CLINO_COLOR.text}}>🚗 Clino Mobile {ev.heure?String(ev.heure).slice(0,5):''}</div>
+                  {ev.medecin_nom&&<div style={{fontSize:10,color:'var(--text-2)'}}>👨‍⚕️ {ev.medecin_nom}</div>}
+                  {ev.technicien_nom&&<div style={{fontSize:10,color:'var(--text-2)'}}>🔧 {ev.technicien_nom}</div>}
+                  {ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:10}}/>}
+                  {ev.commentaire&&<div style={{fontSize:9,color:'var(--text-3)',fontStyle:'italic',marginTop:2}}>{ev.commentaire}</div>}
+                  <div style={{display:'flex',gap:4,marginTop:3,alignItems:'center'}}>
+                    <button className="btn btn-ghost" style={{padding:'1px 5px',fontSize:10,color:'#059669',fontWeight:600}}
+                      title="Valider & Signer sur site" onClick={e=>{e.stopPropagation();onSign?.(ev);}}>✍️ Signer</button>
+                    {isAdmin&&<button className="btn btn-ghost" style={{padding:'1px 4px',fontSize:10,color:'var(--danger)',marginLeft:'auto'}}
+                      onClick={e=>{e.stopPropagation();setConfirm({_t:'cl',t:'cl',id:ev.id,titre:'Clino Mobile '+(ev.medecin_nom||'')});}}>✕</button>}
+                  </div>
                 </div>
               ))}
               {cEvts.map(ev=>{const c=TYPE_COLORS[ev.type]||TYPE_COLORS.autre; return(
@@ -262,13 +289,13 @@ function WeekView({weekStart,pe,ce,isAdmin,medecins,techniciens,onRefresh,toast}
                   <div style={{fontSize:11,fontWeight:700,color:c.text}}>📅 {ev.titre}</div>
                   {ev.lieu&&<MapLink addr={ev.lieu} style={{fontSize:10}}/>}
                   {isAdmin&&<button className="btn btn-ghost" style={{padding:'1px 4px',fontSize:10,color:'var(--danger)',marginTop:2}}
-                    onClick={e=>{e.stopPropagation();setConfirm({t:'e',id:ev.id});}}>✕</button>}
+                    onClick={e=>{e.stopPropagation();setConfirm({_t:'e',t:'e',id:ev.id,titre:ev.titre});}}>✕</button>}
                 </div>
               );})}
               {isAdmin&&(
                 <div style={{display:'flex',gap:3}}>
                   <button className="btn btn-ghost" style={{fontSize:10,opacity:.5,padding:'2px 5px'}}
-                    onClick={()=>setModal({t:'p',data:{date:key}})}>+ Interv.</button>
+                    onClick={()=>setModal({t:'p',data:{date:key}})}>+ Prog.</button>
                   <button className="btn btn-ghost" style={{fontSize:10,opacity:.5,padding:'2px 5px'}}
                     onClick={()=>setModal({t:'e',data:{date_debut:key+'T08:00'}})}>+ Évén.</button>
                 </div>
@@ -282,29 +309,39 @@ function WeekView({weekStart,pe,ce,isAdmin,medecins,techniciens,onRefresh,toast}
       onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
     {modal?.t==='e'&&<EventModal event={modal.data}
       onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
-    {confirm&&<ConfirmDialog title="Supprimer?" message="Action irréversible." danger
+    {confirm&&<ConfirmDialog title="Supprimer?" message={confirm.titre ? `Supprimer "${confirm.titre}" ? Action irréversible.` : "Action irréversible."} danger
       onConfirm={()=>del(confirm)} onCancel={()=>setConfirm(null)}/>}
   </>);
 }
 
 /* ── MONTH view ─────────────────────────────────────────────── */
-function MonthView({current,pe,ce,isAdmin,medecins,techniciens,onRefresh,toast}){
+function MonthView({current,pe,ce,cl = [],isAdmin,medecins,techniciens,onRefresh,toast,onSign}){
   const [selected,setSelected]=useState(null);
   const [modal,setModal]=useState(null);
+  const [confirm,setConfirm]=useState(null);
   const days=eachDayOfInterval({
     start:startOfWeek(startOfMonth(current),{weekStartsOn:1}),
     end:  endOfWeek(endOfMonth(current),{weekStartsOn:1}),
   });
   const gp=d=>pe.filter(e=>e.date===format(d,'yyyy-MM-dd'));
   const gc=d=>ce.filter(e=>e.date_debut?.slice(0,10)===format(d,'yyyy-MM-dd'));
+  const gcl=d=>cl.filter(e=>e.date===format(d,'yyyy-MM-dd'));
   const sp=selected?pe.filter(e=>e.date===selected):[];
   const sc=selected?ce.filter(e=>e.date_debut?.slice(0,10)===selected):[];
+  const scl=selected?cl.filter(e=>e.date===selected):[];
   async function del(item){
     try{
-      if(item._t==='p') await axios.delete(`/api/planning/${item.id}`);
-      else               await axios.delete(`/api/events/${item.id}`);
-      onRefresh(); toast('Supprimé','success');
-    }catch{ toast('Erreur','error'); }
+      const type = item._t || item.t;
+      if(type==='p') await axios.delete(`/api/planning/${item.id}`);
+      else if(type==='cl'||type==='clino') await axios.delete(`/api/clino/${item.id}`);
+      else await axios.delete(`/api/events/${item.id}`);
+      onRefresh(); toast('Supprimé avec succès','success');
+    }catch(err){
+      console.error(err);
+      toast('Erreur lors de la suppression','error');
+    }finally{
+      setConfirm(null);
+    }
   }
   return(
     <div style={{flex:1,display:'flex',overflow:'hidden'}}>
@@ -315,7 +352,8 @@ function MonthView({current,pe,ce,isAdmin,medecins,techniciens,onRefresh,toast})
         <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>
           {days.map(day=>{
             const key=format(day,'yyyy-MM-dd');
-            const pEvts=gp(day); const cEvts=gc(day); const total=pEvts.length+cEvts.length;
+            const pEvts=gp(day); const cEvts=gc(day); const clEvts=gcl(day);
+            const total=pEvts.length+cEvts.length+clEvts.length;
             const today=isTodayFn(day); const sel=selected===key; const inMon=isSameMonth(day,current);
             return(
               <div key={key} onClick={()=>setSelected(sel?null:key)} style={{
@@ -326,8 +364,13 @@ function MonthView({current,pe,ce,isAdmin,medecins,techniciens,onRefresh,toast})
               }}>
                 <div style={{fontSize:12,fontWeight:today?800:500,color:today?'var(--warn)':'var(--text)',marginBottom:2}}>{format(day,'d')}</div>
                 {pEvts.slice(0,1).map(ev=>(
-                  <div key={'p'+ev.id} style={{fontSize:10,padding:'1px 4px',borderRadius:3,mb:1,background:'#e0f2fe',color:'#0284c7',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',borderLeft:'2px solid #0ea5e9',marginBottom:2}}>
-                    📋 {ev.titre||'Intervention'}
+                  <div key={'p'+ev.id} style={{fontSize:10,padding:'1px 4px',borderRadius:3,background:'#e0f2fe',color:'#0284c7',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',borderLeft:'2px solid #0ea5e9',marginBottom:2}}>
+                    📋 {ev.titre||'Programme'}
+                  </div>
+                ))}
+                {clEvts.slice(0,1).map(ev=>(
+                  <div key={'cl'+ev.id} style={{fontSize:10,padding:'1px 4px',borderRadius:3,background:CLINO_COLOR.bg,color:CLINO_COLOR.text,fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',borderLeft:`2px solid ${CLINO_COLOR.border}`,marginBottom:2}}>
+                    🚗 Clino {ev.medecin_nom||''}
                   </div>
                 ))}
                 {cEvts.slice(0,1).map(ev=>{const c=TYPE_COLORS[ev.type]||TYPE_COLORS.autre;return(
@@ -347,17 +390,35 @@ function MonthView({current,pe,ce,isAdmin,medecins,techniciens,onRefresh,toast})
             <span style={{fontWeight:700,fontSize:14}}>{format(parseISO(selected),'d MMMM yyyy',{locale:fr})}</span>
             <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>setSelected(null)}>✕</button>
           </div>
-          {sp.length===0&&sc.length===0&&<p style={{fontSize:13,color:'var(--text-3)',textAlign:'center',marginTop:20}}>Aucun événement</p>}
+          {sp.length===0&&sc.length===0&&scl.length===0&&<p style={{fontSize:13,color:'var(--text-3)',textAlign:'center',marginTop:20}}>Aucun événement</p>}
           {sp.map(ev=>(
             <div key={'sp'+ev.id} style={{background:'#e0f2fe',borderRadius:8,padding:'10px 12px',borderLeft:'3px solid #0ea5e9',marginBottom:8}}>
-              <div style={{fontWeight:600,fontSize:13,color:'#0284c7'}}>📋 {ev.titre||'Intervention'}</div>
+              <div style={{fontWeight:600,fontSize:13,color:'#0284c7'}}>📋 {ev.titre||'Programme'}</div>
               {ev.heure_debut&&<div style={{fontSize:11,color:'var(--text-2)'}}>⏰ {ev.heure_debut}{ev.heure_fin?' → '+ev.heure_fin:''}</div>}
               {ev.medecin_nom&&<div style={{fontSize:11,color:'var(--text-2)'}}>👨‍⚕️ {ev.medecin_nom}</div>}
+              {ev.technicien_nom&&<div style={{fontSize:11,color:'var(--text-2)'}}>🔧 {ev.technicien_nom}</div>}
               {ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:11}}/>}
-              {isAdmin&&<div style={{display:'flex',gap:4,marginTop:6}}>
-                <button className="btn btn-outline btn-sm" style={{fontSize:11}} onClick={()=>setModal({t:'p',data:ev})}>✏️</button>
-                <button className="btn btn-danger btn-sm" style={{fontSize:11}} onClick={()=>del({...ev,_t:'p'})}>🗑</button>
-              </div>}
+              <div style={{display:'flex',gap:4,marginTop:6,alignItems:'center',flexWrap:'wrap'}}>
+                <button className="btn btn-ghost btn-sm" style={{fontSize:11,color:'#0284c7',fontWeight:600}} onClick={()=>onSign?.(ev)}>✍️ Signer</button>
+                {isAdmin&&<>
+                  <button className="btn btn-outline btn-sm" style={{fontSize:11}} onClick={()=>setModal({t:'p',data:ev})}>✏️</button>
+                  <button className="btn btn-danger btn-sm" style={{fontSize:11}} onClick={()=>setConfirm({...ev,_t:'p',t:'p'})}>🗑</button>
+                </>}
+              </div>
+            </div>
+          ))}
+          {scl.map(ev=>(
+            <div key={'scl'+ev.id} style={{background:CLINO_COLOR.bg,borderRadius:8,padding:'10px 12px',borderLeft:`3px solid ${CLINO_COLOR.border}`,marginBottom:8}}>
+              <div style={{fontWeight:600,fontSize:13,color:CLINO_COLOR.text}}>🚗 Clino Mobile</div>
+              {ev.heure&&<div style={{fontSize:11,color:'var(--text-2)'}}>⏰ {String(ev.heure).slice(0,5)}</div>}
+              {ev.medecin_nom&&<div style={{fontSize:11,color:'var(--text-2)'}}>👨‍⚕️ {ev.medecin_nom}</div>}
+              {ev.technicien_nom&&<div style={{fontSize:11,color:'var(--text-2)'}}>🔧 {ev.technicien_nom}</div>}
+              {ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:11}}/>}
+              {ev.commentaire&&<div style={{fontSize:11,color:'var(--text-3)',marginTop:3}}>{ev.commentaire}</div>}
+              <div style={{display:'flex',gap:4,marginTop:6,alignItems:'center',flexWrap:'wrap'}}>
+                <button className="btn btn-ghost btn-sm" style={{fontSize:11,color:'#059669',fontWeight:600}} onClick={()=>onSign?.(ev)}>✍️ Signer</button>
+                {isAdmin&&<button className="btn btn-danger btn-sm" style={{fontSize:11}} onClick={()=>setConfirm({...ev,_t:'cl',t:'cl'})}>🗑</button>}
+              </div>
             </div>
           ))}
           {sc.map(ev=>{const c=TYPE_COLORS[ev.type]||TYPE_COLORS.autre;return(
@@ -369,38 +430,48 @@ function MonthView({current,pe,ce,isAdmin,medecins,techniciens,onRefresh,toast})
               </div>
               {isAdmin&&<div style={{display:'flex',gap:4,marginTop:6}}>
                 <button className="btn btn-outline btn-sm" style={{fontSize:11}} onClick={()=>setModal({t:'e',data:ev})}>✏️</button>
-                <button className="btn btn-danger btn-sm" style={{fontSize:11}} onClick={()=>del({...ev,_t:'e'})}>🗑</button>
+                <button className="btn btn-danger btn-sm" style={{fontSize:11}} onClick={()=>setConfirm({...ev,_t:'e',t:'e'})}>🗑</button>
               </div>}
             </div>
           );})}
           {isAdmin&&<div style={{display:'flex',gap:6,marginTop:8}}>
-            <button className="btn btn-primary btn-sm" style={{flex:1,fontSize:12}} onClick={()=>setModal({t:'p',data:{date:selected}})}>+ Interv.</button>
+            <button className="btn btn-primary btn-sm" style={{flex:1,fontSize:12}} onClick={()=>setModal({t:'p',data:{date:selected}})}>+ Prog.</button>
             <button className="btn btn-outline btn-sm" style={{flex:1,fontSize:12}} onClick={()=>setModal({t:'e',data:{date_debut:selected+'T08:00'}})}>+ Évén.</button>
           </div>}
         </div>
       )}
-      {modal?.t==='p'&&<PlanningModal event={modal.data} medecins={medecins} techniciens={[]}
+      {modal?.t==='p'&&<PlanningModal event={modal.data} medecins={medecins} techniciens={techniciens}
         onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
       {modal?.t==='e'&&<EventModal event={modal.data}
         onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
+      {confirm&&<ConfirmDialog title="Supprimer?" message={confirm.titre ? `Supprimer "${confirm.titre}" ? Action irréversible.` : "Action irréversible."} danger
+        onConfirm={()=>del(confirm)} onCancel={()=>setConfirm(null)}/>}
     </div>
   );
 }
 
 /* ── LIST view ───────────────────────────────────────────────── */
-function ListView({pe,ce,isAdmin,medecins,techniciens,onRefresh,toast}){
+function ListView({pe,ce,cl = [],isAdmin,medecins,techniciens,onRefresh,toast,onSign}){
   const [modal,setModal]=useState(null);
   const [confirm,setConfirm]=useState(null);
   const all=[
-    ...pe.map(e=>({...e,_t:'p'})),
-    ...ce.map(e=>({...e,_t:'e',date:e.date_debut?.slice(0,10)})),
+    ...pe.map(e=>({...e,_t:'p',t:'p'})),
+    ...ce.map(e=>({...e,_t:'e',t:'e',date:e.date_debut?.slice(0,10)})),
+    ...cl.map(e=>({...e,_t:'cl',t:'cl',titre:'Clino Mobile ' + (e.medecin_nom || '')})),
   ].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   async function del(item){
     try{
-      if(item._t==='p') await axios.delete(`/api/planning/${item.id}`);
-      else               await axios.delete(`/api/events/${item.id}`);
-      setConfirm(null); onRefresh(); toast('Supprimé','success');
-    }catch{ toast('Erreur','error'); }
+      const type = item._t || item.t;
+      if(type==='p') await axios.delete(`/api/planning/${item.id}`);
+      else if(type==='cl'||type==='clino') await axios.delete(`/api/clino/${item.id}`);
+      else await axios.delete(`/api/events/${item.id}`);
+      onRefresh(); toast('Supprimé avec succès','success');
+    }catch(err){
+      console.error(err);
+      toast('Erreur lors de la suppression','error');
+    }finally{
+      setConfirm(null);
+    }
   }
   return(
     <div style={{flex:1,overflowY:'auto',padding:20}}>
@@ -410,22 +481,39 @@ function ListView({pe,ce,isAdmin,medecins,techniciens,onRefresh,toast}){
           <thead><tr>
             <th>Type</th><th>Titre</th><th>Date</th><th>Horaire</th>
             <th>Médecin / Lieu</th><th>Technicien / Adresse</th>
-            {isAdmin&&<th>Actions</th>}
+            <th>Actions</th>
           </tr></thead>
           <tbody>
             {all.map(ev=>{
               if(ev._t==='p') return(
                 <tr key={'p'+ev.id}>
-                  <td><span className="badge badge-blue">📋 Intervention</span></td>
+                  <td><span className="badge badge-blue">📋 Programme</span></td>
                   <td style={{fontWeight:600}}>{ev.titre||'—'}</td>
                   <td>{fmtDisplay(ev.date)}</td>
                   <td>{ev.heure_debut?`${ev.heure_debut}${ev.heure_fin?' → '+ev.heure_fin:''}`:'—'}</td>
                   <td>{ev.medecin_nom||'—'}</td>
                   <td>{ev.technicien_nom||'—'}{ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:11,display:'block',marginTop:2}}/>}</td>
-                  {isAdmin&&<td><div style={{display:'flex',gap:4}}>
-                    <button className="btn btn-outline btn-sm" onClick={()=>setModal({t:'p',data:ev})}>✏️</button>
-                    <button className="btn btn-danger btn-sm" onClick={()=>setConfirm(ev)}>🗑</button>
-                  </div></td>}
+                  <td><div style={{display:'flex',gap:4}}>
+                    <button className="btn btn-ghost btn-sm" style={{fontSize:11,color:'#0284c7'}} title="Valider & Signer" onClick={()=>onSign?.(ev)}>✍️</button>
+                    {isAdmin&&<>
+                      <button className="btn btn-outline btn-sm" onClick={()=>setModal({t:'p',data:ev})}>✏️</button>
+                      <button className="btn btn-danger btn-sm" onClick={()=>setConfirm(ev)}>🗑</button>
+                    </>}
+                  </div></td>
+                </tr>
+              );
+              if(ev._t==='cl') return(
+                <tr key={'cl'+ev.id}>
+                  <td><span className="badge badge-green" style={{background:CLINO_COLOR.bg,color:CLINO_COLOR.text,border:`1px solid ${CLINO_COLOR.border}`}}>🚗 Clino Mobile</span></td>
+                  <td style={{fontWeight:600}}>Programme Clino Mobile</td>
+                  <td>{fmtDisplay(ev.date)}</td>
+                  <td>{ev.heure?String(ev.heure).slice(0,5):'—'}</td>
+                  <td>{ev.medecin_nom||'—'}</td>
+                  <td>{ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:11,display:'block'}}/>}{ev.commentaire&&<small style={{color:'var(--text-3)'}}>{ev.commentaire}</small>}</td>
+                  <td><div style={{display:'flex',gap:4}}>
+                    <button className="btn btn-ghost btn-sm" style={{fontSize:11,color:'#059669'}} title="Valider & Signer" onClick={()=>onSign?.(ev)}>✍️</button>
+                    {isAdmin&&<button className="btn btn-danger btn-sm" onClick={()=>setConfirm(ev)}>🗑</button>}
+                  </div></td>
                 </tr>
               );
               const c=TYPE_COLORS[ev.type]||TYPE_COLORS.autre;
@@ -436,21 +524,23 @@ function ListView({pe,ce,isAdmin,medecins,techniciens,onRefresh,toast}){
                   <td>{fmtDisplay(ev.date_debut?.slice(0,10))}</td>
                   <td>{ev.date_debut?format(parseISO(ev.date_debut),'HH:mm',{locale:fr}):'—'}</td>
                   <td>{ev.lieu?<MapLink addr={ev.lieu} style={{fontSize:12}}/>:'—'}</td><td>—</td>
-                  {isAdmin&&<td><div style={{display:'flex',gap:4}}>
-                    <button className="btn btn-outline btn-sm" onClick={()=>setModal({t:'e',data:ev})}>✏️</button>
-                    <button className="btn btn-danger btn-sm" onClick={()=>setConfirm(ev)}>🗑</button>
-                  </div></td>}
+                  <td><div style={{display:'flex',gap:4}}>
+                    {isAdmin&&<>
+                      <button className="btn btn-outline btn-sm" onClick={()=>setModal({t:'e',data:ev})}>✏️</button>
+                      <button className="btn btn-danger btn-sm" onClick={()=>setConfirm(ev)}>🗑</button>
+                    </>}
+                  </div></td>
                 </tr>
               );
             })}
           </tbody>
         </table></div>
       }
-      {modal?.t==='p'&&<PlanningModal event={modal.data} medecins={medecins} techniciens={[]}
+      {modal?.t==='p'&&<PlanningModal event={modal.data} medecins={medecins} techniciens={techniciens}
         onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
       {modal?.t==='e'&&<EventModal event={modal.data}
         onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
-      {confirm&&<ConfirmDialog title="Supprimer?" message="Action irréversible." danger
+      {confirm&&<ConfirmDialog title="Supprimer?" message={confirm.titre ? `Supprimer "${confirm.titre}" ? Action irréversible.` : "Action irréversible."} danger
         onConfirm={()=>del(confirm)} onCancel={()=>setConfirm(null)}/>}
     </div>
   );
@@ -472,6 +562,8 @@ export default function Planning({ toast }) {
   const [tec, setTec] = useState([]);
   const [ents, setEnts] = useState([]);
   const [modal, setModal] = useState(null);
+  const [syncModal, setSyncModal] = useState(false);
+  const [sigModal, setSigModal] = useState(null);
   const [filters, setFilters] = useState({ medecin_id: '', technicien_id: '', entreprise: '', search: '' });
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
@@ -483,16 +575,16 @@ export default function Planning({ toast }) {
         axios.get('/api/events'),
         axios.get('/api/clino'),
       ]);
-      setPe(pr.data); setCe(cr.data);
+      setPe(pr.data || []); setCe(cr.data || []);
       // Normalize clino: map date field and normalize heure
-      setCl(clr.data.map(c=>({
+      setCl((clr.data || []).map(c=>({
         ...c,
         _t: 'clino',
         date: c.date ? String(c.date).slice(0,10) : '',
       })));
     }catch{ toast?.('Erreur chargement','error'); }
     finally{ setLoading(false); }
-  },[]);
+  },[toast]);
 
   useEffect(()=>{loadAll();},[loadAll,tick]);
 
@@ -504,8 +596,8 @@ export default function Planning({ toast }) {
 
   useEffect(()=>{
     Promise.all([
-      axios.get('/api/users/by-role/medecin'),
-      axios.get('/api/users/by-role/technicien'),
+      axios.get('/api/users/by-role/medecin').catch(()=>({data:[]})),
+      axios.get('/api/users/by-role/technicien').catch(()=>({data:[]})),
       axios.get('/api/entreprises').catch(() => ({ data: [] })),
     ]).then(([m,t,e])=>{
       setMed(m.data || []);
@@ -542,22 +634,22 @@ export default function Planning({ toast }) {
 
   return(
     <div style={{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}}>
-      <TodayBanner pe={pe} ce={ce}/>
+      <TodayBanner pe={pe} ce={ce} cl={cl}/>
 
       {/* Toolbar */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 20px',borderBottom:'1px solid var(--border)',background:'var(--surface)',flexShrink:0,flexWrap:'wrap',gap:10}}>
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
           {view==='week'&&<>
-            <button className="btn btn-outline btn-sm" onClick={()=>setWeekStart(w=>subWeeks(w,1))}>Prev</button>
-            <button className="btn btn-outline btn-sm" onClick={()=>setWeekStart(w=>addWeeks(w,1))}>Next</button>
+            <button className="btn btn-outline btn-sm" onClick={()=>setWeekStart(w=>subWeeks(w,1))}>‹ Prev</button>
+            <button className="btn btn-outline btn-sm" onClick={()=>setWeekStart(w=>addWeeks(w,1))}>Next ›</button>
           </>}
           {view==='month'&&<>
-            <button className="btn btn-outline btn-sm" onClick={()=>setMonthDate(d=>subMonths(d,1))}>Prev</button>
-            <button className="btn btn-outline btn-sm" onClick={()=>setMonthDate(d=>addMonths(d,1))}>Next</button>
+            <button className="btn btn-outline btn-sm" onClick={()=>setMonthDate(d=>subMonths(d,1))}>‹ Prev</button>
+            <button className="btn btn-outline btn-sm" onClick={()=>setMonthDate(d=>addMonths(d,1))}>Next ›</button>
           </>}
-          <div style={{display:'flex',gap:6,alignItems:'center',marginLeft:8}}>
+          <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
             <span style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#0284c7'}}>
-              <span style={{width:10,height:10,background:'#e0f2fe',border:'2px solid #0ea5e9',borderRadius:2,display:'inline-block'}}/> Intervention
+              <span style={{width:10,height:10,background:'#e0f2fe',border:'2px solid #0ea5e9',borderRadius:2,display:'inline-block'}}/> Programme
             </span>
             <span style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#854d0e'}}>
               <span style={{width:10,height:10,background:'#fef9c3',border:'2px solid #eab308',borderRadius:2,display:'inline-block'}}/> Calendrier
@@ -567,7 +659,7 @@ export default function Planning({ toast }) {
             </span>
           </div>
         </div>
-        <div style={{display:'flex',gap:6}}>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
           {/* Export buttons */}
           <div style={{display:'flex',gap:4}}>
             <button className="btn btn-outline btn-sm" onClick={() => {
@@ -596,6 +688,22 @@ export default function Planning({ toast }) {
             <button className="btn btn-outline btn-sm" onClick={() => {
               import('../utils/exportUtils').then(({exportToICS}) => exportToICS(filteredPe));
             }} title="Exporter Calendar">📅 .ics</button>
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => setSyncModal(true)}
+              title="Synchroniser l'agenda avec Google Calendar / iPhone / Outlook"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                fontWeight: 600,
+                color: '#0284c7',
+                borderColor: '#bae6fd',
+                background: '#f0f9ff'
+              }}
+            >
+              🔄 Synchroniser
+            </button>
           </div>
           <div style={{display:'flex',gap:2,background:'var(--bg)',borderRadius:8,padding:3}}>
             {[['week','📅 Semaine'],['month','📆 Mois'],['list','📋 Liste']].map(([v,l])=>(
@@ -604,7 +712,7 @@ export default function Planning({ toast }) {
             ))}
           </div>
           {isAdmin&&<>
-            <button className="btn btn-primary btn-sm" onClick={()=>setModal({t:'p'})}>+ Intervention</button>
+            <button className="btn btn-primary btn-sm" onClick={()=>setModal({t:'p'})}>+ Programme</button>
             <button className="btn btn-outline btn-sm" onClick={()=>setModal({t:'e'})}>+ Événement</button>
           </>}
         </div>
@@ -681,21 +789,22 @@ export default function Planning({ toast }) {
               ✕ Réinitialiser
             </button>
             <span className="badge badge-blue" style={{fontSize:11}}>
-              {filteredPe.length} intervention{filteredPe.length > 1 ? 's' : ''} trouvée{filteredPe.length > 1 ? 's' : ''}
+              {filteredPe.length} programme{filteredPe.length > 1 ? 's' : ''} trouvé{filteredPe.length > 1 ? 's' : ''}
             </span>
           </>
         )}
       </div>
 
-      {view==='week'&&<WeekView weekStart={weekStart} pe={filterWeek(filteredPe)} ce={filterWeek(ce.map(e=>({...e,date:e.date_debut?.slice(0,10)})))} cl={filterWeek(cl)} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast}/>}
-      {view==='month'&&<MonthView current={monthDate} pe={filteredPe} ce={ce} cl={cl} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast}/>}
-      {view==='list'&&<ListView pe={filteredPe} ce={ce} cl={cl} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast}/>}
+      {view==='week'&&<WeekView weekStart={weekStart} pe={filterWeek(filteredPe)} ce={filterWeek(ce.map(e=>({...e,date:e.date_debut?.slice(0,10)})))} cl={filterWeek(cl)} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast} onSign={item=>setSigModal(item)}/>}
+      {view==='month'&&<MonthView current={monthDate} pe={filteredPe} ce={ce} cl={cl} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast} onSign={item=>setSigModal(item)}/>}
+      {view==='list'&&<ListView pe={filteredPe} ce={ce} cl={cl} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast} onSign={item=>setSigModal(item)}/>}
 
-      {modal?.t==='p'&&<PlanningModal event={null} medecins={med} techniciens={tec}
-        onSave={()=>{setModal(null);setTick(t=>t+1);toast('Intervention créée ✓ — Email envoyé 📧','success');}} onClose={()=>setModal(null)}/>}
-      {modal?.t==='e'&&<EventModal event={null}
+      {modal?.t==='p'&&<PlanningModal event={modal?.data || null} medecins={med} techniciens={tec}
+        onSave={()=>{setModal(null);setTick(t=>t+1);toast('Programme enregistré ✓ — Email envoyé 📧','success');}} onClose={()=>setModal(null)}/>}
+      {modal?.t==='e'&&<EventModal event={modal?.data || null}
         onSave={()=>{setModal(null);setTick(t=>t+1);toast('Événement créé ✓ — Email envoyé 📧','success');}} onClose={()=>setModal(null)}/>}
+      {syncModal&&<CalendarSyncModal user={user} onClose={()=>setSyncModal(false)} toast={toast}/>}
+      {sigModal&&<SignaturePadModal event={sigModal} onClose={()=>setSigModal(null)} onSave={()=>{setSigModal(null);setTick(t=>t+1);}} toast={toast}/>}
     </div>
   );
 }
-

@@ -7,13 +7,16 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon-192.png', 'icon-512.png'],
+      devOptions: {
+        enabled: true,
+      },
+      includeAssets: ['icon-192.png', 'icon-512.png', 'logo-gmt.png'],
       manifest: {
-        name: 'GMT Ariana',
-        short_name: 'GMT',
+        name: 'GMT Ariana — Planning Médical',
+        short_name: 'GMT Ariana',
         description: 'Groupement de Médecine du Travail de l Ariana - Planning Medical',
-        theme_color: '#1e3a8a',
-        background_color: '#f0f4f8',
+        theme_color: '#0ea5e9',
+        background_color: '#f8fafc',
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',
@@ -22,12 +25,14 @@ export default defineConfig({
           {
             src: '/icon-192.png',
             sizes: '192x192',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any maskable'
           },
           {
             src: '/icon-512.png',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any maskable'
           }
         ]
       }
@@ -46,7 +51,9 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,
     port: 5173,
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:8083',

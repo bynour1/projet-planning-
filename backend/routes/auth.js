@@ -173,15 +173,24 @@ router.post('/biometric/login', async (req, res) => {
   if (!credentialId) return res.status(400).json({ message: 'Identifiant biométrique manquant' });
 
   try {
-    let query = 'SELECT * FROM users WHERE biometric_credential LIKE ? AND is_active = 1';
-    let params = [`%"credentialId":"${credentialId}"%`];
+    let [rows] = await db.query(
+      'SELECT * FROM users WHERE biometric_credential LIKE ? AND is_active = 1',
+      [`%"credentialId":"${credentialId}"%`]
+    );
 
-    if (email) {
-      query = 'SELECT * FROM users WHERE email = ? AND is_active = 1';
-      params = [email];
+    // If not found by credentialId and email was provided, try by email as fallback
+    if (rows.length === 0 && email) {
+      const [emailRows] = await db.query('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
+      if (emailRows.length > 0 && emailRows[0].biometric_credential) {
+        try {
+          const bio = JSON.parse(emailRows[0].biometric_credential);
+          if (bio.credentialId === credentialId) {
+            rows = emailRows;
+          }
+        } catch {}
+      }
     }
 
-    const [rows] = await db.query(query, params);
     const user = rows[0];
 
     if (!user || !user.biometric_credential) {
@@ -261,16 +270,34 @@ router.post('/change-password', authenticate, async (req, res) => {
   const { current_password, new_password } = req.body;
   if (!current_password || !new_password)
     return res.status(400).json({ message: 'Tous les champs sont requis' });
+  if (new_password.length < 6)
+    return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères' });
 
   try {
     const [rows] = await db.query('SELECT password FROM users WHERE id = ?', [req.user.id]);
+    if (!rows[0]) return res.status(404).json({ message: 'Utilisateur introuvable' });
     const valid = await bcrypt.compare(current_password, rows[0].password);
     if (!valid)
-      return res.status(400).json({ message: 'Mot de passe actuel incorrect' });
+      return res.status(401).json({ message: 'Mot de passe actuel incorrect' });
 
     const hash = await bcrypt.hash(new_password, 10);
     await db.query('UPDATE users SET password = ?, first_login = 0 WHERE id = ?', [hash, req.user.id]);
-    res.json({ message: 'Mot de passe modifié avec succès' });
+    res.json({ message: 'Mot de passe mis à jour avec succès' });
+  } catch (err) {
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// POST /api/auth/force-change-password
+router.post('/force-change-password', authenticate, async (req, res) => {
+  const { new_password } = req.body;
+  if (!new_password || new_password.length < 6)
+    return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères' });
+
+  try {
+    const hash = await bcrypt.hash(new_password, 10);
+    await db.query('UPDATE users SET password = ?, first_login = 0 WHERE id = ?', [hash, req.user.id]);
+    res.json({ message: 'Mot de passe mis à jour avec succès' });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });
   }

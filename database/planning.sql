@@ -14,7 +14,10 @@ CREATE TABLE IF NOT EXISTS users (
   email       VARCHAR(255) NOT NULL UNIQUE,
   telephone   VARCHAR(30)  DEFAULT NULL,
   password    VARCHAR(255) NOT NULL,
-  role        ENUM('administrateur', 'medecin', 'technicien') NOT NULL,
+  role        ENUM('administrateur', 'medecin', 'technicien', 'chauffeur') NOT NULL,
+  avatar      VARCHAR(255) DEFAULT NULL,
+  totp_enabled TINYINT(1)   DEFAULT 0,
+  biometric_credential TEXT DEFAULT NULL,
   is_active   TINYINT(1)   DEFAULT 0,
   first_login TINYINT(1)   DEFAULT 1,
   created_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
@@ -69,14 +72,17 @@ CREATE TABLE IF NOT EXISTS events (
 
 -- ─── Table CLINO_MOBILE ──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS clino_mobile (
-  id          INT AUTO_INCREMENT PRIMARY KEY,
-  date        DATE         NOT NULL,
-  heure       TIME         NOT NULL,
-  adresse     VARCHAR(255) NOT NULL,
-  medecin_id  INT          DEFAULT NULL,
-  medecin_nom VARCHAR(255) DEFAULT NULL,
-  commentaire TEXT         DEFAULT NULL,
-  FOREIGN KEY (medecin_id) REFERENCES users(id) ON DELETE SET NULL
+  id             INT AUTO_INCREMENT PRIMARY KEY,
+  date           DATE         NOT NULL,
+  heure          TIME         NOT NULL,
+  adresse        VARCHAR(255) NOT NULL,
+  medecin_id     INT          DEFAULT NULL,
+  technicien_id  INT          DEFAULT NULL,
+  medecin_nom    VARCHAR(255) DEFAULT NULL,
+  technicien_nom VARCHAR(255) DEFAULT NULL,
+  commentaire    TEXT         DEFAULT NULL,
+  FOREIGN KEY (medecin_id)    REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (technicien_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- ─── Table MESSAGES (Chat) ───────────────────────────────────────

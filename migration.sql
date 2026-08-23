@@ -54,3 +54,8 @@ CREATE TABLE IF NOT EXISTS entreprise_avis (
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS telephone VARCHAR(30) DEFAULT NULL AFTER email;
 
+-- ─── Colonnes technicien dans clino_mobile ───────────────────
+ALTER TABLE clino_mobile
+  ADD COLUMN IF NOT EXISTS technicien_id INT DEFAULT NULL AFTER medecin_id,
+  ADD COLUMN IF NOT EXISTS technicien_nom VARCHAR(255) DEFAULT NULL AFTER medecin_nom;
+

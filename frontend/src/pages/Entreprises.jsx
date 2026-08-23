@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AddressAutocomplete from '../components/AddressAutocomplete';
+import NavigationSelector from '../components/NavigationSelector';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -286,50 +287,12 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onDelete, toast }) {
         {/* Contact info */}
         <div style={{display:'flex',gap:16,marginTop:10,flexWrap:'wrap',alignItems:'center'}}>
           {entreprise.adresse&&(
-            <a
-              href={googleMapsUrl(entreprise.adresse)}
-              target="_blank"
-              rel="noreferrer"
-              title="Voir sur Google Maps"
-              style={{
-                fontSize:12,color:'var(--primary)',textDecoration:'none',
-                display:'flex',alignItems:'center',gap:4,
-                background:'var(--primary-lt,#e0f2fe)',
-                padding:'3px 9px',borderRadius:20,
-                fontWeight:600,transition:'opacity .15s',
-              }}
-              onMouseEnter={e=>e.currentTarget.style.opacity='0.75'}
-              onMouseLeave={e=>e.currentTarget.style.opacity='1'}
-            >
-              📍 {entreprise.adresse}
-              <span style={{fontSize:10,opacity:0.7}}>↗</span>
-            </a>
+            <NavigationSelector addr={entreprise.adresse} />
           )}
           {entreprise.telephone&&<span style={{fontSize:12,color:'var(--text-2)'}}>📞 {entreprise.telephone}</span>}
           {entreprise.email&&<a href={`mailto:${entreprise.email}`} style={{fontSize:12,color:'var(--primary)',textDecoration:'none'}}>✉️ {entreprise.email}</a>}
           {entreprise.site_web&&<a href={entreprise.site_web} target="_blank" rel="noreferrer" style={{fontSize:12,color:'var(--primary)',textDecoration:'none'}}>🌐 Site web</a>}
         </div>
-        {entreprise.adresse&&(
-          <div style={{marginTop:8}}>
-            <a
-              href={googleMapsUrl(entreprise.adresse)}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                display:'inline-flex',alignItems:'center',gap:6,
-                fontSize:12,fontWeight:700,
-                color:'#fff',background:'linear-gradient(135deg,#4285F4,#34A853)',
-                padding:'5px 14px',borderRadius:20,textDecoration:'none',
-                boxShadow:'0 2px 8px rgba(66,133,244,.3)',
-                transition:'transform .15s,box-shadow .15s',
-              }}
-              onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-1px)';e.currentTarget.style.boxShadow='0 4px 14px rgba(66,133,244,.4)';}}
-              onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='0 2px 8px rgba(66,133,244,.3)';}}
-            >
-              🗺️ Voir sur Google Maps
-            </a>
-          </div>
-        )}
         {entreprise.description&&<p style={{fontSize:13,color:'var(--text-2)',marginTop:10,lineHeight:1.5}}>{entreprise.description}</p>}
       </div>
 
@@ -483,27 +446,27 @@ export default function Entreprises({ toast }) {
       </div>
 
       {/* Stats */}
-      <div style={{display:'flex',gap:10,marginBottom:16,flexWrap:'wrap'}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(110px,1fr))',gap:10,marginBottom:16}}>
         {[
           {label:'Total',value:stats.total,color:'#0ea5e9'},
           {label:'Conventionnées',value:stats.conv,color:'#10b981'},
           {label:'Avis partagés',value:stats.avis,color:'#f59e0b'},
         ].map(s=>(
-          <div key={s.label} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:10,padding:'10px 16px',display:'flex',gap:10,alignItems:'center'}}>
+          <div key={s.label} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:10,padding:'10px 14px',display:'flex',gap:8,alignItems:'center'}}>
             <span style={{fontSize:18,fontWeight:800,color:s.color}}>{s.value}</span>
-            <span style={{fontSize:13,color:'var(--text-2)'}}>{s.label}</span>
+            <span style={{fontSize:12,color:'var(--text-2)'}}>{s.label}</span>
           </div>
         ))}
       </div>
 
       {/* Filters */}
       <div style={{display:'flex',gap:10,marginBottom:16,flexWrap:'wrap'}}>
-        <input className="input" style={{maxWidth:300}} placeholder="🔍 Rechercher par nom, secteur..."
+        <input className="input" style={{flex:1,minWidth:160}} placeholder="🔍 Rechercher par nom, secteur..."
           value={search} onChange={e=>setSearch(e.target.value)}/>
-        <div style={{display:'flex',gap:2,background:'var(--bg)',borderRadius:8,padding:3}}>
+        <div style={{display:'flex',gap:2,background:'var(--bg)',borderRadius:8,padding:3,overflowX:'auto'}}>
           {[['all','Toutes'],['conv','Conventionnées'],['nonconv','Non conv.']].map(([v,l])=>(
             <button key={v} className={`btn btn-sm ${filterConv===v?'btn-primary':'btn-ghost'}`}
-              onClick={()=>setFilterConv(v)} style={{padding:'4px 10px',fontSize:12}}>{l}</button>
+              onClick={()=>setFilterConv(v)} style={{padding:'4px 10px',fontSize:12,whiteSpace:'nowrap'}}>{l}</button>
           ))}
         </div>
         <div style={{display:'flex',gap:2,background:'var(--bg)',borderRadius:8,padding:3}}>
@@ -522,7 +485,7 @@ export default function Entreprises({ toast }) {
           : viewMode === 'map' ? (
               <MapView entreprises={filtered} />
             ) : (
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:14}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(min(100%, 280px),1fr))',gap:14}}>
               {filtered.map(e=>(
                 <div key={e.id} className="card" style={{cursor:'pointer',transition:'box-shadow .15s',borderTop:`3px solid ${e.convensionne?'var(--accent)':'var(--danger)'}`}}
                   onClick={()=>setSelected(e.id)}
@@ -540,18 +503,9 @@ export default function Entreprises({ toast }) {
                   </div>
 
                   {e.adresse&&(
-                    <a
-                      href={googleMapsUrl(e.adresse)}
-                      target="_blank"
-                      rel="noreferrer"
-                      title="Ouvrir dans Google Maps"
-                      onClick={ev=>ev.stopPropagation()}
-                      style={{fontSize:12,color:'var(--primary)',marginBottom:4,display:'flex',alignItems:'center',gap:3,textDecoration:'none',fontWeight:500}}
-                      onMouseEnter={ev=>ev.currentTarget.style.textDecoration='underline'}
-                      onMouseLeave={ev=>ev.currentTarget.style.textDecoration='none'}
-                    >
-                      📍 {e.adresse} <span style={{fontSize:10,opacity:0.6}}>↗</span>
-                    </a>
+                    <div style={{marginBottom:4}}>
+                      <NavigationSelector addr={e.adresse} compact />
+                    </div>
                   )}
                   {e.telephone&&<div style={{fontSize:12,color:'var(--text-2)',marginBottom:4}}>📞 {e.telephone}</div>}
 

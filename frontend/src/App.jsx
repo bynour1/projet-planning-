@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider }        from './context/SocketContext';
 import { useToast, ToastContainer } from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
+import NetworkStatusBanner from './components/NetworkStatusBanner';
 
 import Sidebar        from './components/Sidebar';
 import Login          from './pages/Login';
@@ -23,6 +25,7 @@ import Entreprises    from './pages/Entreprises';
 function AppShell() {
   const { user, loading } = useAuth();
   const { toasts, addToast } = useToast();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   if (loading) return (
     <div className="loading-center" style={{ height:'100vh' }}>
@@ -56,14 +59,35 @@ function AppShell() {
   return (
     <SocketProvider>
       <GlobalSearch />
+      <NetworkStatusBanner />
       <ToastContainer toasts={toasts}/>
       <div className="layout">
-        <Sidebar/>
+        {/* Mobile Header Bar (< 768px) */}
+        <header className="mobile-topbar">
+          <button className="mobile-menu-btn" onClick={() => setMobileOpen(true)} aria-label="Menu">
+            ☰
+          </button>
+          <div className="mobile-topbar-brand">
+            <img src="/logo-gmt.png" alt="GMT Ariana" style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display='none'; }} />
+            <span>GMT Ariana</span>
+          </div>
+          <button
+            className="mobile-search-btn"
+            onClick={() => window.dispatchEvent(new CustomEvent('open-global-search'))}
+            aria-label="Recherche"
+          >
+            🔍
+          </button>
+        </header>
+
+        <Sidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
         <div className="main-area">
           <Routes>
             {isChauffeur ? (
               <>
                 <Route path="/planning" element={<Planning toast={addToast}/>}/>
+                <Route path="/clino"    element={<Clino    toast={addToast}/>}/>
+                <Route path="/settings" element={<Settings toast={addToast}/>}/>
                 <Route path="*"         element={<Navigate to="/planning" replace/>}/>
               </>
             ) : (

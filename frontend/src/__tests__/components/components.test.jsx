@@ -104,7 +104,7 @@ describe('ConfirmDialog', () => {
 describe('Sidebar', () => {
   it('renders logo and app name', () => {
     renderWithProviders(<Sidebar />);
-    expect(screen.getByText('Planning Médical')).toBeInTheDocument();
+    expect(screen.getByText(/GMT Ariana|Planning Médical/i)).toBeInTheDocument();
   });
 
   it('shows all nav items for admin', () => {
@@ -139,14 +139,21 @@ describe('Sidebar', () => {
   });
 
   it('calls logout on button click', async () => {
-    const { useAuth } = await import('../../context/AuthContext');
     const mockLogout = vi.fn();
-    vi.spyOn(await import('../../context/AuthContext'), 'useAuth').mockReturnValue({
-      user: MOCK_ADMIN, token: 'tok', loading: false,
-      login: vi.fn(), logout: mockLogout, refreshUser: vi.fn(),
-    });
-    renderWithProviders(<Sidebar />);
+    renderWithProviders(<Sidebar />, { authOverrides: { logout: mockLogout } });
     await userEvent.click(screen.getByText(/Déconnexion/i));
     expect(mockLogout).toHaveBeenCalled();
   });
+
+  it('shows only planning, clino and settings for chauffeur', () => {
+    const MOCK_CHAUFFEUR = { id: 99, nom: 'Ali', prenom: 'Chauffeur', email: 'chauffeur@gmt.tn', role: 'chauffeur' };
+    renderWithProviders(<Sidebar />, { user: MOCK_CHAUFFEUR });
+    expect(screen.getByText('Planning')).toBeInTheDocument();
+    expect(screen.getByText('Clino Mobile')).toBeInTheDocument();
+    expect(screen.getByText('Paramètres')).toBeInTheDocument();
+    expect(screen.queryByText('Tableau de bord')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chat')).not.toBeInTheDocument();
+    expect(screen.queryByText('Utilisateurs')).not.toBeInTheDocument();
+  });
 });
+

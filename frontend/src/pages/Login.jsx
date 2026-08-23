@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import PWAInstallBanner from '../components/PWAInstallBanner';
 
 export default function Login({ toast }) {
   const { login } = useAuth();
@@ -14,15 +15,13 @@ export default function Login({ toast }) {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await axios.post('/api/auth/login', { email: form.email, password: form.password });
-      if (res.data.requires2FA) {
-        setTwoFA(t => ({ ...t, required: true, userId: res.data.userId }));
+      const res = await login(form.email, form.password);
+      if (res?.requires2FA) {
+        setTwoFA(t => ({ ...t, required: true, userId: res.userId }));
         toast('Code 2FA envoyé par email et SMS', 'info');
-      } else {
-        await login(form.email, form.password);
       }
     } catch (err) {
-      toast(err.response?.data?.message || 'Identifiants incorrects', 'error');
+      toast(err.response?.data?.message || err.message || 'Identifiants incorrects', 'error');
     } finally {
       setLoading(false);
     }
@@ -89,8 +88,8 @@ export default function Login({ toast }) {
             }}
             onError={e => { e.currentTarget.style.display = 'none'; }}
           />
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)' }}>GMT Ariana</h1>
-          <p style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4 }}>Groupement de Médecine du Travail — Santé de l'employé</p>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)' }}>Planning Médical</h1>
+          <p style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4 }}>GMT Ariana — Groupement de Médecine du Travail</p>
         </div>
 
         <div className="card" style={{ boxShadow: 'var(--shadow-lg)' }}>
@@ -190,6 +189,10 @@ export default function Login({ toast }) {
             </form>
           </div>
         )}
+
+        <div style={{ marginTop: 16 }}>
+          <PWAInstallBanner />
+        </div>
 
         <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-3)', marginTop: 20 }}>
           Accès réservé au personnel autorisé

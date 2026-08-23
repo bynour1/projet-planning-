@@ -105,7 +105,7 @@ export default function Settings({ toast }) {
         <div><h2>⚙️ Paramètres</h2><p>Gérer votre compte et la sécurité</p></div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px,1fr))', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px),1fr))', gap: 16 }}>
 
         {/* Profile card */}
         <div className="card">

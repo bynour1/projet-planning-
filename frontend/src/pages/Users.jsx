@@ -53,7 +53,7 @@ function UserModal({ user: editUser, onSave, onClose }) {
 
           <div style={{ flex: 1 }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--text-1)' }}>
-              {isEdit ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'}
+              {isEdit ? 'Modifier l\'utilisateur' : 'Créer un utilisateur'}
             </h3>
             <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 0' }}>
               {isEdit
@@ -445,7 +445,7 @@ export default function Users({ toast }) {
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(105px, 1fr))', gap: 10, marginBottom: 16 }}>
         {[
           { label: 'Total',       value: stats.total,       color: '#0ea5e9' },
           { label: 'Actifs',      value: stats.actifs,      color: '#10b981' },
@@ -455,21 +455,21 @@ export default function Users({ toast }) {
         ].map(s => (
           <div key={s.label} style={{
             background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
-            padding: '10px 16px', display: 'flex', gap: 10, alignItems: 'center',
+            padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center',
           }}>
-            <span style={{ fontSize: 18, fontWeight: 800, color: s.color }}>{s.value}</span>
-            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{s.label}</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: s.color }}>{s.value}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{s.label}</span>
           </div>
         ))}
       </div>
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-        <input className="input" style={{ maxWidth: 260 }} placeholder="🔍 Rechercher..." value={search} onChange={e => setSearch(e.target.value)} />
-        <div style={{ display: 'flex', gap: 2, background: 'var(--bg)', borderRadius: 8, padding: 3 }}>
+        <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder="🔍 Rechercher..." value={search} onChange={e => setSearch(e.target.value)} />
+        <div style={{ display: 'flex', gap: 2, background: 'var(--bg)', borderRadius: 8, padding: 3, overflowX: 'auto' }}>
           {[['all','Tous'],['medecin','Médecins'],['technicien','Techniciens'],['administrateur','Admins'],['chauffeur','Chauffeurs']].map(([v,l]) => (
             <button key={v} className={`btn btn-sm ${filter === v ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setFilter(v)} style={{ padding: '4px 10px' }}>{l}</button>
+              onClick={() => setFilter(v)} style={{ padding: '4px 10px', fontSize: 12, whiteSpace: 'nowrap' }}>{l}</button>
           ))}
         </div>
       </div>

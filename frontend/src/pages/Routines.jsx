@@ -179,7 +179,7 @@ export default function Routines({ toast }) {
 
       {/* Stats */}
       {routines.length > 0 && (
-        <div style={{ display:'flex', gap:10, marginBottom:16 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(100px, 1fr))', gap:10, marginBottom:16 }}>
           {[
             { label:'Total',    value:routines.length, color:'#0ea5e9' },
             { label:'Actives',  value:activeCount,     color:'#10b981' },
@@ -187,11 +187,11 @@ export default function Routines({ toast }) {
           ].map(s => (
             <div key={s.label} style={{
               background:'var(--surface)', border:'1px solid var(--border)',
-              borderRadius:10, padding:'10px 16px',
-              display:'flex', gap:10, alignItems:'center',
+              borderRadius:10, padding:'8px 12px',
+              display:'flex', gap:8, alignItems:'center',
             }}>
-              <span style={{ fontSize:18, fontWeight:800, color:s.color }}>{s.value}</span>
-              <span style={{ fontSize:13, color:'var(--text-2)' }}>{s.label}</span>
+              <span style={{ fontSize:16, fontWeight:800, color:s.color }}>{s.value}</span>
+              <span style={{ fontSize:12, color:'var(--text-2)' }}>{s.label}</span>
             </div>
           ))}
         </div>

@@ -46,6 +46,11 @@ export function SocketProvider({ children }) {
         new Notification('📅 Nouvel événement — GMT Ariana', { body: 'Un événement a été ajouté au calendrier', icon: '/logo-gmt.png' });
       }
     });
+    socket.on('clino_refresh', () => {
+      if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification('🚗 Clino Mobile mis à jour — GMT Ariana', { body: 'Une intervention Clino Mobile a été ajoutée ou modifiée', icon: '/logo-gmt.png' });
+      }
+    });
 
     socketRef.current = socket;
     return () => {

@@ -44,21 +44,21 @@ export default function Dashboard({ toast }) {
         user.role === 'administrateur' ? axios.get('/api/stats/by-medecin').catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
       ]);
       setStats({
-        users:    usersRes.data.length,
-        events:   eventsRes.data.length,
-        planning: planningRes.data.length,
-        clino:    clinoRes.data.length,
+        users:    usersRes?.data?.length || 0,
+        events:   eventsRes?.data?.length || 0,
+        planning: planningRes?.data?.length || 0,
+        clino:    clinoRes?.data?.length || 0,
       });
       const today = new Date().toISOString().split('T')[0];
       // Tous les événements à venir (passés aussi si aujourd'hui)
       setUpcomingEvents(
-        eventsRes.data
+        (eventsRes?.data || [])
           .filter(e => e.date_debut?.slice(0, 10) >= today)
-          .sort((a, b) => a.date_debut.localeCompare(b.date_debut))
+          .sort((a, b) => (a.date_debut || '').localeCompare(b.date_debut || ''))
       );
-      setMyPlanning(myRes.data.slice(0, 5));
-      setMonthlyStats(monthlyRes.data);
-      setMedecinStats(medecinRes.data);
+      setMyPlanning((myRes?.data || []).slice(0, 5));
+      setMonthlyStats(monthlyRes?.data || []);
+      setMedecinStats(medecinRes?.data || []);
     } catch (err) {
       toast?.('Erreur lors du chargement', 'error');
     } finally {
@@ -183,7 +183,7 @@ export default function Dashboard({ toast }) {
       )}
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px,1fr))', gap: 14, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px,1fr))', gap: 12, marginBottom: 20 }}>
         {isAdmin && <StatCard icon="👥" label="Utilisateurs"    value={stats.users}    color="#0ea5e9" />}
         <StatCard icon="📋" label="Interventions"       value={stats.planning} color="#10b981" />
         <StatCard icon="📅" label="Événements"          value={stats.events}   color="#f59e0b" />
@@ -191,7 +191,7 @@ export default function Dashboard({ toast }) {
       </div>
 
       {/* Charts */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px,1fr))', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px),1fr))', gap: 16, marginBottom: 20 }}>
         <div className="card">
           <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>📈 Interventions / mois</h3>
           <div style={{ height: 250 }}>
@@ -225,8 +225,8 @@ export default function Dashboard({ toast }) {
         )}
       </div>
 
-      {/* Two columns */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px,1fr))', gap: 16 }}>
+      {/* Planning personnel & Infos */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px),1fr))', gap: 16 }}>
 
         {/* My planning */}
         <div className="card">

@@ -34,3 +34,11 @@ Thumbs.db
 # Vite & cache
 .vite/
 frontend/node_modules/.vite/
+frontend/dev-dist/
+
+# Binaries & Uploads
+cloudflared.exe
+*.exe
+backend/uploads/*
+!backend/uploads/.gitkeep
+!backend/uploads/avatars/.gitkeep

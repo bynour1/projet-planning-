@@ -4,6 +4,10 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import AudioMessage from '../components/AudioMessage';
+import ImageMessage from '../components/ImageMessage';
+import CameraCaptureModal from '../components/CameraCaptureModal';
+import LocationMessage from '../components/LocationMessage';
 
 /* ═══════════════════════════════════════════════════════
    HELPERS
@@ -95,7 +99,16 @@ function FileMessage({ content, isMine }) {
   try { data = JSON.parse(content); } catch { return <span>{content}</span>; }
   if (!data || data.type !== 'file') return <span>{content}</span>;
 
-  const isImage = data.mimetype?.startsWith('image/');
+  const isAudio = data.mimetype?.startsWith('audio/') || data.originalname?.endsWith('.webm') || data.originalname?.endsWith('.ogg') || data.originalname?.endsWith('.wav') || data.originalname?.endsWith('.mp3') || data.originalname?.endsWith('.m4a');
+  const isImage = data.mimetype?.startsWith('image/') || data.originalname?.match(/\.(jpg|jpeg|png|gif|webp|heic)$/i);
+
+  if (isAudio) {
+    return <AudioMessage url={data.url} originalname={data.originalname} sizeDisplay={data.sizeDisplay} isMine={isMine} />;
+  }
+
+  if (isImage) {
+    return <ImageMessage url={data.url} originalname={data.originalname} isMine={isMine} />;
+  }
 
   async function handleOpen(e) {
     e.preventDefault();
@@ -106,22 +119,12 @@ function FileMessage({ content, isMine }) {
   }
 
   return (
-    <div>
-      {isImage ? (
-        <div onClick={handleOpen} style={{ cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.7 : 1 }}>
-          <div style={{ maxWidth: 200, maxHeight: 160, borderRadius: 8, background: 'rgba(0,0,0,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8 }}>
-            {loading ? <span style={{ fontSize: 24 }}>⏳</span> : <span style={{ fontSize: 13, color: isMine ? '#fff' : 'var(--text-2)' }}>🖼 {data.originalname}</span>}
-          </div>
-        </div>
-      ) : (
-        <div onClick={handleOpen} style={{ display: 'flex', alignItems: 'center', gap: 8, background: isMine ? 'rgba(255,255,255,.2)' : 'var(--surface2)', padding: '8px 12px', borderRadius: 8, border: isMine ? 'none' : '1px solid var(--border)', cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.7 : 1, transition: 'opacity .2s' }}>
-          <span style={{ fontSize: 22 }}>{loading ? '⏳' : (data.icon || '📎')}</span>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: isMine ? '#fff' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>{data.originalname}</div>
-            <div style={{ fontSize: 11, color: isMine ? 'rgba(255,255,255,.7)' : 'var(--text-3)' }}>{data.sizeDisplay} · {loading ? 'Ouverture…' : 'Cliquer pour ouvrir'}</div>
-          </div>
-        </div>
-      )}
+    <div onClick={handleOpen} style={{ display: 'flex', alignItems: 'center', gap: 8, background: isMine ? 'rgba(255,255,255,.2)' : 'var(--surface2)', padding: '8px 12px', borderRadius: 8, border: isMine ? 'none' : '1px solid var(--border)', cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.7 : 1, transition: 'opacity .2s' }}>
+      <span style={{ fontSize: 22 }}>{loading ? '⏳' : (data.icon || '📎')}</span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: isMine ? '#fff' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>{data.originalname}</div>
+        <div style={{ fontSize: 11, color: isMine ? 'rgba(255,255,255,.7)' : 'var(--text-3)' }}>{data.sizeDisplay} · {loading ? 'Ouverture…' : 'Cliquer pour ouvrir'}</div>
+      </div>
     </div>
   );
 }
@@ -186,10 +189,21 @@ export default function Chat({ toast }) {
   // Emoji picker visible
   const [emojiPickerFor, setEmojiPickerFor] = useState(null);
 
-  const bottomRef    = useRef(null);
-  const fileInputRef = useRef(null);
-  const typingTimer  = useRef(null);
-  const inputRef     = useRef(null);
+  // Caméra, Vocal & Localisation
+  const [cameraModalOpen, setCameraModalOpen] = useState(false);
+  const [isRecording,     setIsRecording]     = useState(false);
+  const [recSeconds,      setRecSeconds]      = useState(0);
+  const [locating,        setLocating]        = useState(false);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+
+  const bottomRef         = useRef(null);
+  const fileInputRef      = useRef(null);
+  const cameraInputRef    = useRef(null);
+  const mediaRecorderRef  = useRef(null);
+  const audioChunksRef    = useRef([]);
+  const recTimerRef       = useRef(null);
+  const typingTimer       = useRef(null);
+  const inputRef          = useRef(null);
 
   /* ── Load history ── */
   useEffect(() => {
@@ -280,24 +294,150 @@ export default function Chat({ toast }) {
     clearTimeout(typingTimer.current);
   }
 
-  /* ── File upload ── */
-  async function handleFileChange(e) {
-    const file = e.target.files?.[0];
+  /* ── File / Media upload direct ── */
+  async function uploadDirectFile(file, successLabel = 'Fichier envoyé') {
     if (!file) return;
-    e.target.value = '';
-    if (file.size > 10 * 1024 * 1024) { toast('Fichier trop volumineux (max 10 Mo)', 'error'); return; }
+    if (file.size > 15 * 1024 * 1024) { toast('Fichier trop volumineux (max 15 Mo)', 'error'); return; }
     const formData = new FormData();
     formData.append('file', file);
     setUploading(true); setUploadProg(0);
     try {
       await axios.post('/api/chat/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: e => setUploadProg(Math.round((e.loaded * 100) / e.total)),
+        onUploadProgress: e => setUploadProg(Math.round((e.loaded * 100) / (e.total || 1))),
       });
-      toast(`Fichier envoyé : ${file.name}`, 'success');
+      toast(`${successLabel} ✓`, 'success');
     } catch (err) {
       toast(err.response?.data?.message || "Erreur lors de l'envoi", 'error');
     } finally { setUploading(false); setUploadProg(0); }
+  }
+
+  /* ── File input change handler ── */
+  async function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    await uploadDirectFile(file, `Fichier envoyé : ${file.name}`);
+  }
+
+  /* ── Caméra Capture Handler ── */
+  async function handleCameraCapture(file) {
+    await uploadDirectFile(file, 'Photo envoyée');
+  }
+
+  /* ── Voice Recording Logic ── */
+  async function startVoiceRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = e => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.start(100);
+      setIsRecording(true);
+      setRecSeconds(0);
+      recTimerRef.current = setInterval(() => {
+        setRecSeconds(s => s + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Audio recording error:', err);
+      toast("Impossible d'accéder au microphone. Autorisez l'accès dans le navigateur.", 'error');
+    }
+  }
+
+  function cancelVoiceRecording() {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      if (mediaRecorderRef.current.stream) {
+        mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+      }
+    }
+    clearInterval(recTimerRef.current);
+    setIsRecording(false);
+    setRecSeconds(0);
+    audioChunksRef.current = [];
+  }
+
+  async function stopAndSendVoiceRecording() {
+    if (!mediaRecorderRef.current) return;
+    clearInterval(recTimerRef.current);
+
+    mediaRecorderRef.current.onstop = async () => {
+      const mimeType = mediaRecorderRef.current.mimeType || 'audio/webm';
+      const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+      const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('ogg') ? 'ogg' : 'webm';
+      const file = new File([audioBlob], `vocal_${Date.now()}.${ext}`, { type: mimeType });
+
+      if (mediaRecorderRef.current.stream) {
+        mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+      }
+
+      setIsRecording(false);
+      setRecSeconds(0);
+      audioChunksRef.current = [];
+
+      await uploadDirectFile(file, 'Message vocal envoyé');
+    };
+
+    mediaRecorderRef.current.stop();
+  }
+
+  /* ── Partager Position GPS ── */
+  async function handleShareLocation() {
+    if (!navigator.geolocation) {
+      toast("La géolocalisation n'est pas supportée par votre navigateur", 'error');
+      return;
+    }
+    setLocating(true);
+    toast('Récupération de votre position GPS…', 'info');
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const accuracy = pos.coords.accuracy;
+
+        let address = '';
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, {
+            headers: { 'Accept-Language': 'fr' }
+          });
+          const geoData = await res.json();
+          address = geoData.display_name?.split(',').slice(0, 3).join(', ') || '';
+        } catch {
+          address = `Position GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+        }
+
+        const payload = {
+          type: 'location',
+          lat,
+          lng,
+          accuracy,
+          address: address || `Coordonnées : ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          timestamp: new Date().toISOString(),
+        };
+
+        emit('send_message', {
+          content: JSON.stringify(payload),
+          type: 'location',
+        });
+
+        setLocating(false);
+        toast('Position GPS partagée ✓', 'success');
+      },
+      (err) => {
+        console.error('Geolocation error:', err);
+        setLocating(false);
+        toast("Impossible d'obtenir la position GPS. Vérifiez les autorisations de votre appareil.", 'error');
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 10000 }
+    );
   }
 
   function handleDelete(id) { emit('delete_message', id); }
@@ -315,9 +455,16 @@ export default function Chat({ toast }) {
   /* ── Copier message ── */
   function copyMessage(content) {
     let text = content;
-    try { const d = JSON.parse(content); if (d?.type === 'file') text = d.originalname; } catch {}
+    try {
+      const d = JSON.parse(content);
+      if (d?.type === 'file') text = d.originalname;
+      else if (d?.type === 'location') text = d.address || `${d.lat}, ${d.lng}`;
+    } catch {}
     navigator.clipboard.writeText(text).then(() => toast('Message copié !', 'success'));
   }
+
+  /* ── Mobile panel state ── */
+  const [showInfo, setShowInfo] = useState(false);
 
   /* ── Épingler message (admin) ── */
   function pinMessage(msg) {
@@ -335,20 +482,20 @@ export default function Chat({ toast }) {
      RENDER
   ───────────────────────────────────────────────────── */
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div className="chat-container">
 
       {/* ══════════════════════════════════
           MAIN CHAT AREA
       ══════════════════════════════════ */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="chat-main">
 
         {/* ── Header ── */}
-        <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-          <span style={{ fontSize: 22 }}>💬</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700 }}>Chat Équipe</div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-              {onlineUsers.length} membre(s) en ligne · Documents partagés acceptés
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 20 }}>💬</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>Chat Équipe</div>
+            <div style={{ fontSize: 11, color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {onlineUsers.length} en ligne · Partage docs & IA
             </div>
           </div>
           {/* Bouton recherche */}
@@ -356,8 +503,18 @@ export default function Chat({ toast }) {
             type="button"
             title="Rechercher dans les messages"
             onClick={() => { setSearchOpen(o => !o); setSearchQuery(''); }}
-            style={{ background: searchOpen ? 'var(--primary)' : 'var(--border)', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: searchOpen ? '#fff' : 'var(--text-2)', fontSize: 14, transition: 'all .15s' }}
+            style={{ background: searchOpen ? 'var(--primary)' : 'var(--border)', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: searchOpen ? '#fff' : 'var(--text-2)', fontSize: 13, transition: 'all .15s' }}
           >🔎</button>
+          {/* Bouton Infos / Membres / IA sur mobile */}
+          <button
+            type="button"
+            onClick={() => setShowInfo(o => !o)}
+            className="btn btn-outline btn-sm"
+            style={{ padding: '5px 9px', fontSize: 12 }}
+            title="Membres en ligne & Assistant IA"
+          >
+            {showInfo ? '✕' : '👥 Infos'}
+          </button>
         </div>
 
         {/* ── Barre de recherche ── */}
@@ -411,6 +568,7 @@ export default function Chat({ toast }) {
             const prevMsg    = i > 0 ? filteredMessages[i - 1] : null;
             const showHeader = !prevMsg || prevMsg.user_id !== msg.user_id;
             const isFile     = msg.type === 'file';
+            const isLocation = msg.type === 'location' || (typeof msg.content === 'string' && msg.content.includes('"type":"location"'));
             const msgRx      = reactions[msg.id] || {};
             const hasRx      = Object.keys(msgRx).length > 0;
 
@@ -461,7 +619,7 @@ export default function Chat({ toast }) {
                   <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', flexDirection: mine ? 'row-reverse' : 'row' }}>
                     {/* Bulle */}
                     <div style={{
-                      padding: isFile ? '6px 8px' : '9px 13px',
+                      padding: (isFile || isLocation) ? '6px 8px' : '9px 13px',
                       borderRadius: mine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
                       background: msg.isAI
                         ? 'linear-gradient(135deg,#6366f115,#8b5cf615)'
@@ -478,19 +636,20 @@ export default function Chat({ toast }) {
                       )}
 
                       {/* Contenu */}
-                      {isFile
-                        ? <FileMessage content={msg.content} isMine={mine} />
-                        : msg.isAI
-                          ? <MarkdownText text={msg.content} />
-                          : (replyData ? (
-                              (() => {
-                                try {
-                                  const p = JSON.parse(msg.content);
-                                  return p.text || msg.content;
-                                } catch { return msg.content; }
-                              })()
-                            ) : msg.content)
-                      }
+                      {isFile ? (
+                        <FileMessage content={msg.content} isMine={mine} />
+                      ) : isLocation ? (
+                        <LocationMessage content={msg.content} isMine={mine} />
+                      ) : msg.isAI ? (
+                        <MarkdownText text={msg.content} />
+                      ) : (replyData ? (
+                        (() => {
+                          try {
+                            const p = JSON.parse(msg.content);
+                            return p.text || msg.content;
+                          } catch { return msg.content; }
+                        })()
+                      ) : msg.content)}
                     </div>
 
                     {/* Actions contextuelles au hover */}
@@ -604,75 +763,289 @@ export default function Chat({ toast }) {
 
         {/* ── Reply preview ── */}
         {replyTo && (
-          <div style={{ padding: '6px 16px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ flex: 1, fontSize: 12, color: 'var(--text-2)', borderLeft: '3px solid var(--primary)', paddingLeft: 8 }}>
-              <strong>{replyTo.nom}</strong> : {replyTo.content?.slice(0, 80)}…
+          <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', display: 'flex', alignItems: 'center', gap: 10, animation: 'fadeIn 0.15s ease' }}>
+            <div style={{ flex: 1, fontSize: 12, color: 'var(--text-2)', borderLeft: '3px solid var(--primary)', paddingLeft: 10 }}>
+              <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{replyTo.nom}</span> : {replyTo.content?.slice(0, 70)}…
             </div>
             <button type="button" onClick={() => setReplyTo(null)}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 16 }}>✕</button>
           </div>
         )}
 
-        {/* ── Barre de saisie ── */}
-        <form onSubmit={handleSend} style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* ── Barre de saisie moderne ── */}
+        <form onSubmit={handleSend} style={{ padding: '8px 12px', borderTop: '1px solid var(--border)', background: 'var(--surface)', position: 'relative' }}>
           {/* Mode IA indicator */}
           {aiMode && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6366f1', padding: '4px 8px', background: '#6366f110', borderRadius: 6 }}>
-              🤖 <strong>Mode IA activé</strong> — Posez votre question, l'assistant répondra
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#6366f1', padding: '4px 10px', background: '#6366f112', borderRadius: 8, marginBottom: 6 }}>
+              <span>🤖 <strong>Mode Assistant IA activé</strong></span>
+              <button type="button" onClick={() => setAiMode(false)} style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Désactiver</button>
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-            {/* Attacher fichier */}
-            <input ref={fileInputRef} type="file" style={{ display: 'none' }}
-              accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
-              onChange={handleFileChange} />
-            <button type="button" className="btn btn-outline btn-icon"
-              title="Joindre un fichier (max 10 Mo)"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading || aiMode}
-              style={{ flexShrink: 0, fontSize: 18, padding: '8px 10px' }}>📎</button>
+          {/* Hidden file & camera inputs */}
+          <input ref={fileInputRef} type="file" style={{ display: 'none' }}
+            accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+            onChange={handleFileChange} />
+          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+            onChange={handleFileChange} />
 
-            {/* Bouton IA */}
-            <button type="button"
-              title={aiMode ? "Désactiver l'assistant IA" : "Activer l'assistant IA"}
-              onClick={() => { setAiMode(o => !o); setReplyTo(null); inputRef.current?.focus(); }}
-              style={{
-                flexShrink: 0, fontSize: 16, padding: '8px 10px',
-                border: aiMode ? '2px solid #6366f1' : '1px solid var(--border)',
-                borderRadius: 8, cursor: 'pointer',
-                background: aiMode ? '#6366f115' : 'var(--surface)',
-                color: aiMode ? '#6366f1' : 'var(--text-2)',
-                transition: 'all .2s', fontWeight: aiMode ? 700 : 400,
+          {/* Action Menu Popover (Tray) */}
+          {actionsMenuOpen && !isRecording && (
+            <>
+              <div style={{ position: 'fixed', inset: 0, zIndex: 90 }} onClick={() => setActionsMenuOpen(false)} />
+              <div style={{
+                position: 'absolute',
+                bottom: '100%',
+                left: 12,
+                marginBottom: 8,
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 16,
+                padding: '12px 14px',
+                boxShadow: '0 12px 36px rgba(0,0,0,0.18)',
+                display: 'flex',
+                gap: 14,
+                zIndex: 95,
+                animation: 'fadeIn 0.15s ease',
               }}>
-              🤖
-            </button>
+                {/* Camera Tile */}
+                <button type="button" onClick={() => { setActionsMenuOpen(false); setCameraModalOpen(true); }}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
+                  <div style={{ width: 46, height: 46, borderRadius: 14, background: 'linear-gradient(135deg,#0284c7,#0ea5e9)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, boxShadow: '0 3px 8px rgba(2,132,199,0.3)' }}>
+                    📷
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>Photo</span>
+                </button>
 
-            {/* Champ texte */}
-            <input
-              ref={inputRef}
-              className="input"
-              value={text}
-              onChange={handleInput}
-              placeholder={aiMode ? "Posez votre question à l'IA médicale…" : "Votre message… (ou joindre un document avec 📎)"}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-              style={{ flex: 1 }}
-              disabled={uploading}
-            />
+                {/* Document Tile */}
+                <button type="button" onClick={() => { setActionsMenuOpen(false); fileInputRef.current?.click(); }}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
+                  <div style={{ width: 46, height: 46, borderRadius: 14, background: 'linear-gradient(135deg,#8b5cf6,#a855f7)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, boxShadow: '0 3px 8px rgba(139,92,246,0.3)' }}>
+                    📁
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>Fichier</span>
+                </button>
 
-            <button className="btn btn-primary" type="submit"
-              disabled={!text.trim() || uploading}
-              style={{ background: aiMode ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : undefined }}>
-              {aiMode ? '🤖 Demander' : 'Envoyer ↗'}
-            </button>
-          </div>
+                {/* Location Tile */}
+                <button type="button" onClick={() => { setActionsMenuOpen(false); handleShareLocation(); }}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
+                  <div style={{ width: 46, height: 46, borderRadius: 14, background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, boxShadow: '0 3px 8px rgba(16,185,129,0.3)' }}>
+                    📍
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>GPS</span>
+                </button>
+
+                {/* AI Assistant Tile */}
+                <button type="button" onClick={() => { setActionsMenuOpen(false); setAiMode(o => !o); }}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
+                  <div style={{ width: 46, height: 46, borderRadius: 14, background: aiMode ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'var(--surface2)', color: aiMode ? '#fff' : '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, border: '1px solid #6366f135', boxShadow: aiMode ? '0 3px 8px rgba(99,102,241,0.3)' : 'none' }}>
+                    🤖
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>IA {aiMode ? '✓' : ''}</span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Main Input Row */}
+          {isRecording ? (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '6px 14px',
+              background: '#fef2f2',
+              borderRadius: 24,
+              border: '1px solid #fecaca',
+              gap: 10,
+              minHeight: 44,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  width: 10, height: 10, borderRadius: '50%', background: '#ef4444',
+                  animation: 'pulse 1s infinite'
+                }} />
+                <span style={{ fontWeight: 700, fontSize: 14, color: '#b91c1c' }}>
+                  {Math.floor(recSeconds / 60)}:{(recSeconds % 60) < 10 ? '0' : ''}{recSeconds % 60}
+                </span>
+                <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 600 }}>
+                  Enregistrement vocal…
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={cancelVoiceRecording}
+                  style={{ color: '#64748b', fontSize: 12, padding: '4px 8px' }}
+                >
+                  🗑️ Annuler
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={stopAndSendVoiceRecording}
+                  style={{ background: '#ef4444', borderColor: '#ef4444', borderRadius: 20, padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                >
+                  🚀 Envoyer
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* Plus Actions Button */}
+              <button
+                type="button"
+                onClick={() => setActionsMenuOpen(o => !o)}
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: '50%',
+                  border: 'none',
+                  background: actionsMenuOpen ? 'var(--primary)' : 'var(--surface2)',
+                  color: actionsMenuOpen ? '#fff' : 'var(--text)',
+                  fontSize: 20,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  transition: 'all .15s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                }}
+                title="Ajouter photo, fichier, GPS, IA"
+              >
+                {actionsMenuOpen ? '✕' : '➕'}
+              </button>
+
+              {/* Text Input Capsule */}
+              <div style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                background: 'var(--surface2)',
+                borderRadius: 24,
+                padding: '2px 14px',
+                border: '1px solid var(--border)',
+                minHeight: 40,
+              }}>
+                <input
+                  ref={inputRef}
+                  value={text}
+                  onChange={handleInput}
+                  placeholder={aiMode ? "Posez votre question à l'IA…" : "Votre message…"}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: 'var(--text)',
+                    fontSize: 14,
+                    padding: '8px 0',
+                  }}
+                  disabled={uploading}
+                />
+              </div>
+
+              {/* Right Action: Send OR Quick Mic & Camera */}
+              {text.trim().length > 0 ? (
+                <button
+                  type="submit"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: '50%',
+                    border: 'none',
+                    background: aiMode ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'linear-gradient(135deg,#0284c7,#0ea5e9)',
+                    color: '#fff',
+                    fontSize: 17,
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    boxShadow: '0 3px 10px rgba(2,132,199,0.35)',
+                    transition: 'transform .1s',
+                  }}
+                  title="Envoyer"
+                >
+                  🚀
+                </button>
+              ) : (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={startVoiceRecording}
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: '50%',
+                      border: 'none',
+                      background: '#fef2f2',
+                      color: '#ef4444',
+                      fontSize: 18,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      boxShadow: '0 1px 3px rgba(239,68,68,0.15)',
+                    }}
+                    title="Enregistrer un message vocal"
+                  >
+                    🎙️
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCameraModalOpen(true)}
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: '50%',
+                      border: 'none',
+                      background: '#f0f9ff',
+                      color: '#0284c7',
+                      fontSize: 18,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      boxShadow: '0 1px 3px rgba(2,132,199,0.15)',
+                    }}
+                    title="Prendre une photo"
+                  >
+                    📷
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </form>
       </div>
 
+      {/* Camera Capture Modal */}
+      <CameraCaptureModal
+        isOpen={cameraModalOpen}
+        onClose={() => setCameraModalOpen(false)}
+        onCapture={handleCameraCapture}
+      />
+
       {/* ══════════════════════════════════
-          PANNEAU LATÉRAL DROIT
+          PANNEAU LATÉRAL DROIT (Off-canvas Drawer)
       ══════════════════════════════════ */}
-      <div style={{ width: 220, borderLeft: '1px solid var(--border)', background: 'var(--surface)', overflowY: 'auto', flexShrink: 0 }}>
+      {showInfo && (
+        <div className="sidebar-backdrop" onClick={() => setShowInfo(false)} />
+      )}
+      <div className={`chat-sidebar-panel${showInfo ? ' open' : ''}`}>
+
+        {/* Header panneau sur mobile */}
+        <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-1)' }}>Détails & Membres</div>
+          <button className="btn btn-ghost btn-icon" onClick={() => setShowInfo(false)} style={{ fontSize: 16, padding: '2px 6px' }}>✕</button>
+        </div>
 
         {/* En ligne */}
         <div style={{ padding: 14, borderBottom: '1px solid var(--border)' }}>
@@ -737,6 +1110,7 @@ export default function Chat({ toast }) {
 
       <style>{`
         @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+        @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.3;transform:scale(1.2)} }
       `}</style>
     </div>
   );

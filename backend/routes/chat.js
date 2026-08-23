@@ -20,7 +20,8 @@ const storage = multer.diskStorage({
 });
 
 const ALLOWED_TYPES = [
-  'image/jpeg','image/png','image/gif','image/webp',
+  'image/jpeg','image/png','image/gif','image/webp','image/heic','image/heif',
+  'audio/webm','audio/ogg','audio/mp3','audio/mpeg','audio/wav','audio/mp4','audio/m4a','audio/aac','audio/x-m4a',
   'application/pdf','application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel',
@@ -30,7 +31,7 @@ const ALLOWED_TYPES = [
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     ALLOWED_TYPES.includes(file.mimetype) ? cb(null,true) : cb(new Error('Type de fichier non autorisé'));
   },
@@ -39,6 +40,7 @@ const upload = multer({
 function fileIcon(mime) {
   if (!mime) return '📎';
   if (mime.startsWith('image/'))  return '🖼';
+  if (mime.startsWith('audio/'))  return '🎙️';
   if (mime === 'application/pdf') return '📄';
   if (mime.includes('word'))      return '📝';
   if (mime.includes('excel') || mime.includes('spreadsheet')) return '📊';

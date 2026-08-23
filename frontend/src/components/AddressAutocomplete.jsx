@@ -40,9 +40,12 @@ export default function AddressAutocomplete({
   /* ── Charger entreprises BDD (mode par défaut) ── */
   useEffect(() => {
     if (searchLocation) return;
-    axios.get('/api/entreprises')
-      .then(r => setAllEntreprises(r.data || []))
-      .catch(() => setAllEntreprises([]));
+    try {
+      const p = axios.get('/api/entreprises');
+      if (p && typeof p.then === 'function') {
+        p.then(r => setAllEntreprises(r?.data || [])).catch(() => setAllEntreprises([]));
+      }
+    } catch {}
   }, [searchLocation]);
 
   /* ── Sync value → query ── */
