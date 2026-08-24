@@ -578,7 +578,7 @@ export default function Planning({ toast }) {
   const [modal, setModal] = useState(null);
   const [syncModal, setSyncModal] = useState(false);
   const [sigModal, setSigModal] = useState(null);
-  const [filters, setFilters] = useState({ medecin_id: '', technicien_id: '', entreprise: '', search: '' });
+  const [filters, setFilters] = useState({ role: '', entreprise: '', search: '' });
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
@@ -590,7 +590,6 @@ export default function Planning({ toast }) {
         axios.get('/api/clino'),
       ]);
       setPe(pr.data || []); setCe(cr.data || []);
-      // Normalize clino: map date field and normalize heure
       setCl((clr.data || []).map(c=>({
         ...c,
         _t: 'clino',
@@ -600,32 +599,33 @@ export default function Planning({ toast }) {
     finally{ setLoading(false); }
   },[toast]);
 
-  useEffect(()=>{loadAll();},[loadAll,tick]);
+  useEffect(()=>{ loadAll(); },[loadAll,tick]);
 
   useEffect(()=>{
-    const op=on('planning_refresh',()=>setTick(t=>t+1));
-    const oc=on('calendar_refresh',()=>setTick(t=>t+1));
-    return ()=>{op?.();oc?.();};
+    const off1=on('planning_refresh',()=>setTick(t=>t+1));
+    const off2=on('calendar_refresh',()=>setTick(t=>t+1));
+    const off3=on('clino_refresh',()=>setTick(t=>t+1));
+    return ()=>{ off1?.(); off2?.(); off3?.(); };
   },[on]);
 
   useEffect(()=>{
-    Promise.all([
-      axios.get('/api/users/by-role/medecin').catch(()=>({data:[]})),
-      axios.get('/api/users/by-role/technicien').catch(()=>({data:[]})),
-      axios.get('/api/entreprises').catch(() => ({ data: [] })),
-    ]).then(([m,t,e])=>{
-      setMed(m.data || []);
-      setTec(t.data || []);
-      setEnts(e.data || []);
-    });
+    axios.get('/api/users/by-role/medecin').then(r=>setMed(r.data||[])).catch(()=>{});
+    axios.get('/api/users/by-role/technicien').then(r=>setTec(r.data||[])).catch(()=>{});
+    axios.get('/api/entreprises').then(r=>setEnts(r.data||[])).catch(()=>{});
   },[]);
 
   const weekEnd=addDays(weekStart,6);
   const filterWeek=arr=>arr.filter(e=>{const d=toRaw(e.date||e.date_debut?.slice(0,10)||'');return d>=format(weekStart,'yyyy-MM-dd')&&d<=format(weekEnd,'yyyy-MM-dd');});
 
   const filteredPe = pe.filter(e => {
-    if (filters.medecin_id && String(e.medecin_id) !== filters.medecin_id) return false;
-    if (filters.technicien_id && String(e.technicien_id) !== filters.technicien_id) return false;
+    if (filters.role === 'medecin') {
+      const hasMed = Boolean(e.medecin_id || (e.medecin_nom && e.medecin_nom !== '—' && e.medecin_nom !== '-'));
+      if (!hasMed) return false;
+    }
+    if (filters.role === 'technicien') {
+      const hasTec = Boolean(e.technicien_id || (e.technicien_nom && e.technicien_nom !== '—' && e.technicien_nom !== '-'));
+      if (!hasTec) return false;
+    }
     if (filters.entreprise) {
       const q = filters.entreprise.toLowerCase();
       const match = (e.titre || '').toLowerCase().includes(q) || (e.adresse || '').toLowerCase().includes(q);
@@ -643,8 +643,14 @@ export default function Planning({ toast }) {
   });
 
   const filteredCl = cl.filter(e => {
-    if (filters.medecin_id && String(e.medecin_id) !== filters.medecin_id) return false;
-    if (filters.technicien_id && String(e.technicien_id) !== filters.technicien_id) return false;
+    if (filters.role === 'medecin') {
+      const hasMed = Boolean(e.medecin_id || e.medecin_nom || e.medecin_full);
+      if (!hasMed) return false;
+    }
+    if (filters.role === 'technicien') {
+      const hasTec = Boolean(e.technicien_id || e.technicien_nom || e.technicien_full);
+      if (!hasTec) return false;
+    }
     if (filters.entreprise) {
       const q = filters.entreprise.toLowerCase();
       const match = (e.adresse || '').toLowerCase().includes(q) || (e.commentaire || '').toLowerCase().includes(q);
@@ -664,7 +670,7 @@ export default function Planning({ toast }) {
   });
 
   const filteredCe = ce.filter(e => {
-    if (filters.medecin_id || filters.technicien_id) return false;
+    if (filters.role) return false;
     if (filters.entreprise) {
       const q = filters.entreprise.toLowerCase();
       const match = (e.titre || '').toLowerCase().includes(q) || (e.lieu || '').toLowerCase().includes(q);
@@ -821,32 +827,22 @@ export default function Planning({ toast }) {
         </div>
       </div>
 
-      {/* Advanced Filter Bar (Médecin, Technicien, Entreprise, Recherche) */}
+      {/* Filter Bar (Rôle: Médecins / Techniciens, Entreprise, Recherche) */}
       <div style={{display:'flex',gap:10,padding:'10px 20px',background:'var(--surface2)',borderBottom:'1px solid var(--border)',flexShrink:0,flexWrap:'wrap',alignItems:'center'}}>
         <span style={{fontSize:13,fontWeight:700,color:'var(--text)',display:'flex',alignItems:'center',gap:4}}>
           🏷️ Filtres :
         </span>
 
-        {/* Filter by Doctor */}
+        {/* Filter by Category: All / Medecins / Techniciens */}
         <select
           className="input"
-          style={{width:'auto',fontSize:12,padding:'5px 10px',height:32,borderRadius:8}}
-          value={filters.medecin_id}
-          onChange={e=>setFilters(f=>({...f,medecin_id:e.target.value}))}
+          style={{width:'auto',fontSize:12,padding:'5px 10px',height:32,borderRadius:8,fontWeight:600}}
+          value={filters.role}
+          onChange={e=>setFilters(f=>({...f,role:e.target.value}))}
         >
-          <option value="">👨‍⚕️ Tous les médecins</option>
-          {med.map(m=><option key={m.id} value={m.id}>{m.prenom} {m.nom}</option>)}
-        </select>
-
-        {/* Filter by Technician */}
-        <select
-          className="input"
-          style={{width:'auto',fontSize:12,padding:'5px 10px',height:32,borderRadius:8}}
-          value={filters.technicien_id}
-          onChange={e=>setFilters(f=>({...f,technicien_id:e.target.value}))}
-        >
-          <option value="">🔧 Tous les techniciens</option>
-          {tec.map(t=><option key={t.id} value={t.id}>{t.prenom} {t.nom}</option>)}
+          <option value="">👥 Tous les intervenants</option>
+          <option value="medecin">👨‍⚕️ Médecins uniquement</option>
+          <option value="technicien">🔧 Techniciens uniquement</option>
         </select>
 
         {/* Filter by Company */}
@@ -885,7 +881,7 @@ export default function Planning({ toast }) {
           <>
             <button
               className="btn btn-ghost btn-sm"
-              onClick={()=>setFilters({medecin_id:'',technicien_id:'',entreprise:'',search:''})}
+              onClick={()=>setFilters({role:'',entreprise:'',search:''})}
               style={{fontSize:12,padding:'4px 8px',color:'var(--danger)'}}
               title="Réinitialiser tous les filtres"
             >

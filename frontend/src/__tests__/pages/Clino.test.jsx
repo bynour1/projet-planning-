@@ -71,18 +71,13 @@ describe('Clino Mobile page', () => {
     expect(screen.queryByText('Rue de la Liberté, Tunis')).not.toBeInTheDocument();
   });
 
-  it('filters by doctor dropdown', async () => {
+  it('filters by category dropdown (Médecins / Techniciens)', async () => {
     setup();
-    await waitFor(() => screen.getByText('👨‍⚕️ Tous les médecins'));
-    const doctorSelect = screen.getByDisplayValue('👨‍⚕️ Tous les médecins');
-    expect(doctorSelect).toBeInTheDocument();
-  });
-
-  it('filters by technician dropdown', async () => {
-    setup();
-    await waitFor(() => screen.getByText('🔧 Tous les techniciens'));
-    const techSelect = screen.getByDisplayValue('🔧 Tous les techniciens');
-    expect(techSelect).toBeInTheDocument();
+    await waitFor(() => screen.getByText('👥 Tous les intervenants'));
+    const roleSelect = screen.getByDisplayValue('👥 Tous les intervenants');
+    expect(roleSelect).toBeInTheDocument();
+    await userEvent.selectOptions(roleSelect, 'medecin');
+    expect(screen.getByText('👨‍⚕️ Médecins uniquement')).toBeInTheDocument();
   });
 
   it('opens modal on + Programme click', async () => {

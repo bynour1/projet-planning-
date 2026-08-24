@@ -258,7 +258,7 @@ export default function Clino({ toast }) {
   const [modal,       setModal]       = useState(null);
   const [sigModal,    setSigModal]    = useState(null);
   const [confirm,     setConfirm]     = useState(null);
-  const [filters,     setFilters]     = useState({ medecin_id: '', technicien_id: '', search: '' });
+  const [filters,     setFilters]     = useState({ role: '', search: '' });
   const [loading,     setLoading]     = useState(true);
   const [selectedDate,setSelectedDate]= useState(format(new Date(),'yyyy-MM-dd'));
   const [activeTab,   setActiveTab]   = useState('list'); // 'list'|'programme'
@@ -294,8 +294,14 @@ export default function Clino({ toast }) {
   }
 
   const filtered = items.filter(it => {
-    if (filters.medecin_id && String(it.medecin_id) !== String(filters.medecin_id)) return false;
-    if (filters.technicien_id && String(it.technicien_id) !== String(filters.technicien_id)) return false;
+    if (filters.role === 'medecin') {
+      const hasMed = Boolean(it.medecin_id || it.medecin_nom || it.medecin_full);
+      if (!hasMed) return false;
+    }
+    if (filters.role === 'technicien') {
+      const hasTec = Boolean(it.technicien_id || it.technicien_nom || it.technicien_full);
+      if (!hasTec) return false;
+    }
     if (filters.search) {
       const q = filters.search.toLowerCase();
       const match = (it.adresse || '').toLowerCase().includes(q) ||
@@ -307,7 +313,7 @@ export default function Clino({ toast }) {
     return true;
   });
 
-  const hasActiveFilters = Boolean(filters.medecin_id || filters.technicien_id || filters.search);
+  const hasActiveFilters = Boolean(filters.role || filters.search);
 
   const allDates = [...new Set([
     ...items.map(i => i.date ? String(i.date).slice(0, 10) : null),
@@ -400,36 +406,22 @@ export default function Clino({ toast }) {
         </div>
       </div>
 
-      {/* Advanced Filter Bar (Médecin, Technicien, Recherche) */}
+      {/* Filter Bar (Rôle: Médecins / Techniciens, Recherche) */}
       <div style={{ display: 'flex', gap: 10, padding: '10px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 4 }}>
           🏷️ Filtres :
         </span>
 
-        {/* Filter by Doctor */}
+        {/* Filter by Category: All / Medecins / Techniciens */}
         <select
           className="input"
-          style={{ width: 'auto', fontSize: 12, padding: '5px 10px', height: 32, borderRadius: 8 }}
-          value={filters.medecin_id}
-          onChange={e => setFilters(f => ({ ...f, medecin_id: e.target.value }))}
+          style={{ width: 'auto', fontSize: 12, padding: '5px 10px', height: 32, borderRadius: 8, fontWeight: 600 }}
+          value={filters.role}
+          onChange={e => setFilters(f => ({ ...f, role: e.target.value }))}
         >
-          <option value="">👨‍⚕️ Tous les médecins</option>
-          {medecins.map(m => (
-            <option key={m.id} value={m.id}>{m.prenom} {m.nom}</option>
-          ))}
-        </select>
-
-        {/* Filter by Technician */}
-        <select
-          className="input"
-          style={{ width: 'auto', fontSize: 12, padding: '5px 10px', height: 32, borderRadius: 8 }}
-          value={filters.technicien_id}
-          onChange={e => setFilters(f => ({ ...f, technicien_id: e.target.value }))}
-        >
-          <option value="">🔧 Tous les techniciens</option>
-          {techniciens.map(t => (
-            <option key={t.id} value={t.id}>{t.prenom} {t.nom}</option>
-          ))}
+          <option value="">👥 Tous les intervenants</option>
+          <option value="medecin">👨‍⚕️ Médecins uniquement</option>
+          <option value="technicien">🔧 Techniciens uniquement</option>
         </select>
 
         {/* Search input */}
@@ -437,7 +429,7 @@ export default function Clino({ toast }) {
           className="input"
           type="text"
           placeholder="🔍 Rechercher par mot-clé, médecin ou adresse..."
-          style={{ width: 240, fontSize: 12, padding: '5px 10px', height: 32, borderRadius: 8 }}
+          style={{ width: 260, fontSize: 12, padding: '5px 10px', height: 32, borderRadius: 8 }}
           value={filters.search}
           onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
         />
@@ -446,7 +438,7 @@ export default function Clino({ toast }) {
           <>
             <button
               className="btn btn-ghost btn-sm"
-              onClick={() => setFilters({ medecin_id: '', technicien_id: '', search: '' })}
+              onClick={() => setFilters({ role: '', search: '' })}
               style={{ fontSize: 12, padding: '4px 8px', color: 'var(--danger)' }}
               title="Réinitialiser tous les filtres"
             >
