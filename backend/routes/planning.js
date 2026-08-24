@@ -116,7 +116,21 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
 
     // Emit socket
     const io = req.app.get('io');
-    if (io) io.emit('planning_refresh');
+    if (io) {
+      io.emit('planning_new', {
+        id: result.insertId,
+        titre: titre || 'Nouvelle intervention',
+        date: fmtRaw(date),
+        heure_debut,
+        heure_fin,
+        adresse,
+        medecin_nom,
+        technicien_nom,
+        createdBy: `${req.user.prenom} ${req.user.nom}`,
+        creatorId: req.user.id,
+      });
+      io.emit('planning_refresh');
+    }
 
     // Email + SMS notification (async, don't await)
     notifyAllUsers({
@@ -180,6 +194,33 @@ router.get('/feed.ics', async (req, res) => {
 
     const [rows] = await db.query(query, params);
 
+    // Also fetch Clino Mobile events
+    let clinoQuery = `
+      SELECT cm.*,
+        CONCAT(u.prenom, ' ', u.nom) AS medecin_nom,
+        CONCAT(t.prenom, ' ', t.nom) AS technicien_nom
+      FROM clino_mobile cm
+      LEFT JOIN users u ON u.id = cm.medecin_id
+      LEFT JOIN users t ON t.id = cm.technicien_id
+      WHERE cm.date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+    `;
+    const clinoParams = [];
+    if (user_id) {
+      clinoQuery += ' AND (cm.medecin_id = ? OR cm.technicien_id = ?)';
+      clinoParams.push(user_id, user_id);
+    } else {
+      if (medecin_id) {
+        clinoQuery += ' AND cm.medecin_id = ?';
+        clinoParams.push(medecin_id);
+      }
+      if (technicien_id) {
+        clinoQuery += ' AND cm.technicien_id = ?';
+        clinoParams.push(technicien_id);
+      }
+    }
+    clinoQuery += ' ORDER BY cm.date, cm.heure';
+    const [clinoRows] = await db.query(clinoQuery, clinoParams);
+
     const lines = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
@@ -207,6 +248,26 @@ router.get('/feed.ics', async (req, res) => {
       lines.push(`SUMMARY:${(ev.titre || 'Intervention GMT').replace(/[\r\n]/g, ' ')}`);
       if (ev.adresse) lines.push(`LOCATION:${ev.adresse.replace(/[\r\n]/g, ' ')}`);
       lines.push(`DESCRIPTION:Medecin: ${ev.medecin_nom || 'Non assigné'} \\nTechnicien: ${ev.technicien_nom || 'Non assigné'}${ev.commentaire ? ' \\nNote: ' + ev.commentaire : ''}`);
+      lines.push('STATUS:CONFIRMED');
+      lines.push('END:VEVENT');
+    });
+
+    clinoRows.forEach((cl) => {
+      const dStr = fmtRaw(cl.date);
+      if (!dStr) return;
+      const cleanDate = dStr.replace(/-/g, '');
+      const hStr = cl.heure ? String(cl.heure).replace(':', '').slice(0, 4) : '0800';
+      const start = `${cleanDate}T${hStr}00`;
+      const end   = `${cleanDate}T${hStr}00`;
+
+      lines.push('BEGIN:VEVENT');
+      lines.push(`UID:gmt-clino-${cl.id}@gmt-ariana.tn`);
+      lines.push(`DTSTAMP:${nowStr}`);
+      lines.push(`DTSTART:${start}`);
+      lines.push(`DTEND:${end}`);
+      lines.push(`SUMMARY:🚗 Clino Mobile - ${(cl.medecin_nom || cl.adresse || 'Tournée').replace(/[\r\n]/g, ' ')}`);
+      if (cl.adresse) lines.push(`LOCATION:${cl.adresse.replace(/[\r\n]/g, ' ')}`);
+      lines.push(`DESCRIPTION:Type: Clino Mobile \\nMedecin: ${cl.medecin_nom || 'Non assigné'} \\nTechnicien: ${cl.technicien_nom || 'Non assigné'}${cl.commentaire ? ' \\nNote: ' + cl.commentaire : ''}`);
       lines.push('STATUS:CONFIRMED');
       lines.push('END:VEVENT');
     });

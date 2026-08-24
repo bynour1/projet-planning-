@@ -34,8 +34,8 @@ describe('Clino Mobile page', () => {
 
   it('lists clino programmes', async () => {
     setup();
-    await waitFor(() => expect(screen.getByText('Rue de la Liberté, Tunis')).toBeInTheDocument());
-    expect(screen.getByText('Avenue Bourguiba')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText('Rue de la Liberté, Tunis')[0]).toBeInTheDocument());
+    expect(screen.getAllByText('Avenue Bourguiba')[0]).toBeInTheDocument();
   });
 
   it('shows formatted dates (DD/MM/YYYY)', async () => {
@@ -69,7 +69,7 @@ describe('Clino Mobile page', () => {
     setup();
     await waitFor(() => screen.getByPlaceholderText(/Rechercher/i));
     await userEvent.type(screen.getByPlaceholderText(/Rechercher/i), 'Bourguiba');
-    expect(screen.getByText('Avenue Bourguiba')).toBeInTheDocument();
+    expect(screen.getAllByText('Avenue Bourguiba')[0]).toBeInTheDocument();
     expect(screen.queryByText('Rue de la Liberté, Tunis')).not.toBeInTheDocument();
   });
 

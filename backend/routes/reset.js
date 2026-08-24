@@ -20,7 +20,10 @@ router.post('/forgot-password', async (req, res) => {
     const token = crypto.randomBytes(32).toString('hex');
 
     await db.query('DELETE FROM password_resets WHERE email = ?', [email]);
-    await db.query('INSERT INTO password_resets (email, token) VALUES (?,?)', [email, token]);
+    await db.query(
+      'INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 1 HOUR))',
+      [email, token]
+    );
 
     await sendPasswordReset(email, user.nom, user.prenom, token, user.telephone || null);
   } catch (err) {

@@ -60,7 +60,19 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     );
 
     const io = req.app.get('io');
-    if (io) io.emit('clino_refresh');
+    if (io) {
+      io.emit('clino_new', {
+        id: result.insertId,
+        date: fmtRaw(date),
+        heure,
+        adresse,
+        medecin_nom,
+        technicien_nom,
+        createdBy: `${req.user.prenom} ${req.user.nom}`,
+        creatorId: req.user.id,
+      });
+      io.emit('clino_refresh');
+    }
 
     res.status(201).json({ message: 'Intervention créée', id: result.insertId });
   } catch (err) {

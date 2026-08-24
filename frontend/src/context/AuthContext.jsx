@@ -8,16 +8,38 @@ export function AuthProvider({ children }) {
   const [token,   setToken]   = useState(() => localStorage.getItem('pm_token'));
   const [loading, setLoading] = useState(true);
 
-  // Set axios default auth header
+  // Set axios default auth header and setup 401 interceptor
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      if (!user) fetchMe();
+      if (!user) {
+        fetchMe();
+      }
     } else {
       delete axios.defaults.headers.common['Authorization'];
+      setUser(null);
       setLoading(false);
     }
-  }, [token, user]);
+
+    let interceptor;
+    if (axios.interceptors?.response?.use) {
+      interceptor = axios.interceptors.response.use(
+        (res) => res,
+        (err) => {
+          if (err?.response?.status === 401 && !err.config?.url?.includes('/api/auth/login')) {
+            logout();
+          }
+          return Promise.reject(err);
+        }
+      );
+    }
+
+    return () => {
+      if (interceptor !== undefined && axios.interceptors?.response?.eject) {
+        axios.interceptors.response.eject(interceptor);
+      }
+    };
+  }, [token]);
 
   async function fetchMe() {
     try {

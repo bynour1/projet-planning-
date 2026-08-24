@@ -146,6 +146,23 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok', time: new Date() 
 // 404
 app.use((_req, res) => res.status(404).json({ message: 'Route introuvable' }));
 
+// Global Express error handler
+app.use((err, _req, res, _next) => {
+  console.error('Unhandled API Error:', err);
+  res.status(err.status || 500).json({
+    message: err.message || 'Une erreur interne est survenue sur le serveur.',
+  });
+});
+
+// Process-level safety handlers
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Promise Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
+
 // ─── Start Reminders ──────────────────────────────────────────
 require('./cron/reminders')(db);
 

@@ -53,6 +53,20 @@ function fmtDisplay(dateStr) {
   }
 }
 
+function fmtDisplayWithDay(dateStr) {
+  if (!dateStr) return '—';
+  try {
+    const raw = toRaw(dateStr);
+    if (!raw) return dateStr;
+    const parsed = parseISO(raw);
+    const dayName = format(parsed, 'EEEE', { locale: fr });
+    const capDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+    return `${capDay} ${format(parsed, 'dd/MM/yyyy')}`;
+  } catch {
+    return dateStr;
+  }
+}
+
 /* ── Planning modal ─────────────────────────────────────────── */
 function PlanningModal({ event, medecins, techniciens, onSave, onClose }) {
   const init = event || {};
@@ -628,6 +642,91 @@ export default function Planning({ toast }) {
     return true;
   });
 
+  const filteredCl = cl.filter(e => {
+    if (filters.medecin_id && String(e.medecin_id) !== filters.medecin_id) return false;
+    if (filters.technicien_id && String(e.technicien_id) !== filters.technicien_id) return false;
+    if (filters.entreprise) {
+      const q = filters.entreprise.toLowerCase();
+      const match = (e.adresse || '').toLowerCase().includes(q) || (e.commentaire || '').toLowerCase().includes(q);
+      if (!match) return false;
+    }
+    if (filters.search) {
+      const s = filters.search.toLowerCase();
+      const match = (e.adresse || '').toLowerCase().includes(s) ||
+                    (e.medecin_nom || '').toLowerCase().includes(s) ||
+                    (e.medecin_full || '').toLowerCase().includes(s) ||
+                    (e.technicien_nom || '').toLowerCase().includes(s) ||
+                    (e.technicien_full || '').toLowerCase().includes(s) ||
+                    (e.commentaire || '').toLowerCase().includes(s);
+      if (!match) return false;
+    }
+    return true;
+  });
+
+  const filteredCe = ce.filter(e => {
+    if (filters.medecin_id || filters.technicien_id) return false;
+    if (filters.entreprise) {
+      const q = filters.entreprise.toLowerCase();
+      const match = (e.titre || '').toLowerCase().includes(q) || (e.lieu || '').toLowerCase().includes(q);
+      if (!match) return false;
+    }
+    if (filters.search) {
+      const s = filters.search.toLowerCase();
+      const match = (e.titre || '').toLowerCase().includes(s) || (e.lieu || '').toLowerCase().includes(s) || (e.description || '').toLowerCase().includes(s);
+      if (!match) return false;
+    }
+    return true;
+  });
+
+  const exportItems = [
+    ...filteredPe.map(e => ({
+      ...e,
+      _t: 'p',
+      type_label: 'Programme',
+      date: toRaw(e.date),
+      date_display: fmtDisplayWithDay(e.date),
+      heure_debut: e.heure_debut || '',
+      heure_fin: e.heure_fin || '',
+      heure_display: e.heure_debut ? `${e.heure_debut}${e.heure_fin ? ' - ' + e.heure_fin : ''}` : '-',
+      titre: e.titre || 'Programme',
+      medecin_nom: e.medecin_nom || '-',
+      technicien_nom: e.technicien_nom || '-',
+      adresse: e.adresse || '-',
+      commentaire: e.commentaire || '',
+    })),
+    ...filteredCl.map(e => ({
+      ...e,
+      _t: 'cl',
+      type_label: 'Clino Mobile',
+      titre: 'Programme Clino Mobile',
+      date: toRaw(e.date),
+      date_display: fmtDisplayWithDay(e.date),
+      heure_debut: e.heure ? String(e.heure).slice(0, 5) : '',
+      heure_fin: '',
+      heure_display: e.heure ? String(e.heure).slice(0, 5) : '-',
+      medecin_nom: e.medecin_full || e.medecin_nom || '-',
+      technicien_nom: e.technicien_full || e.technicien_nom || '-',
+      adresse: e.adresse || '-',
+      commentaire: e.commentaire || '',
+    })),
+    ...filteredCe.map(e => ({
+      ...e,
+      _t: 'e',
+      type_label: e.type ? `Evenement (${e.type})` : 'Evenement',
+      date: toRaw(e.date_debut?.slice(0, 10)),
+      date_display: fmtDisplayWithDay(e.date_debut?.slice(0, 10)),
+      heure_debut: e.date_debut ? format(parseISO(e.date_debut), 'HH:mm') : '',
+      heure_fin: e.date_fin ? format(parseISO(e.date_fin), 'HH:mm') : '',
+      heure_display: e.date_debut ? `${format(parseISO(e.date_debut), 'HH:mm')}${e.date_fin ? ' - ' + format(parseISO(e.date_fin), 'HH:mm') : ''}` : '-',
+      titre: e.titre || 'Evenement',
+      medecin_nom: '-',
+      technicien_nom: '-',
+      adresse: e.lieu || '-',
+      commentaire: e.description || '',
+    })),
+  ].sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.heure_debut || '').localeCompare(b.heure_debut || ''));
+
+  const totalFilteredCount = filteredPe.length + filteredCl.length + filteredCe.length;
   const hasActiveFilters = Boolean(filters.medecin_id || filters.technicien_id || filters.entreprise || filters.search);
 
   if(loading) return <div className="loading-center"><div className="spinner"/></div>;
@@ -664,30 +763,34 @@ export default function Planning({ toast }) {
           <div style={{display:'flex',gap:4}}>
             <button className="btn btn-outline btn-sm" onClick={() => {
               import('../utils/exportUtils').then(({exportToPDF}) => {
-                exportToPDF(filteredPe, [
-                  {header:'Date',key:'date'},
-                  {header:'Titre',key:'titre'},
+                exportToPDF(exportItems, [
+                  {header:'Date',key:'date_display'},
+                  {header:'Horaire',key:'heure_display'},
+                  {header:'Titre / Sujet',key:'titre'},
                   {header:'Médecin',key:'medecin_nom'},
-                  {header:'Heure',key:'heure_debut'},
-                  {header:'Adresse',key:'adresse'},
+                  {header:'Technicien',key:'technicien_nom'},
+                  {header:'Adresse / Lieu',key:'adresse'},
                 ], 'Planning GMT Ariana');
               });
-            }} title="Exporter PDF">📄 PDF</button>
+            }} title="Exporter PDF (Programmes + Clino + Calendrier)">📄 PDF</button>
             <button className="btn btn-outline btn-sm" onClick={() => {
               import('../utils/exportUtils').then(({exportToExcel}) => {
-                exportToExcel(filteredPe, [
-                  {header:'Date',key:'date'},
-                  {header:'Titre',key:'titre'},
-                  {header:'Médecin',key:'medecin_nom'},
+                exportToExcel(exportItems, [
+                  {header:'Type',key:'type_label'},
+                  {header:'Date',key:'date_display'},
                   {header:'Heure début',key:'heure_debut'},
                   {header:'Heure fin',key:'heure_fin'},
-                  {header:'Adresse',key:'adresse'},
+                  {header:'Titre',key:'titre'},
+                  {header:'Médecin',key:'medecin_nom'},
+                  {header:'Technicien',key:'technicien_nom'},
+                  {header:'Adresse / Lieu',key:'adresse'},
+                  {header:'Commentaires / Détails',key:'commentaire'},
                 ], 'Planning_GMT_Ariana');
               });
-            }} title="Exporter Excel">📊 Excel</button>
+            }} title="Exporter Excel (Programmes + Clino + Calendrier)">📊 Excel</button>
             <button className="btn btn-outline btn-sm" onClick={() => {
-              import('../utils/exportUtils').then(({exportToICS}) => exportToICS(filteredPe));
-            }} title="Exporter Calendar">📅 .ics</button>
+              import('../utils/exportUtils').then(({exportToICS}) => exportToICS(exportItems));
+            }} title="Exporter Calendrier .ics (Programmes + Clino + Calendrier)">📅 .ics</button>
             <button
               className="btn btn-outline btn-sm"
               onClick={() => setSyncModal(true)}
@@ -789,15 +892,15 @@ export default function Planning({ toast }) {
               ✕ Réinitialiser
             </button>
             <span className="badge badge-blue" style={{fontSize:11}}>
-              {filteredPe.length} programme{filteredPe.length > 1 ? 's' : ''} trouvé{filteredPe.length > 1 ? 's' : ''}
+              {totalFilteredCount} élément{totalFilteredCount > 1 ? 's' : ''} trouvé{totalFilteredCount > 1 ? 's' : ''}
             </span>
           </>
         )}
       </div>
 
-      {view==='week'&&<WeekView weekStart={weekStart} pe={filterWeek(filteredPe)} ce={filterWeek(ce.map(e=>({...e,date:e.date_debut?.slice(0,10)})))} cl={filterWeek(cl)} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast} onSign={item=>setSigModal(item)}/>}
-      {view==='month'&&<MonthView current={monthDate} pe={filteredPe} ce={ce} cl={cl} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast} onSign={item=>setSigModal(item)}/>}
-      {view==='list'&&<ListView pe={filteredPe} ce={ce} cl={cl} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast} onSign={item=>setSigModal(item)}/>}
+      {view==='week'&&<WeekView weekStart={weekStart} pe={filterWeek(filteredPe)} ce={filterWeek(filteredCe.map(e=>({...e,date:e.date_debut?.slice(0,10)})))} cl={filterWeek(filteredCl)} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast} onSign={item=>setSigModal(item)}/>}
+      {view==='month'&&<MonthView current={monthDate} pe={filteredPe} ce={filteredCe} cl={filteredCl} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast} onSign={item=>setSigModal(item)}/>}
+      {view==='list'&&<ListView pe={filteredPe} ce={filteredCe} cl={filteredCl} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast} onSign={item=>setSigModal(item)}/>}
 
       {modal?.t==='p'&&<PlanningModal event={modal?.data || null} medecins={med} techniciens={tec}
         onSave={()=>{setModal(null);setTick(t=>t+1);toast('Programme enregistré ✓ — Email envoyé 📧','success');}} onClose={()=>setModal(null)}/>}

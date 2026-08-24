@@ -948,79 +948,84 @@ export default function Chat({ toast }) {
                 />
               </div>
 
-              {/* Right Action: Send OR Quick Mic & Camera */}
-              {text.trim().length > 0 ? (
+              {/* Right Action: Quick Actions & Send Button */}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                {!text.trim() && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={startVoiceRecording}
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: '50%',
+                        border: 'none',
+                        background: '#fef2f2',
+                        color: '#ef4444',
+                        fontSize: 18,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        boxShadow: '0 1px 3px rgba(239,68,68,0.15)',
+                      }}
+                      title="Enregistrer un message vocal"
+                      aria-label="Enregistrer vocal"
+                    >
+                      🎙️
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCameraModalOpen(true)}
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: '50%',
+                        border: 'none',
+                        background: '#f0f9ff',
+                        color: '#0284c7',
+                        fontSize: 18,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        boxShadow: '0 1px 3px rgba(2,132,199,0.15)',
+                      }}
+                      title="Prendre une photo"
+                      aria-label="Prendre photo"
+                    >
+                      📷
+                    </button>
+                  </>
+                )}
                 <button
                   type="submit"
+                  disabled={!text.trim() || uploading}
+                  aria-label="Envoyer"
                   style={{
                     width: 40,
                     height: 40,
                     borderRadius: '50%',
                     border: 'none',
-                    background: aiMode ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'linear-gradient(135deg,#0284c7,#0ea5e9)',
-                    color: '#fff',
+                    background: !text.trim() || uploading ? 'var(--border)' : (aiMode ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'linear-gradient(135deg,#0284c7,#0ea5e9)'),
+                    color: !text.trim() || uploading ? 'var(--text-3)' : '#fff',
                     fontSize: 17,
                     fontWeight: 700,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    cursor: 'pointer',
+                    cursor: !text.trim() || uploading ? 'not-allowed' : 'pointer',
                     flexShrink: 0,
-                    boxShadow: '0 3px 10px rgba(2,132,199,0.35)',
-                    transition: 'transform .1s',
+                    boxShadow: text.trim() && !uploading ? '0 3px 10px rgba(2,132,199,0.35)' : 'none',
+                    transition: 'all .15s',
                   }}
                   title="Envoyer"
                 >
                   🚀
                 </button>
-              ) : (
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <button
-                    type="button"
-                    onClick={startVoiceRecording}
-                    style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: '50%',
-                      border: 'none',
-                      background: '#fef2f2',
-                      color: '#ef4444',
-                      fontSize: 18,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                      boxShadow: '0 1px 3px rgba(239,68,68,0.15)',
-                    }}
-                    title="Enregistrer un message vocal"
-                  >
-                    🎙️
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCameraModalOpen(true)}
-                    style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: '50%',
-                      border: 'none',
-                      background: '#f0f9ff',
-                      color: '#0284c7',
-                      fontSize: 18,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                      boxShadow: '0 1px 3px rgba(2,132,199,0.15)',
-                    }}
-                    title="Prendre une photo"
-                  >
-                    📷
-                  </button>
-                </div>
-              )}
+              </div>
             </div>
           )}
         </form>

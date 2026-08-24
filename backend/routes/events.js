@@ -26,7 +26,18 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
 
     // Emit socket
     const io = req.app.get('io');
-    if (io) io.emit('calendar_refresh');
+    if (io) {
+      io.emit('calendar_new', {
+        id: result.insertId,
+        titre,
+        type: type || 'ponctuel',
+        date_debut,
+        lieu,
+        createdBy: `${req.user.prenom} ${req.user.nom}`,
+        creatorId: req.user.id,
+      });
+      io.emit('calendar_refresh');
+    }
 
     // Email notification (async)
     notifyAllUsers({

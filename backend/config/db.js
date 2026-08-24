@@ -2,10 +2,13 @@ const mysql = require('mysql2/promise');
 require('dotenv').config();
 
 let poolConfig = {
-  waitForConnections: true,
-  connectionLimit:    10,
-  queueLimit:         0,
-  timezone:           '+00:00',
+  waitForConnections:    true,
+  connectionLimit:       10,
+  queueLimit:            0,
+  timezone:              '+00:00',
+  enableKeepAlive:       true,
+  keepAliveInitialDelay: 10000,
+  connectTimeout:        20000,
 };
 
 if (process.env.DATABASE_URL) {
@@ -21,6 +24,15 @@ if (process.env.DATABASE_URL) {
 }
 
 const pool = mysql.createPool(poolConfig);
+
+// Periodically ping DB to keep remote cloud connection warm and healthy
+setInterval(async () => {
+  try {
+    await pool.query('SELECT 1');
+  } catch (err) {
+    console.error('DB Keepalive Ping Error:', err.message);
+  }
+}, 60000);
 
 module.exports = pool;
 

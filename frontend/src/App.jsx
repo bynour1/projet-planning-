@@ -5,6 +5,7 @@ import { SocketProvider }        from './context/SocketContext';
 import { useToast, ToastContainer } from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
 import NetworkStatusBanner from './components/NetworkStatusBanner';
+import ErrorBoundary from './components/ErrorBoundary';
 
 import Sidebar        from './components/Sidebar';
 import Login          from './pages/Login';
@@ -115,10 +116,12 @@ function AppShell() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppShell/>
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppShell/>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
