@@ -2,6 +2,7 @@
 jest.mock('../config/db', () => require('./__mocks__/db'));
 jest.mock('../config/mailer', () => ({
   sendOTP: jest.fn().mockResolvedValue(undefined),
+  sendWelcomeEmail: jest.fn().mockResolvedValue(undefined),
   notifyAllUsers: jest.fn().mockResolvedValue(undefined),
   planningEmailHtml: jest.fn(()=>''), eventEmailHtml: jest.fn(()=>''),
 }));
