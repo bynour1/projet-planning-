@@ -93,43 +93,51 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     // Générer l'OTP de confirmation
     const otp = generateOTP();
     await db.query('DELETE FROM codes WHERE email = ?', [email]);
-    await db.query('INSERT INTO codes (email, code) VALUES (?,?)', [email, otp]);
+    await db.query('INSERT INTO codes (email, code, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE))', [email, otp]);
+
+    const loginUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login`;
 
     // Envoyer l'email avec OTP + mot de passe provisoire
     try {
       const transporter = getTransporter();
       await transporter.sendMail({
-        from: `"Planning Médical" <${process.env.EMAIL_USER}>`,
+        from: `"GMT Ariana 🏥" <${process.env.EMAIL_USER}>`,
         to: email,
-        subject: 'Votre compte Planning Médical — Informations de connexion',
+        subject: '🏥 Vos identifiants de connexion — GMT Ariana',
         html: `
-          <div style="font-family:sans-serif;max-width:520px;margin:auto;padding:32px;border:1px solid #e2e8f0;border-radius:12px;background:#fff">
+          <div style="font-family:DM Sans,Segoe UI,Arial,sans-serif;max-width:520px;margin:auto;padding:32px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff">
             <div style="text-align:center;margin-bottom:24px">
-              <div style="display:inline-block;background:#0ea5e9;border-radius:12px;padding:10px 20px">
-                <span style="color:#fff;font-size:20px;font-weight:800">🏥 Planning Médical</span>
+              <div style="display:inline-block;background:#0284c7;border-radius:12px;padding:12px 24px">
+                <span style="color:#ffffff;font-size:18px;font-weight:800">🏥 GMT Ariana — Médecine du Travail</span>
               </div>
             </div>
-            <p style="font-size:15px">Bonjour <strong>${prenom} ${nom}</strong>,</p>
-            <p style="color:#475569">Un compte a été créé pour vous sur l'application de planning médical.</p>
+            <p style="font-size:15px;color:#0f172a">Bonjour <strong>${prenom} ${nom}</strong>,</p>
+            <p style="color:#475569;font-size:14px;line-height:1.5">Un compte a été créé pour vous sur la plateforme officielle du <strong>Groupement de Médecine du Travail de l'Ariana</strong>.</p>
 
-            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin:20px 0">
-              <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#166534">🔑 Vos informations de connexion</p>
-              <table style="width:100%;font-size:14px">
-                <tr><td style="color:#64748b;padding:4px 0">Email :</td><td style="font-weight:700">${email}</td></tr>
-                <tr><td style="color:#64748b;padding:4px 0">Mot de passe provisoire :</td><td><code style="background:#dcfce7;padding:2px 8px;border-radius:4px;font-size:16px;font-weight:800;letter-spacing:2px">${tempPassword}</code></td></tr>
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:18px;margin:20px 0">
+              <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:#166534">🔑 Vos informations de connexion :</p>
+              <table style="width:100%;font-size:14px;border-collapse:collapse">
+                <tr><td style="color:#64748b;padding:6px 0;width:40%">Identifiant (Email) :</td><td style="font-weight:700;color:#0f172a">${email}</td></tr>
+                <tr><td style="color:#64748b;padding:6px 0">Mot de passe initial :</td><td><code style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:6px;font-size:15px;font-weight:800;letter-spacing:1px">${tempPassword}</code></td></tr>
               </table>
             </div>
 
-            <p style="font-size:14px;color:#475569">Pour activer votre compte, votre administrateur a besoin du <strong>code de confirmation</strong> ci-dessous :</p>
-            <div style="font-size:36px;font-weight:900;letter-spacing:10px;color:#0f172a;background:#f1f5f9;padding:20px;border-radius:10px;text-align:center;margin:16px 0;border:2px dashed #cbd5e1">
+            <div style="text-align:center;margin:20px 0">
+              <a href="${loginUrl}" style="background:#0284c7;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;display:inline-block">
+                🚀 Accéder à la plateforme
+              </a>
+            </div>
+
+            <p style="font-size:13px;color:#475569;margin-top:20px">Pour finaliser l'activation de votre compte, communiquez ce <strong>code de confirmation</strong> à votre administrateur :</p>
+            <div style="font-size:32px;font-weight:900;letter-spacing:8px;color:#0f172a;background:#f8fafc;padding:16px;border-radius:10px;text-align:center;margin:12px 0;border:2px dashed #cbd5e1">
               ${otp}
             </div>
             <p style="color:#94a3b8;font-size:12px;text-align:center">⏱ Ce code de confirmation expire dans 15 minutes.</p>
 
             <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0"/>
-            <p style="font-size:12px;color:#94a3b8;text-align:center">
-              ⚠️ Lors de votre première connexion, vous serez invité à changer votre mot de passe.<br/>
-              Ne partagez pas ces informations avec d'autres personnes.
+            <p style="font-size:12px;color:#94a3b8;text-align:center;line-height:1.4">
+              ⚠️ Lors de votre première connexion, il vous sera demandé de choisir un nouveau mot de passe personnalisé.<br/>
+              Ne partagez jamais vos identifiants.
             </p>
           </div>
         `,
@@ -141,7 +149,7 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     // SMS notification si numéro de téléphone fourni
     if (telephone) {
       await sendSMS(telephone,
-        `GMT Ariana - Bonjour ${prenom} ${nom} !\nVotre compte a été créé.\nEmail : ${email}\nMot de passe provisoire : ${tempPassword}\nCode de confirmation (à remettre à l'admin) : ${otp}\nValable 15 min.`
+        `GMT Ariana - Bonjour ${prenom} ${nom} !\nVotre compte a été créé.\nEmail : ${email}\nMot de passe provisoire : ${tempPassword}\nCode de confirmation : ${otp}\nValable 15 min.`
       );
     }
 
