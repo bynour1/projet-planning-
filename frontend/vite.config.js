@@ -73,6 +73,10 @@ export default defineConfig({
         target: 'http://localhost:8083',
         changeOrigin: true,
       },
+      '/uploads': {
+        target: 'http://localhost:8083',
+        changeOrigin: true,
+      },
       '/socket.io': {
         target: 'http://localhost:8083',
         changeOrigin: true,

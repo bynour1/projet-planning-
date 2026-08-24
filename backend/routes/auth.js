@@ -249,6 +249,17 @@ router.post('/avatar', authenticate, upload.single('avatar'), async (req, res) =
   }
 });
 
+// DELETE /api/auth/avatar
+router.delete('/avatar', authenticate, async (req, res) => {
+  try {
+    await db.query('UPDATE users SET avatar = NULL WHERE id = ?', [req.user.id]);
+    res.json({ avatar: null, message: 'Photo de profil supprimée' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Erreur serveur lors de la suppression' });
+  }
+});
+
 // GET /api/auth/me
 router.get('/me', authenticate, async (req, res) => {
   try {

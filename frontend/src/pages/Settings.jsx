@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
 function roleColor(role) {
   if (role === 'administrateur') return '#0ea5e9';
   if (role === 'medecin')        return '#10b981';
+  if (role === 'chauffeur')      return '#f97316';
   return '#8b5cf6';
 }
 
@@ -14,6 +15,10 @@ export default function Settings({ toast }) {
   const [saving,  setSaving]  = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [bioLoading, setBioLoading] = useState(false);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.avatar]);
 
   async function handleChangePassword(e) {
     e.preventDefault();
@@ -97,6 +102,17 @@ export default function Settings({ toast }) {
     }
   }
 
+  async function handleRemoveAvatar() {
+    try {
+      await axios.delete('/api/auth/avatar');
+      setAvatarError(false);
+      await refreshUser();
+      toast('Photo de profil supprimée', 'info');
+    } catch {
+      toast('Erreur lors de la suppression', 'error');
+    }
+  }
+
   const color = roleColor(user?.role);
 
   return (
@@ -141,7 +157,18 @@ export default function Settings({ toast }) {
                 }} />
               </label>
             </div>
-            <div style={{fontSize:12,color:'var(--text-3)'}}>Cliquez sur 📷 pour importer une photo</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-3)' }}>
+              <span>Cliquez sur 📷 pour importer une photo</span>
+              {user?.avatar && (
+                <button
+                  type="button"
+                  onClick={handleRemoveAvatar}
+                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, textDecoration: 'underline' }}
+                >
+                  Supprimer
+                </button>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 16 }}>
             <div>

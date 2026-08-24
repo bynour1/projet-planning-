@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -32,6 +32,11 @@ export default function Sidebar({ mobileOpen, onCloseMobile }) {
   const navigate          = useNavigate();
   const [theme, toggleTheme] = useTheme();
   const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [user?.avatar]);
+
   const isAdmin     = user?.role === 'administrateur';
   const isChauffeur = user?.role === 'chauffeur';
   const navClass = ({ isActive }) => `nav-item${isActive ? ' active' : ''}`;
