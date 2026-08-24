@@ -73,63 +73,101 @@ export default function PWAInstallBanner() {
         <div style={{ fontSize: 11, opacity: 0.9, lineHeight: 1.3 }}>
           Installez l'app sur votre téléphone pour un accès rapide.
         </div>
-        <button
-          onClick={handleInstallClick}
-          style={{
-            marginTop: 2,
-            padding: '6px 10px',
-            background: '#fff',
-            color: '#0284c7',
-            border: 'none',
-            borderRadius: 8,
-            fontWeight: 800,
-            fontSize: 11,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 4,
-          }}
-        >
-          📲 Installer l'App
-        </button>
+        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+          <button
+            onClick={handleInstallClick}
+            style={{
+              flex: 1,
+              padding: '7px 10px',
+              background: '#fff',
+              color: '#0284c7',
+              border: 'none',
+              borderRadius: 8,
+              fontWeight: 800,
+              fontSize: 11,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+            }}
+          >
+            📲 Installer l'App
+          </button>
+          <button
+            onClick={() => setShowIOSModal(true)}
+            title="Scanner le QR Code"
+            style={{
+              padding: '7px 10px',
+              background: 'rgba(255,255,255,0.2)',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.4)',
+              borderRadius: 8,
+              fontWeight: 700,
+              fontSize: 11,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+            }}
+          >
+            📷 QR Code
+          </button>
+        </div>
       </div>
 
-      {/* Modal d'instructions */}
+      {/* Modal d'instructions & QR Code */}
       {showIOSModal && (
         <div className="modal-overlay" onClick={() => setShowIOSModal(false)}>
-          <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 440, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>📱 Installation sur votre téléphone</h3>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+                📱 Accès & Installation Mobile
+              </h3>
               <button className="btn btn-ghost btn-icon" onClick={() => setShowIOSModal(false)}>✕</button>
             </div>
             <div className="modal-body" style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text)' }}>
-              {isIOS ? (
-                <>
-                  <p style={{ fontWeight: 700, color: '#0284c7', marginBottom: 6 }}>Sur iPhone / iPad (Safari) :</p>
-                  <ol style={{ paddingLeft: 20, margin: '8px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <li>Ouvrez cette page dans <strong>Safari</strong>.</li>
-                    <li>Appuyez sur le bouton <strong>Partager</strong> (carré avec flèche 📤 en bas).</li>
-                    <li>Sélectionnez <strong>« Sur l'écran d'accueil »</strong> (ou <i>Add to Home Screen</i> ➕).</li>
-                    <li>Appuyez sur <strong>Ajouter</strong> en haut à droite.</li>
-                  </ol>
-                </>
-              ) : (
-                <>
-                  <p style={{ fontWeight: 700, color: '#0284c7', marginBottom: 6 }}>Sur Android (Google Chrome) :</p>
-                  <ol style={{ paddingLeft: 20, margin: '8px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <li>Appuyez sur les <strong>3 points ⋮</strong> en haut à droite de Chrome.</li>
-                    <li>Sélectionnez <strong>« Installer l'application »</strong> ou <strong>« Ajouter à l'écran d'accueil »</strong>.</li>
-                    <li>Confirmez en appuyant sur <strong>Installer</strong>.</li>
-                  </ol>
-                </>
-              )}
-              <div style={{ marginTop: 14, padding: '10px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, color: '#166534', fontSize: 12 }}>
-                ✅ L'icône GMT Ariana apparaîtra sur votre écran d'accueil comme une application native.
+              
+              <div style={{ margin: '10px auto 16px', padding: 12, background: '#fff', borderRadius: 12, display: 'inline-block', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : '')}`}
+                  alt="QR Code Planning Médical"
+                  style={{ width: 190, height: 190, display: 'block', borderRadius: 8 }}
+                />
+                <p style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: '#0284c7' }}>
+                  Scannez avec l'appareil photo du téléphone
+                </p>
+              </div>
+
+              <div style={{ textAlign: 'left', background: '#f8fafc', padding: 12, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                {isIOS ? (
+                  <>
+                    <p style={{ fontWeight: 700, color: '#0284c7', marginBottom: 4 }}>Sur iPhone / iPad (Safari) :</p>
+                    <ol style={{ paddingLeft: 18, margin: '4px 0', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <li>Scannez le QR code ou ouvrez le lien dans <strong>Safari</strong>.</li>
+                      <li>Appuyez sur <strong>Partager 📤</strong> en bas.</li>
+                      <li>Appuyez sur <strong>« Sur l'écran d'accueil » ➕</strong> puis <strong>Ajouter</strong>.</li>
+                    </ol>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontWeight: 700, color: '#0284c7', marginBottom: 4 }}>Sur Android (Chrome) :</p>
+                    <ol style={{ paddingLeft: 18, margin: '4px 0', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <li>Scannez le QR code pour ouvrir l'application.</li>
+                      <li>Appuyez sur les <strong>3 points ⋮</strong> en haut à droite.</li>
+                      <li>Choisissez <strong>« Installer l'application »</strong>.</li>
+                    </ol>
+                  </>
+                )}
+              </div>
+
+              <div style={{ marginTop: 12, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, color: '#166534', fontSize: 11 }}>
+                ✅ L'application s'installe directement sans identifiant développeur ni compte externe.
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-primary" onClick={() => setShowIOSModal(false)}>Compris !</button>
+            <div className="modal-footer" style={{ justifyContent: 'center' }}>
+              <button className="btn btn-primary" onClick={() => setShowIOSModal(false)}>Fermer</button>
             </div>
           </div>
         </div>
