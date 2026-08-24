@@ -86,8 +86,13 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     await sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telephone });
 
     res.status(201).json({
-      message: 'Utilisateur créé. Email de connexion envoyé avec le mot de passe provisoire.',
+      message: 'Utilisateur créé. Email de connexion envoyé.',
       userId: result.insertId,
+      tempPassword,
+      otp,
+      email,
+      nom,
+      prenom,
       otp_sent: true,
     });
   } catch (err) {
@@ -96,9 +101,46 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
   }
 });
 
+// ─── POST /api/users/:id/resend-welcome (Admin only) ─────────
+router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ message: 'Utilisateur introuvable' });
+    const user = rows[0];
+
+    // Générer nouveau mot de passe temporaire et OTP
+    const tempPassword = generateTempPassword();
+    const tempHash = await bcrypt.hash(tempPassword, 10);
+    const otp = generateOTP();
+
+    await db.query('UPDATE users SET password = ?, first_login = 1, is_active = 1 WHERE id = ?', [tempHash, user.id]);
+    await db.query('DELETE FROM codes WHERE email = ?', [user.email]);
+    await db.query('INSERT INTO codes (email, code, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE))', [user.email, otp]);
+
+    await sendWelcomeEmail({
+      email: user.email,
+      prenom: user.prenom,
+      nom: user.nom,
+      tempPassword,
+      otp,
+      telephone: user.telephone,
+    });
+
+    res.json({
+      message: `E-mail d'accès renvoyé à ${user.email}`,
+      tempPassword,
+      otp,
+      email: user.email,
+      nom: user.nom,
+      prenom: user.prenom,
+    });
+  } catch (err) {
+    console.error('[resend-welcome]', err);
+    res.status(500).json({ message: 'Erreur lors du renvoi de l\'e-mail' });
+  }
+});
+
 // ─── POST /api/users/verify-otp  (Admin only) ────────────────
-// Le mot de passe provisoire est déjà enregistré lors de la création.
-// L'admin saisit seulement l'OTP pour confirmer et activer le compte.
 router.post('/verify-otp', authenticate, authorize('administrateur'), async (req, res) => {
   const { email, code } = req.body;
   if (!email || !code)
@@ -111,14 +153,13 @@ router.post('/verify-otp', authenticate, authorize('administrateur'), async (req
     );
     if (!rows.length) return res.status(400).json({ message: 'Code invalide ou expiré' });
 
-    // Activer le compte (le mot de passe provisoire est déjà hashé et stocké)
     await db.query(
       'UPDATE users SET is_active = 1 WHERE email = ?',
       [email]
     );
     await db.query('DELETE FROM codes WHERE email = ?', [email]);
 
-    res.json({ message: 'Compte activé avec succès. L\'utilisateur peut se connecter avec son mot de passe provisoire.' });
+    res.json({ message: 'Compte activé avec succès.' });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });
   }

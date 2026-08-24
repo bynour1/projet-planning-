@@ -13,9 +13,13 @@ function UserModal({ user: editUser, onSave, onClose }) {
     if (!form.nom || !form.prenom || !form.email || !form.role) return;
     setSaving(true);
     try {
-      if (isEdit) await axios.put(`/api/users/${editUser.id}`, form);
-      else        await axios.post('/api/users', form);
-      onSave(isEdit ? null : null);
+      if (isEdit) {
+        await axios.put(`/api/users/${editUser.id}`, form);
+        onSave(null);
+      } else {
+        const res = await axios.post('/api/users', form);
+        onSave(res.data);
+      }
     } catch (err) { alert(err.response?.data?.message || 'Erreur'); }
     finally { setSaving(false); }
   }
@@ -88,7 +92,7 @@ function UserModal({ user: editUser, onSave, onClose }) {
             }}>
               <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>📧</span>
               <span style={{ fontSize: 12.5, color: '#0369a1', lineHeight: 1.5 }}>
-                Un <strong>code de confirmation</strong> et un mot de passe provisoire seront envoyés à l'adresse email fournie.
+                Un <strong>e-mail officiel GMT Ariana</strong> avec identifiant, mot de passe initial et code d'activation sera automatiquement expédié.
               </span>
             </div>
           )}
@@ -131,7 +135,7 @@ function UserModal({ user: editUser, onSave, onClose }) {
               <input
                 className="input"
                 type="email"
-                placeholder="exemple@planning.com"
+                placeholder="exemple@gmail.com"
                 value={form.email}
                 onChange={e => set('email', e.target.value)}
                 style={{ paddingLeft: 36, height: 40 }}
@@ -145,7 +149,6 @@ function UserModal({ user: editUser, onSave, onClose }) {
               Numéro de téléphone
             </label>
             <div style={{ position: 'relative', display: 'flex', gap: 0 }}>
-              {/* Indicatif Tunisie */}
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 5,
                 padding: '0 10px', height: 40, borderRadius: '8px 0 0 8px',
@@ -161,9 +164,7 @@ function UserModal({ user: editUser, onSave, onClose }) {
                 placeholder="XX XXX XXX"
                 value={(form.telephone || '').replace(/^\+216\s?/, '')}
                 onChange={e => {
-                  // Garder uniquement chiffres et espaces, max 8 chiffres
                   const raw = e.target.value.replace(/[^\d]/g, '').slice(0, 8);
-                  // Formater : XX XXX XXX
                   const fmt = raw.replace(/(\d{2})(\d{3})?(\d{3})?/, (_, a, b, c) =>
                     [a, b, c].filter(Boolean).join(' ')
                   );
@@ -261,112 +262,92 @@ function UserModal({ user: editUser, onSave, onClose }) {
   );
 }
 
+function AccountCreatedModal({ data, onClose, toast }) {
+  const [resending, setResending] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-function OTPModal({ email, onClose, toast }) {
-  const [code,      setCode]      = useState('');
-  const [saving,    setSaving]    = useState(false);
-  const [step,      setStep]      = useState('otp');
-  const [countdown, setCountdown] = useState(60);
-
-  useEffect(() => {
-    const t = setInterval(() => setCountdown(c => c > 0 ? c - 1 : 0), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  async function handleVerify() {
-    if (!code) return toast('Entrez le code reçu', 'error');
-    setSaving(true);
+  async function handleResend() {
+    if (!data?.userId) return;
+    setResending(true);
     try {
-      await axios.post('/api/users/verify-otp', { email, code });
-      setStep('success');
-    } catch (err) { toast(err.response?.data?.message || 'Code invalide ou expiré', 'error'); }
-    finally { setSaving(false); }
+      const res = await axios.post(`/api/users/${data.userId}/resend-welcome`);
+      toast(res.data?.message || 'E-mail renvoyé avec succès !', 'success');
+    } catch (err) {
+      toast(err.response?.data?.message || 'Erreur lors du renvoi', 'error');
+    } finally {
+      setResending(false);
+    }
+  }
+
+  function handleCopy() {
+    const text = `🏥 GMT Ariana — Accès plateforme\nEmail : ${data.email}\nMot de passe initial : ${data.tempPassword}\nCode d'activation : ${data.otp}\nLien : ${window.location.origin}/login`;
+    navigator.clipboard?.writeText(text);
+    setCopied(true);
+    toast('Identifiants copiés dans le presse-papier !', 'success');
+    setTimeout(() => setCopied(false), 3000);
   }
 
   return (
-    <div className="modal-overlay" onClick={()=>step==='success'?onClose(true):onClose(false)}>
-      <div className="modal" style={{ maxWidth:460 }} onClick={e=>e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 500, padding: 0, overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ background: 'linear-gradient(135deg,#0284c7,#0369a1)', padding: '24px 24px 18px', color: '#fff', textAlign: 'center' }}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>🎉</div>
+          <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>Compte créé & activé avec succès !</h3>
+          <p style={{ fontSize: 12.5, opacity: 0.9, marginTop: 4 }}>
+            Un e-mail de bienvenue a été envoyé à <strong>{data.email}</strong>
+          </p>
+        </div>
 
-        {step==='otp' ? (<>
-          <div className="modal-header" style={{ borderBottom:'none', paddingBottom:0 }}>
-            <div style={{ display:'flex', gap:12, alignItems:'center' }}>
-              <div style={{ width:42, height:42, borderRadius:10, background:'var(--primary-lt)',
-                display:'flex', alignItems:'center', justifyContent:'center', fontSize:22 }}>🔑</div>
-              <div>
-                <h3 style={{ fontSize:16, fontWeight:700 }}>Activer le compte</h3>
-                <p style={{ fontSize:12, color:'var(--text-2)', marginTop:2 }}>Saisir le code de confirmation</p>
-              </div>
+        {/* Body */}
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '16px' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 10 }}>
+              🔑 Récapitulatif des identifiants attribués :
             </div>
-            <button className="btn btn-ghost btn-icon" onClick={()=>onClose(false)}>✕</button>
+            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={{ color: '#64748b', padding: '6px 0', width: '45%' }}>Identifiant (Email) :</td>
+                  <td style={{ fontWeight: 700, color: '#0f172a' }}>{data.email}</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={{ color: '#64748b', padding: '6px 0' }}>Mot de passe initial :</td>
+                  <td>
+                    <code style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: 4, fontWeight: 800, fontSize: 14 }}>
+                      {data.tempPassword}
+                    </code>
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ color: '#64748b', padding: '6px 0' }}>Code d'activation :</td>
+                  <td>
+                    <strong style={{ letterSpacing: 2, color: '#0284c7', fontSize: 15 }}>{data.otp}</strong>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
-          <div className="modal-body">
-            {/* Info email envoyé */}
-            <div style={{ padding:'12px 14px',
-              background:'linear-gradient(135deg,#e0f2fe,#f0fdf4)',
-              borderRadius:10, border:'1px solid var(--border)', marginBottom:4 }}>
-              <div style={{ fontSize:13, fontWeight:600, marginBottom:2 }}>📧 Code envoyé à</div>
-              <div style={{ fontSize:14, color:'var(--primary-dk)', fontWeight:700 }}>{email}</div>
-              <div style={{ fontSize:12, color:'var(--text-3)', marginTop:4 }}>
-                ⏱ Expire dans 15 min · Vérifiez vos spams
-              </div>
-            </div>
-
-            {/* Bandeau info mot de passe provisoire */}
-            <div style={{ padding:'10px 14px', background:'#f0fdf4',
-              border:'1px solid #bbf7d0', borderRadius:10, marginBottom:4 }}>
-              <div style={{ fontSize:12, fontWeight:700, color:'#166534', marginBottom:4 }}>
-                🔒 Mot de passe provisoire
-              </div>
-              <div style={{ fontSize:12, color:'#15803d', lineHeight:1.5 }}>
-                Un mot de passe provisoire a été <strong>automatiquement généré</strong> et envoyé
-                à l'adresse email de l'utilisateur.<br/>
-                <span style={{ color:'var(--text-2)' }}>Lors de sa première connexion, il sera invité à le changer.</span>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label style={{ fontSize:13, fontWeight:600 }}>Code de confirmation (reçu par email)</label>
-              <input className="input" placeholder="123456"
-                value={code}
-                onChange={e=>setCode(e.target.value.replace(/\D/g,'').slice(0,8))}
-                style={{ fontFamily:'var(--font-mono)', letterSpacing:8, fontSize:24,
-                  textAlign:'center', fontWeight:800, height:54 }}
-                maxLength={8} autoFocus />
-            </div>
-
-            <div style={{ textAlign:'center', fontSize:12, color:'var(--text-3)' }}>
-              {countdown>0
-                ? <span>Renvoyer dans <strong style={{ color:'var(--text-2)' }}>{countdown}s</strong></span>
-                : <span style={{ color:'var(--primary)' }}>Supprimez et recréez le compte pour renvoyer un code.</span>}
-            </div>
+          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#92400e', lineHeight: 1.4 }}>
+            💡 <strong>Conseil :</strong> Si l'utilisateur ne voit pas l'e-mail dans sa boîte de réception, invitez-le à consulter son dossier <em>Spam / Courrier indésirable</em> ou transmettez-lui directement ces accès.
           </div>
+        </div>
 
-          <div className="modal-footer">
-            <button className="btn btn-outline" onClick={()=>onClose(false)}>Annuler</button>
-            <button className="btn btn-success" onClick={handleVerify}
-              disabled={saving||!code}>
-              {saving ? <span className="spinner" style={{ width:16, height:16 }}/> : '✓ Activer le compte'}
+        {/* Footer */}
+        <div style={{ padding: '14px 24px', background: 'var(--bg)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <button className="btn btn-outline btn-sm" onClick={handleCopy} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {copied ? '✅ Copié !' : '📋 Copier les accès'}
+          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-ghost btn-sm" onClick={handleResend} disabled={resending} style={{ color: '#0284c7', fontWeight: 600 }}>
+              {resending ? 'Envoi…' : '🔄 Renvoyer l\'e-mail'}
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={onClose}>
+              Terminer
             </button>
           </div>
-        </>) : (
-          <>
-            <div className="modal-body" style={{ textAlign:'center', padding:'32px 24px' }}>
-              <div style={{ width:64, height:64, background:'var(--accent-lt)', borderRadius:'50%',
-                display:'inline-flex', alignItems:'center', justifyContent:'center',
-                fontSize:32, marginBottom:16 }}>✅</div>
-              <h3 style={{ fontSize:17, fontWeight:700, marginBottom:8 }}>Compte activé !</h3>
-              <p style={{ fontSize:13, color:'var(--text-2)', lineHeight:1.6 }}>
-                Le compte <strong>{email}</strong> est maintenant actif.<br/>
-                L'utilisateur peut se connecter avec le <strong>mot de passe provisoire</strong> reçu par email.
-                Il sera invité à le changer lors de sa première connexion.
-              </p>
-            </div>
-            <div className="modal-footer" style={{ justifyContent:'center' }}>
-              <button className="btn btn-primary" onClick={()=>onClose(true)}>✓ Fermer</button>
-            </div>
-          </>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -374,13 +355,13 @@ function OTPModal({ email, onClose, toast }) {
 
 export default function Users({ toast }) {
   const { user: me } = useAuth();
-  const [users,   setUsers]   = useState([]);
-  const [modal,   setModal]   = useState(null);
-  const [otpData, setOtpData] = useState(null); // { email }
-  const [confirm, setConfirm] = useState(null);
-  const [search,  setSearch]  = useState('');
-  const [loading, setLoading] = useState(true);
-  const [filter,  setFilter]  = useState('all');
+  const [users,       setUsers]       = useState([]);
+  const [modal,       setModal]       = useState(null);
+  const [createdData, setCreatedData] = useState(null);
+  const [confirm,     setConfirm]     = useState(null);
+  const [search,      setSearch]      = useState('');
+  const [loading,     setLoading]     = useState(true);
+  const [filter,      setFilter]      = useState('all');
 
   async function load() {
     try { const { data } = await axios.get('/api/users'); setUsers(data); }
@@ -390,18 +371,26 @@ export default function Users({ toast }) {
 
   useEffect(() => { load(); }, []);
 
-  async function handleSaved(email) {
+  async function handleCreated(data) {
     setModal(null);
     await load();
-    toast('Utilisateur enregistré', 'success');
-    if (email) setOtpData({ email });
+    if (data?.tempPassword) {
+      setCreatedData(data);
+    } else {
+      toast('Utilisateur enregistré', 'success');
+    }
   }
 
-  async function handleCreateSaved() {
-    // reload to get new user, then check if we need OTP
-    setModal(null);
-    await load();
-    toast('Utilisateur créé ! Code OTP envoyé.', 'success');
+  async function handleResendEmail(u) {
+    try {
+      const res = await axios.post(`/api/users/${u.id}/resend-welcome`);
+      toast(res.data?.message || `E-mail renvoyé à ${u.email}`, 'success');
+      if (res.data?.tempPassword) {
+        setCreatedData({ ...res.data, userId: u.id });
+      }
+    } catch (err) {
+      toast(err.response?.data?.message || 'Erreur lors du renvoi', 'error');
+    }
   }
 
   async function handleDelete(id) {
@@ -510,7 +499,7 @@ export default function Users({ toast }) {
                     </span>
                     {!u.is_active && (
                       <button className="btn btn-ghost btn-sm" style={{ marginLeft: 4, fontSize: 11 }}
-                        onClick={() => setOtpData({ email: u.email })}>Activer</button>
+                        onClick={() => handleResendEmail(u)}>Activer</button>
                     )}
                   </td>
                   <td style={{ fontSize: 12, color: 'var(--text-2)' }}>
@@ -518,9 +507,16 @@ export default function Users({ toast }) {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn btn-outline btn-sm" onClick={() => setModal(u)}>✏️</button>
+                      <button className="btn btn-outline btn-sm" title="Renvoyer l'e-mail avec nouveaux identifiants" onClick={() => handleResendEmail(u)}>
+                        ✉️
+                      </button>
+                      <button className="btn btn-outline btn-sm" title="Modifier" onClick={() => setModal(u)}>
+                        ✏️
+                      </button>
                       {u.id !== me?.id && (
-                        <button className="btn btn-danger btn-sm" onClick={() => setConfirm(u.id)}>🗑</button>
+                        <button className="btn btn-danger btn-sm" title="Supprimer" onClick={() => setConfirm(u.id)}>
+                          🗑
+                        </button>
                       )}
                     </div>
                   </td>
@@ -533,10 +529,10 @@ export default function Users({ toast }) {
       )}
 
       {modal !== null && (
-        <UserModal user={modal?.id ? modal : null} onSave={modal?.id ? () => { setModal(null); load(); toast('Mis à jour', 'success'); } : handleCreateSaved} onClose={() => setModal(null)} />
+        <UserModal user={modal?.id ? modal : null} onSave={modal?.id ? () => { setModal(null); load(); toast('Mis à jour', 'success'); } : handleCreated} onClose={() => setModal(null)} />
       )}
-      {otpData && (
-        <OTPModal email={otpData.email} toast={toast} onClose={(refreshed) => { setOtpData(null); if (refreshed) load(); }} />
+      {createdData && (
+        <AccountCreatedModal data={createdData} toast={toast} onClose={() => setCreatedData(null)} />
       )}
       {confirm && (
         <ConfirmDialog title="Supprimer l'utilisateur ?" message="Cette action est irréversible." danger
