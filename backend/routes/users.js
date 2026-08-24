@@ -68,14 +68,8 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     const [exists] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
     if (exists.length) return res.status(409).json({ message: 'Email déjà utilisé' });
 
-    // Mot de passe initial : numéro de téléphone (8 chiffres) si renseigné, sinon mot de passe généré
-    let tempPassword;
-    const cleanPhone = (telephone || '').replace(/[^\d]/g, '');
-    if (cleanPhone && cleanPhone.length >= 8) {
-      tempPassword = cleanPhone.slice(-8);
-    } else {
-      tempPassword = generateTempPassword();
-    }
+    // Mot de passe initial provisoire sécurisé envoyé par email
+    const tempPassword = generateTempPassword();
     const tempHash = await bcrypt.hash(tempPassword, 10);
 
     const [result] = await db.query(
@@ -88,11 +82,11 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     await db.query('DELETE FROM codes WHERE email = ?', [email]);
     await db.query('INSERT INTO codes (email, code, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE))', [email, otp]);
 
-    // Envoyer l'email et SMS de bienvenue directement et uniquement à l'utilisateur
+    // Envoyer l'email de bienvenue directement et uniquement à l'utilisateur
     await sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telephone });
 
     res.status(201).json({
-      message: `Compte créé avec succès. L'utilisateur peut se connecter avec son email/téléphone et son mot de passe initial.`,
+      message: `Compte créé avec succès. Un e-mail d'accès officiel contenant les identifiants a été envoyé directement à ${email}.`,
       userId: result.insertId,
       email,
       otp_sent: true,
@@ -111,13 +105,7 @@ router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), as
     const user = rows[0];
 
     // Générer nouveau mot de passe temporaire et OTP
-    let tempPassword;
-    const cleanPhone = (user.telephone || '').replace(/[^\d]/g, '');
-    if (cleanPhone && cleanPhone.length >= 8) {
-      tempPassword = cleanPhone.slice(-8);
-    } else {
-      tempPassword = generateTempPassword();
-    }
+    const tempPassword = generateTempPassword();
     const tempHash = await bcrypt.hash(tempPassword, 10);
     const otp = generateOTP();
 
