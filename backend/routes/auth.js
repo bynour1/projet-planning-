@@ -34,17 +34,26 @@ const upload = multer({
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password)
-    return res.status(400).json({ message: 'Email et mot de passe requis' });
+    return res.status(400).json({ message: 'Email / Téléphone et mot de passe requis' });
 
   try {
-    const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+    const rawInput = String(email).trim();
+    const cleanPhone = rawInput.replace(/[^\d]/g, '');
+
+    const [rows] = await db.query(
+      `SELECT * FROM users WHERE email = ? 
+       OR telephone = ? 
+       OR telephone = ? 
+       OR REPLACE(REPLACE(telephone, ' ', ''), '+216', '') = ?`,
+      [rawInput, rawInput, `+216 ${rawInput}`, cleanPhone ? cleanPhone.slice(-8) : '___nomatch___']
+    );
     const user = rows[0];
 
-    if (!user) return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
+    if (!user) return res.status(401).json({ message: 'Email / Téléphone ou mot de passe incorrect' });
     if (!user.is_active) return res.status(403).json({ message: 'Compte non activé' });
 
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
+    if (!valid) return res.status(401).json({ message: 'Email / Téléphone ou mot de passe incorrect' });
 
     if (user.role === 'administrateur' && user.totp_enabled === 1) {
       const code = Math.floor(100000 + Math.random() * 900000).toString();

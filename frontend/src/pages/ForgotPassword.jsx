@@ -41,17 +41,17 @@ export default function ForgotPassword({ toast }) {
                 <div style={{ fontSize:40 }}>🔒</div>
                 <h2 style={{ fontSize:17, fontWeight:700, marginTop:8 }}>Mot de passe oublié ?</h2>
                 <p style={{ fontSize:13, color:'var(--text-2)', marginTop:6 }}>
-                  Entrez votre email. Vous recevrez un lien de réinitialisation.
+                  Entrez votre email ou votre numéro de téléphone pour réinitialiser vos accès.
                 </p>
               </div>
               <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:14 }}>
                 <div className="form-group">
-                  <label>Adresse email</label>
-                  <input className="input" type="email" placeholder="vous@exemple.com"
+                  <label>Email ou N° Téléphone</label>
+                  <input className="input" type="text" placeholder="vous@exemple.com ou 98 123 456"
                     value={email} onChange={e=>setEmail(e.target.value)} required autoFocus />
                 </div>
                 <button className="btn btn-primary" type="submit" disabled={loading||!email} style={{ height:42 }}>
-                  {loading ? <span className="spinner" style={{ width:18, height:18 }}/> : '📧 Envoyer le lien'}
+                  {loading ? <span className="spinner" style={{ width:18, height:18 }}/> : '🚀 Envoyer le lien / SMS'}
                 </button>
                 <a href="/login" style={{ textAlign:'center', fontSize:13, color:'var(--primary)', textDecoration:'none' }}>
                   ← Retour à la connexion

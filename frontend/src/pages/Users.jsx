@@ -262,106 +262,14 @@ function UserModal({ user: editUser, onSave, onClose }) {
   );
 }
 
-function AccountCreatedModal({ data, onClose, toast }) {
-  const [resending, setResending] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  async function handleResend() {
-    if (!data?.userId) return;
-    setResending(true);
-    try {
-      const res = await axios.post(`/api/users/${data.userId}/resend-welcome`);
-      toast(res.data?.message || 'E-mail renvoyé avec succès !', 'success');
-    } catch (err) {
-      toast(err.response?.data?.message || 'Erreur lors du renvoi', 'error');
-    } finally {
-      setResending(false);
-    }
-  }
-
-  function handleCopy() {
-    const text = `🏥 GMT Ariana — Accès plateforme\nEmail : ${data.email}\nMot de passe initial : ${data.tempPassword}\nCode d'activation : ${data.otp}\nLien : ${window.location.origin}/login`;
-    navigator.clipboard?.writeText(text);
-    setCopied(true);
-    toast('Identifiants copiés dans le presse-papier !', 'success');
-    setTimeout(() => setCopied(false), 3000);
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 500, padding: 0, overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div style={{ background: 'linear-gradient(135deg,#0284c7,#0369a1)', padding: '24px 24px 18px', color: '#fff', textAlign: 'center' }}>
-          <div style={{ fontSize: 36, marginBottom: 8 }}>🎉</div>
-          <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>Compte créé & activé avec succès !</h3>
-          <p style={{ fontSize: 12.5, opacity: 0.9, marginTop: 4 }}>
-            Un e-mail de bienvenue a été envoyé à <strong>{data.email}</strong>
-          </p>
-        </div>
-
-        {/* Body */}
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '16px' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 10 }}>
-              🔑 Récapitulatif des identifiants attribués :
-            </div>
-            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
-              <tbody>
-                <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                  <td style={{ color: '#64748b', padding: '6px 0', width: '45%' }}>Identifiant (Email) :</td>
-                  <td style={{ fontWeight: 700, color: '#0f172a' }}>{data.email}</td>
-                </tr>
-                <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                  <td style={{ color: '#64748b', padding: '6px 0' }}>Mot de passe initial :</td>
-                  <td>
-                    <code style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: 4, fontWeight: 800, fontSize: 14 }}>
-                      {data.tempPassword}
-                    </code>
-                  </td>
-                </tr>
-                <tr>
-                  <td style={{ color: '#64748b', padding: '6px 0' }}>Code d'activation :</td>
-                  <td>
-                    <strong style={{ letterSpacing: 2, color: '#0284c7', fontSize: 15 }}>{data.otp}</strong>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#92400e', lineHeight: 1.4 }}>
-            💡 <strong>Conseil :</strong> Si l'utilisateur ne voit pas l'e-mail dans sa boîte de réception, invitez-le à consulter son dossier <em>Spam / Courrier indésirable</em> ou transmettez-lui directement ces accès.
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div style={{ padding: '14px 24px', background: 'var(--bg)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-          <button className="btn btn-outline btn-sm" onClick={handleCopy} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            {copied ? '✅ Copié !' : '📋 Copier les accès'}
-          </button>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-ghost btn-sm" onClick={handleResend} disabled={resending} style={{ color: '#0284c7', fontWeight: 600 }}>
-              {resending ? 'Envoi…' : '🔄 Renvoyer l\'e-mail'}
-            </button>
-            <button className="btn btn-primary btn-sm" onClick={onClose}>
-              Terminer
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function Users({ toast }) {
   const { user: me } = useAuth();
-  const [users,       setUsers]       = useState([]);
-  const [modal,       setModal]       = useState(null);
-  const [createdData, setCreatedData] = useState(null);
-  const [confirm,     setConfirm]     = useState(null);
-  const [search,      setSearch]      = useState('');
-  const [loading,     setLoading]     = useState(true);
-  const [filter,      setFilter]      = useState('all');
+  const [users,   setUsers]   = useState([]);
+  const [modal,   setModal]   = useState(null);
+  const [confirm, setConfirm] = useState(null);
+  const [search,  setSearch]  = useState('');
+  const [loading, setLoading] = useState(true);
+  const [filter,  setFilter]  = useState('all');
 
   async function load() {
     try { const { data } = await axios.get('/api/users'); setUsers(data); }
@@ -374,20 +282,13 @@ export default function Users({ toast }) {
   async function handleCreated(data) {
     setModal(null);
     await load();
-    if (data?.tempPassword) {
-      setCreatedData(data);
-    } else {
-      toast('Utilisateur enregistré', 'success');
-    }
+    toast(data?.message || 'Utilisateur créé avec succès ! E-mail d\'accès envoyé.', 'success');
   }
 
   async function handleResendEmail(u) {
     try {
       const res = await axios.post(`/api/users/${u.id}/resend-welcome`);
-      toast(res.data?.message || `E-mail renvoyé à ${u.email}`, 'success');
-      if (res.data?.tempPassword) {
-        setCreatedData({ ...res.data, userId: u.id });
-      }
+      toast(res.data?.message || `E-mail d'accès renvoyé à ${u.email}`, 'success');
     } catch (err) {
       toast(err.response?.data?.message || 'Erreur lors du renvoi', 'error');
     }
@@ -530,9 +431,6 @@ export default function Users({ toast }) {
 
       {modal !== null && (
         <UserModal user={modal?.id ? modal : null} onSave={modal?.id ? () => { setModal(null); load(); toast('Mis à jour', 'success'); } : handleCreated} onClose={() => setModal(null)} />
-      )}
-      {createdData && (
-        <AccountCreatedModal data={createdData} toast={toast} onClose={() => setCreatedData(null)} />
       )}
       {confirm && (
         <ConfirmDialog title="Supprimer l'utilisateur ?" message="Cette action est irréversible." danger

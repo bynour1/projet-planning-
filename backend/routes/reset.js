@@ -7,25 +7,34 @@ const { sendPasswordReset } = require('../config/mailer');
 // POST /api/auth/forgot-password
 router.post('/forgot-password', async (req, res) => {
   const { email } = req.body;
-  if (!email) return res.status(400).json({ message: 'Email requis' });
+  if (!email) return res.status(400).json({ message: 'Email ou numéro de téléphone requis' });
 
-  // Always return success to avoid email enumeration
-  res.json({ message: 'Si cet email existe, un lien de réinitialisation a été envoyé.' });
+  // Always return success to avoid enumeration
+  res.json({ message: 'Si ce compte existe, un lien / code de réinitialisation a été envoyé par e-mail ou SMS.' });
 
   try {
-    const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+    const rawInput = String(email).trim();
+    const cleanPhone = rawInput.replace(/[^\d]/g, '');
+
+    const [rows] = await db.query(
+      `SELECT * FROM users WHERE email = ? 
+       OR telephone = ? 
+       OR telephone = ? 
+       OR REPLACE(REPLACE(telephone, ' ', ''), '+216', '') = ?`,
+      [rawInput, rawInput, `+216 ${rawInput}`, cleanPhone ? cleanPhone.slice(-8) : '___nomatch___']
+    );
     if (!rows[0]) return;
 
     const user  = rows[0];
     const token = crypto.randomBytes(32).toString('hex');
 
-    await db.query('DELETE FROM password_resets WHERE email = ?', [email]);
+    await db.query('DELETE FROM password_resets WHERE email = ?', [user.email]);
     await db.query(
       'INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 1 HOUR))',
-      [email, token]
+      [user.email, token]
     );
 
-    await sendPasswordReset(email, user.nom, user.prenom, token, user.telephone || null);
+    await sendPasswordReset(user.email, user.nom, user.prenom, token, user.telephone || null);
   } catch (err) {
     console.error('[forgot-password]', err.message);
   }

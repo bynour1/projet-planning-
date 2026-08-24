@@ -95,11 +95,11 @@ export default function Login({ toast }) {
         <div className="card" style={{ boxShadow: 'var(--shadow-lg)' }}>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="form-group">
-              <label>Adresse email</label>
+              <label>Email ou N° Téléphone</label>
               <input
                 className="input"
-                type="email"
-                placeholder="vous@exemple.com"
+                type="text"
+                placeholder="vous@exemple.com ou 98 123 456"
                 value={form.email}
                 onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
                 required
