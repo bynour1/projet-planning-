@@ -86,7 +86,7 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     const tempHash = await bcrypt.hash(tempPassword, 10);
 
     const [result] = await db.query(
-      'INSERT INTO users (nom, prenom, email, password, role, telephone, is_active, first_login) VALUES (?,?,?,?,?,?,0,1)',
+      'INSERT INTO users (nom, prenom, email, password, role, telephone, is_active, first_login) VALUES (?,?,?,?,?,?,1,1)',
       [nom, prenom, email, tempHash, role, telephone || null]
     );
 

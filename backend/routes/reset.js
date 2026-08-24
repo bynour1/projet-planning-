@@ -13,7 +13,7 @@ router.post('/forgot-password', async (req, res) => {
   res.json({ message: 'Si cet email existe, un lien de réinitialisation a été envoyé.' });
 
   try {
-    const [rows] = await db.query('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
+    const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
     if (!rows[0]) return;
 
     const user  = rows[0];
@@ -61,7 +61,7 @@ router.post('/reset-password', async (req, res) => {
     if (!rows[0]) return res.status(400).json({ message: 'Lien invalide ou expiré' });
 
     const hashed = await bcrypt.hash(new_password, 10);
-    await db.query('UPDATE users SET password = ?, first_login = 0 WHERE email = ?', [hashed, rows[0].email]);
+    await db.query('UPDATE users SET password = ?, is_active = 1, first_login = 0 WHERE email = ?', [hashed, rows[0].email]);
     await db.query('UPDATE password_resets SET used = 1 WHERE token = ?', [token]);
 
     res.json({ message: 'Mot de passe réinitialisé avec succès' });

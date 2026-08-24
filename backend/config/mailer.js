@@ -52,16 +52,19 @@ async function notifyAllUsers({ subject, html, smsText = null, excludeId = null 
 
     // ── Email ──
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-      try {
-        const transporter = getTransporter();
-        await transporter.sendMail({
-          from:    `"GMT Ariana 🏥" <${process.env.EMAIL_USER}>`,
-          to:      users.map(u => u.email).join(','),
-          subject,
-          html,
-        });
-      } catch (err) {
-        console.warn('[Email] Envoi impossible :', err.message);
+      const transporter = getTransporter();
+      for (const u of users) {
+        if (!u.email || !u.email.includes('@')) continue;
+        try {
+          await transporter.sendMail({
+            from:    `"GMT Ariana 🏥" <${process.env.EMAIL_USER}>`,
+            to:      u.email,
+            subject,
+            html,
+          });
+        } catch (err) {
+          console.warn(`[Email] Envoi impossible à ${u.email} :`, err.message);
+        }
       }
     }
 
