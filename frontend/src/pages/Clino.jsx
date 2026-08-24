@@ -258,7 +258,7 @@ export default function Clino({ toast }) {
   const [modal,       setModal]       = useState(null);
   const [sigModal,    setSigModal]    = useState(null);
   const [confirm,     setConfirm]     = useState(null);
-  const [search,      setSearch]      = useState('');
+  const [filters,     setFilters]     = useState({ medecin_id: '', technicien_id: '', search: '' });
   const [loading,     setLoading]     = useState(true);
   const [selectedDate,setSelectedDate]= useState(format(new Date(),'yyyy-MM-dd'));
   const [activeTab,   setActiveTab]   = useState('list'); // 'list'|'programme'
@@ -284,22 +284,30 @@ export default function Clino({ toast }) {
   }, [on, load]);
 
   useEffect(() => {
-    if (isAdmin) {
-      axios.get('/api/users/by-role/medecin')?.then?.(r => setMedecins(r?.data || []))?.catch?.(() => {});
-      axios.get('/api/users/by-role/technicien')?.then?.(r => setTechniciens(r?.data || []))?.catch?.(() => {});
-    }
-  }, [isAdmin]);
+    axios.get('/api/users/by-role/medecin')?.then?.(r => setMedecins(r?.data || []))?.catch?.(() => {});
+    axios.get('/api/users/by-role/technicien')?.then?.(r => setTechniciens(r?.data || []))?.catch?.(() => {});
+  }, []);
 
   async function handleDelete(id) {
     try { await axios.delete(`/api/clino/${id}`); setConfirm(null); load(); toast('Supprimé', 'success'); }
     catch { toast('Erreur', 'error'); }
   }
 
-  const filtered = items.filter(it =>
-    (it.adresse || '').toLowerCase().includes(search.toLowerCase()) ||
-    (it.medecin_full || it.medecin_nom || '').toLowerCase().includes(search.toLowerCase()) ||
-    (it.technicien_full || it.technicien_nom || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = items.filter(it => {
+    if (filters.medecin_id && String(it.medecin_id) !== String(filters.medecin_id)) return false;
+    if (filters.technicien_id && String(it.technicien_id) !== String(filters.technicien_id)) return false;
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      const match = (it.adresse || '').toLowerCase().includes(q) ||
+                    (it.medecin_full || it.medecin_nom || '').toLowerCase().includes(q) ||
+                    (it.technicien_full || it.technicien_nom || '').toLowerCase().includes(q) ||
+                    (it.commentaire || '').toLowerCase().includes(q);
+      if (!match) return false;
+    }
+    return true;
+  });
+
+  const hasActiveFilters = Boolean(filters.medecin_id || filters.technicien_id || filters.search);
 
   const allDates = [...new Set([
     ...items.map(i => i.date ? String(i.date).slice(0, 10) : null),
@@ -392,14 +400,70 @@ export default function Clino({ toast }) {
         </div>
       </div>
 
+      {/* Advanced Filter Bar (Médecin, Technicien, Recherche) */}
+      <div style={{ display: 'flex', gap: 10, padding: '10px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 4 }}>
+          🏷️ Filtres :
+        </span>
+
+        {/* Filter by Doctor */}
+        <select
+          className="input"
+          style={{ width: 'auto', fontSize: 12, padding: '5px 10px', height: 32, borderRadius: 8 }}
+          value={filters.medecin_id}
+          onChange={e => setFilters(f => ({ ...f, medecin_id: e.target.value }))}
+        >
+          <option value="">👨‍⚕️ Tous les médecins</option>
+          {medecins.map(m => (
+            <option key={m.id} value={m.id}>{m.prenom} {m.nom}</option>
+          ))}
+        </select>
+
+        {/* Filter by Technician */}
+        <select
+          className="input"
+          style={{ width: 'auto', fontSize: 12, padding: '5px 10px', height: 32, borderRadius: 8 }}
+          value={filters.technicien_id}
+          onChange={e => setFilters(f => ({ ...f, technicien_id: e.target.value }))}
+        >
+          <option value="">🔧 Tous les techniciens</option>
+          {techniciens.map(t => (
+            <option key={t.id} value={t.id}>{t.prenom} {t.nom}</option>
+          ))}
+        </select>
+
+        {/* Search input */}
+        <input
+          className="input"
+          type="text"
+          placeholder="🔍 Rechercher par mot-clé, médecin ou adresse..."
+          style={{ width: 240, fontSize: 12, padding: '5px 10px', height: 32, borderRadius: 8 }}
+          value={filters.search}
+          onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+        />
+
+        {hasActiveFilters && (
+          <>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setFilters({ medecin_id: '', technicien_id: '', search: '' })}
+              style={{ fontSize: 12, padding: '4px 8px', color: 'var(--danger)' }}
+              title="Réinitialiser tous les filtres"
+            >
+              ✕ Réinitialiser
+            </button>
+            <span className="badge badge-blue" style={{ fontSize: 11 }}>
+              {filtered.length} tournée{filtered.length > 1 ? 's' : ''} trouvée{filtered.length > 1 ? 's' : ''}
+            </span>
+          </>
+        )}
+      </div>
+
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: 14 }}>
         {/* Main content */}
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {activeTab === 'list' && (
             <>
-              <div style={{ marginBottom: 14 }}>
-                <input className="input" style={{ maxWidth: 360 }} placeholder="🔍 Rechercher par adresse, médecin ou technicien..." value={search} onChange={e => setSearch(e.target.value)} />
-              </div>
               {loading ? <div className="loading-center"><div className="spinner" /></div>
               : filtered.length === 0 ? <div className="empty-state"><div className="empty-icon">🚗</div><p>Aucun programme trouvé</p></div>
               : (
@@ -501,7 +565,7 @@ export default function Clino({ toast }) {
               {/* Daily program full width */}
               <DailyProgram
                 selectedDate={selectedDate}
-                clinoItems={items}
+                clinoItems={filtered}
                 planningItems={planning}
                 isAdmin={isAdmin}
                 onAddClino={() => setModal({ date: selectedDate })}

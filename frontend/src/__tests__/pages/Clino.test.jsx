@@ -19,10 +19,8 @@ const PLANNING_DATA = [
 function setup(user = MOCK_ADMIN) {
   axios.get.mockResolvedValueOnce({ data: CLINO_DATA });   // /api/clino
   axios.get.mockResolvedValueOnce({ data: PLANNING_DATA }); // /api/planning
-  if (user.role === 'administrateur') {
-    axios.get.mockResolvedValueOnce({ data: [MOCK_MEDECIN] }); // by-role/medecin
-    axios.get.mockResolvedValueOnce({ data: [] }); // by-role/technicien
-  }
+  axios.get.mockResolvedValueOnce({ data: [MOCK_MEDECIN, { id: 2, nom: 'Mansouri', prenom: 'Karim', role: 'medecin' }] }); // by-role/medecin
+  axios.get.mockResolvedValueOnce({ data: [{ id: 3, nom: 'Ben Salah', prenom: 'Ahmed', role: 'technicien' }] }); // by-role/technicien
   return renderWithProviders(<Clino toast={mockToast} />, { user });
 }
 
@@ -71,6 +69,20 @@ describe('Clino Mobile page', () => {
     await userEvent.type(screen.getByPlaceholderText(/Rechercher/i), 'Bourguiba');
     expect(screen.getAllByText('Avenue Bourguiba')[0]).toBeInTheDocument();
     expect(screen.queryByText('Rue de la Liberté, Tunis')).not.toBeInTheDocument();
+  });
+
+  it('filters by doctor dropdown', async () => {
+    setup();
+    await waitFor(() => screen.getByText('👨‍⚕️ Tous les médecins'));
+    const doctorSelect = screen.getByDisplayValue('👨‍⚕️ Tous les médecins');
+    expect(doctorSelect).toBeInTheDocument();
+  });
+
+  it('filters by technician dropdown', async () => {
+    setup();
+    await waitFor(() => screen.getByText('🔧 Tous les techniciens'));
+    const techSelect = screen.getByDisplayValue('🔧 Tous les techniciens');
+    expect(techSelect).toBeInTheDocument();
   });
 
   it('opens modal on + Programme click', async () => {
