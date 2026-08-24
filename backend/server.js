@@ -118,9 +118,27 @@ io.on('connection', (socket) => {
 app.set('io', io);
 
 // ─── Express Middleware ───────────────────────────────────────
+const helmet    = require('helmet');
+const rateLimit = require('express-rate-limit');
+
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+  contentSecurityPolicy: false,
+}));
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Anti brute-force rate limiter for auth
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { message: 'Trop de requêtes, veuillez patienter 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
 
 // Serve uploaded files statically
 const path = require('path');
