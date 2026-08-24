@@ -9,6 +9,20 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import NavigationSelector from '../components/NavigationSelector';
 import SignaturePadModal from '../components/SignaturePadModal';
 
+function fmtDisplayWithDay(dateStr) {
+  if (!dateStr) return '-';
+  try {
+    const raw = String(dateStr).slice(0, 10);
+    if (!raw) return dateStr;
+    const parsed = parseISO(raw);
+    const dayName = format(parsed, 'EEEE', { locale: fr });
+    const capDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+    return `${capDay} ${format(parsed, 'dd/MM/yyyy')}`;
+  } catch {
+    return dateStr;
+  }
+}
+
 /* ── Clino Modal ─────────────────────────────────────────────── */
 function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
   const init = item || {};
@@ -292,6 +306,22 @@ export default function Clino({ toast }) {
     ...planning.map(p => p.date ? String(p.date).slice(0, 10) : null),
   ])].filter(Boolean).sort().reverse();
 
+  const exportClinoItems = filtered.map(it => ({
+    ...it,
+    _t: 'cl',
+    type_label: 'Clino Mobile',
+    date: String(it.date || '').slice(0, 10),
+    date_display: fmtDisplayWithDay(it.date),
+    heure_debut: it.heure ? String(it.heure).slice(0, 5) : '',
+    heure_fin: '',
+    heure_display: it.heure ? String(it.heure).slice(0, 5) : '-',
+    titre: 'Programme Clino Mobile',
+    medecin_nom: it.medecin_full || it.medecin_nom || '-',
+    technicien_nom: it.technicien_full || it.technicien_nom || '-',
+    adresse: it.adresse || '-',
+    commentaire: it.commentaire || '',
+  })).sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.heure_debut || '').localeCompare(b.heure_debut || ''));
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Toolbar */}
@@ -301,6 +331,56 @@ export default function Clino({ toast }) {
           <p style={{ fontSize: 12, color: 'var(--text-2)' }}>Planning journalier & programme des tournées</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Export buttons */}
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => {
+                import('../utils/exportUtils').then(({ exportToPDF }) => {
+                  exportToPDF(exportClinoItems, [
+                    { header: 'Date', key: 'date_display' },
+                    { header: 'Horaire', key: 'heure_display' },
+                    { header: 'Titre / Sujet', key: 'titre' },
+                    { header: 'Médecin', key: 'medecin_nom' },
+                    { header: 'Technicien', key: 'technicien_nom' },
+                    { header: 'Adresse / Destination', key: 'adresse' },
+                  ], 'Tournees Clino Mobile GMT Ariana');
+                });
+              }}
+              title="Exporter Clino Mobile en PDF"
+            >
+              📄 PDF
+            </button>
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => {
+                import('../utils/exportUtils').then(({ exportToExcel }) => {
+                  exportToExcel(exportClinoItems, [
+                    { header: 'Date', key: 'date_display' },
+                    { header: 'Heure', key: 'heure_debut' },
+                    { header: 'Programme', key: 'titre' },
+                    { header: 'Médecin', key: 'medecin_nom' },
+                    { header: 'Technicien', key: 'technicien_nom' },
+                    { header: 'Adresse / Destination', key: 'adresse' },
+                    { header: 'Commentaires / Notes', key: 'commentaire' },
+                  ], 'Tournees_Clino_Mobile_GMT_Ariana');
+                });
+              }}
+              title="Exporter Clino Mobile en Excel"
+            >
+              📊 Excel
+            </button>
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => {
+                import('../utils/exportUtils').then(({ exportToICS }) => exportToICS(exportClinoItems));
+              }}
+              title="Exporter Clino Mobile au format Calendrier .ics"
+            >
+              📅 .ics
+            </button>
+          </div>
+
           {/* Tab switcher */}
           <div style={{ display: 'flex', gap: 2, background: 'var(--bg)', borderRadius: 8, padding: 3 }}>
             {[['list', '📋 Liste'], ['programme', '📅 Programme jour']].map(([v, l]) => (
