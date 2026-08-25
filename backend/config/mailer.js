@@ -99,21 +99,23 @@ async function sendOTP(email, code, nom, prenom, telephone = null) {
     try {
       const transporter = getTransporter();
       await transporter.sendMail({
-        from:    `"GMT Ariana 🏥" <${process.env.EMAIL_USER}>`,
+        from:    `"GMT Ariana" <${process.env.EMAIL_USER}>`,
         to:      email,
-        subject: '🔑 Confirmation de votre compte — GMT Ariana',
+        subject: 'Confirmation de votre compte — GMT Ariana',
+        text:    `Bonjour ${prenom} ${nom},\n\nVotre compte GMT Ariana a été créé.\nCode de confirmation : ${code}\nCe code expire dans 15 minutes.\n\nGMT Ariana — Groupement de Médecine du Travail`,
         html: `
-          <div style="font-family:DM Sans,sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #e2e8f0;border-radius:12px">
+          <div style="font-family:DM Sans,Segoe UI,Arial,sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff">
             <div style="text-align:center;margin-bottom:24px">
-              <div style="font-size:40px">🏥</div>
-              <h2 style="color:#1e3a8a;margin:8px 0">GMT Ariana — Santé de l'employé</h2>
+              <div style="display:inline-block;background:#0284c7;border-radius:10px;padding:10px 20px">
+                <span style="color:#ffffff;font-size:16px;font-weight:700">GMT Ariana — Santé de l'employé</span>
+              </div>
             </div>
-            <p>Bonjour <strong>${prenom} ${nom}</strong>,</p>
-            <p>Votre compte a été créé. Voici votre code de confirmation :</p>
-            <div style="font-size:36px;font-weight:900;letter-spacing:10px;color:#0f172a;background:#f1f5f9;padding:20px;border-radius:10px;text-align:center;margin:20px 0">
+            <p style="font-size:15px;color:#0f172a">Bonjour <strong>${prenom} ${nom}</strong>,</p>
+            <p style="color:#475569;font-size:14px;line-height:1.5">Votre compte a été créé. Voici votre code de confirmation :</p>
+            <div style="font-size:36px;font-weight:900;letter-spacing:10px;color:#0f172a;background:#f1f5f9;padding:20px;border-radius:10px;text-align:center;margin:20px 0;border:1px solid #e2e8f0">
               ${code}
             </div>
-            <p style="color:#64748b;font-size:13px">⏱ Ce code expire dans <strong>15 minutes</strong>.</p>
+            <p style="color:#64748b;font-size:13px;text-align:center">⏱ Ce code expire dans <strong>15 minutes</strong>.</p>
             <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0"/>
             <p style="font-size:12px;color:#94a3b8;text-align:center">GMT Ariana — Groupement de Médecine du Travail de l'Ariana</p>
           </div>`,
@@ -125,7 +127,7 @@ async function sendOTP(email, code, nom, prenom, telephone = null) {
 
   // SMS OTP
   if (telephone) {
-    await sendSMS(telephone, `GMT Ariana - Votre code de confirmation : ${code}\nValable 15 minutes. Ne le partagez pas.`);
+    await sendSMS(telephone, `GMT Ariana - Votre code de confirmation : ${code}\nValable 15 minutes.`);
   }
 }
 
@@ -138,21 +140,22 @@ async function sendPasswordReset(email, nom, prenom, token, telephone = null) {
     try {
       const transporter = getTransporter();
       const info = await transporter.sendMail({
-        from:    `"GMT Ariana 🏥" <${process.env.EMAIL_USER}>`,
+        from:    `"GMT Ariana" <${process.env.EMAIL_USER}>`,
         to:      email,
-        subject: '🔒 Réinitialisation de mot de passe — GMT Ariana',
+        subject: 'Réinitialisation de mot de passe — GMT Ariana',
+        text:    `Bonjour ${prenom} ${nom},\n\nVous avez demandé une réinitialisation de votre mot de passe pour accéder à votre espace GMT Ariana.\nLien de réinitialisation : ${resetUrl}\nCe lien expire dans 1 heure.\n\nSi vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email.\n\nGMT Ariana`,
         html: `
           <div style="font-family:DM Sans,Segoe UI,Arial,sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff">
             <div style="text-align:center;margin-bottom:24px">
               <div style="display:inline-block;background:#0284c7;border-radius:12px;padding:12px 24px">
-                <span style="color:#ffffff;font-size:18px;font-weight:800">🏥 GMT Ariana</span>
+                <span style="color:#ffffff;font-size:18px;font-weight:800">GMT Ariana</span>
               </div>
             </div>
             <p style="font-size:15px;color:#0f172a">Bonjour <strong>${prenom} ${nom}</strong>,</p>
             <p style="color:#475569;font-size:14px;line-height:1.5">Vous avez demandé une réinitialisation de votre mot de passe pour accéder à votre espace GMT Ariana.</p>
             <div style="text-align:center;margin:24px 0">
               <a href="${resetUrl}" style="background:#0284c7;color:#ffffff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;display:inline-block">
-                🔑 Réinitialiser mon mot de passe
+                Réinitialiser mon mot de passe
               </a>
             </div>
             <p style="color:#64748b;font-size:13px">⏱ Ce lien de sécurité expire dans <strong>1 heure</strong>.</p>
@@ -240,9 +243,10 @@ async function sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telepho
     try {
       const transporter = getTransporter();
       const info = await transporter.sendMail({
-        from: `"GMT Ariana 🏥" <${process.env.EMAIL_USER}>`,
+        from: `"GMT Ariana" <${process.env.EMAIL_USER}>`,
         to: email,
-        subject: '🏥 Vos identifiants de connexion — GMT Ariana',
+        subject: 'Vos identifiants de connexion — GMT Ariana',
+        text: `Bonjour ${prenom} ${nom},\n\nUn compte a été créé pour vous sur la plateforme officielle du Groupement de Médecine du Travail de l'Ariana.\n\nVos informations de connexion :\nIdentifiant (Email) : ${email}\nMot de passe initial : ${tempPassword}\n\nLien d'accès : ${loginUrl}\nCode de confirmation : ${otp} (valable 15 minutes)\n\nLors de votre première connexion, il vous sera demandé de choisir un nouveau mot de passe personnalisé.\n\nGMT Ariana`,
         html: `
           <div style="font-family:DM Sans,Segoe UI,Arial,sans-serif;max-width:520px;margin:auto;padding:32px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff">
             <div style="text-align:center;margin-bottom:24px">
