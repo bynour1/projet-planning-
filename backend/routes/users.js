@@ -94,9 +94,11 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     res.status(201).json({
       message: emailError
         ? `Compte créé mais l'e-mail n'a pas pu être envoyé à ${email} (${emailError}).`
-        : `Compte créé avec succès ! Un e-mail d'accès contenant les identifiants et le code de confirmation a été envoyé à ${email}. (Conseil : Vérifier aussi le dossier Spam / Courrier indésirable)`,
+        : `Compte créé avec succès ! Un e-mail d'accès contenant les identifiants et le code de confirmation a été envoyé à ${email}.`,
       userId: result.insertId,
       email,
+      tempPassword,
+      otp,
       otp_sent: !emailError,
       email_error: emailError || null,
     });
@@ -140,8 +142,11 @@ router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), as
     res.json({
       message: emailError
         ? `Erreur lors de l'envoi de l'e-mail à ${user.email}.`
-        : `E-mail d'accès et code de confirmation renvoyés à ${user.email}. (Demandez à l'utilisateur de vérifier son dossier Spam)`,
+        : `E-mail d'accès et code de confirmation renvoyés à ${user.email}.`,
       email: user.email,
+      tempPassword,
+      otp,
+      email_error: emailError || null,
     });
   } catch (err) {
     console.error('[resend-welcome]', err);
@@ -192,7 +197,7 @@ router.post('/resend-otp', authenticate, authorize('administrateur'), async (req
     const { sendOTP } = require('../config/mailer');
     await sendOTP(email, otp, user.nom, user.prenom, user.telephone);
 
-    res.json({ message: `Nouveau code de confirmation envoyé à ${email}.` });
+    res.json({ message: `Nouveau code de confirmation envoyé à ${email}.`, otp });
   } catch (err) {
     console.error('[resend-otp]', err);
     res.status(500).json({ message: 'Erreur serveur' });

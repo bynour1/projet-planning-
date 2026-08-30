@@ -6,12 +6,15 @@ export default function ForgotPassword({ toast }) {
   const [loading, setLoading] = useState(false);
   const [sent,    setSent]    = useState(false);
 
+  const [resetData, setResetData] = useState(null);
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (!email.trim()) return toast('Veuillez entrer votre email', 'error');
     setLoading(true);
     try {
-      await axios.post('/api/auth/forgot-password', { email });
+      const res = await axios.post('/api/auth/forgot-password', { email });
+      setResetData(res.data);
       setSent(true);
     } catch (err) {
       toast(err.response?.data?.message || 'Erreur serveur', 'error');
@@ -25,7 +28,7 @@ export default function ForgotPassword({ toast }) {
       minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center',
       background:'linear-gradient(135deg,#e0f2fe 0%,#f0f9ff 50%,#ecfdf5 100%)', padding:16,
     }}>
-      <div style={{ width:'100%', maxWidth:420 }}>
+      <div style={{ width:'100%', maxWidth:440 }}>
         <div style={{ textAlign:'center', marginBottom:28 }}>
           <div style={{ width:56, height:56, background:'var(--primary)', borderRadius:16,
             display:'inline-flex', alignItems:'center', justifyContent:'center',
@@ -63,21 +66,47 @@ export default function ForgotPassword({ toast }) {
               <div style={{ width:64, height:64, background:'var(--accent-lt)', borderRadius:'50%',
                 display:'inline-flex', alignItems:'center', justifyContent:'center',
                 fontSize:32, marginBottom:16 }}>✅</div>
-              <h3 style={{ fontSize:17, fontWeight:700, marginBottom:8 }}>Email envoyé !</h3>
+              <h3 style={{ fontSize:17, fontWeight:700, marginBottom:8 }}>Demande traitée avec succès</h3>
               <p style={{ fontSize:13, color:'var(--text-2)', lineHeight:1.6 }}>
-                Si cet email correspond à un compte actif,
-                vous recevrez un lien de réinitialisation.
+                Si cet email correspond à un compte actif, l'e-mail avec le lien de réinitialisation a été expédié.
               </p>
               <p style={{ fontSize:12, color:'var(--text-3)', marginTop:6 }}>
-                Adresse demandée : <strong>{email}</strong>
+                Identifiant recherché : <strong>{resetData?.email || email}</strong>
               </p>
-              <p style={{ fontSize:12, color:'var(--text-3)', marginTop:10 }}>
-                ⏱ Le lien expire dans <strong>1 heure</strong>. Vérifiez vos spams.
+
+              {resetData?.resetUrl && (
+                <div style={{
+                  marginTop: 16, padding: '14px', background: '#f0f9ff',
+                  border: '1px solid #bae6fd', borderRadius: 10, textAlign: 'left',
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0369a1', marginBottom: 6 }}>
+                    ⚡ Lien d'accès direct de réinitialisation :
+                  </div>
+                  <p style={{ fontSize: 11.5, color: '#0c4a6e', marginBottom: 12, lineHeight: 1.4 }}>
+                    Si vous ne recevez pas l'e-mail (filtres anti-spam ou boîte jetable), vous pouvez utiliser le bouton ci-dessous pour changer votre mot de passe immédiatement :
+                  </p>
+                  <a
+                    href={resetData.resetUrl}
+                    style={{
+                      display: 'block', textAlign: 'center', padding: '10px 16px',
+                      background: 'var(--primary)', color: '#fff', borderRadius: 8,
+                      textDecoration: 'none', fontSize: 13, fontWeight: 700,
+                      boxShadow: '0 2px 8px rgba(14,165,233,.3)',
+                    }}
+                  >
+                    🔗 Réinitialiser mon mot de passe maintenant
+                  </a>
+                </div>
+              )}
+
+              <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 14 }}>
+                ⏱ Le lien expire dans <strong>1 heure</strong>.
               </p>
+
               <a href="/login" style={{
-                display:'inline-block', marginTop:20, padding:'9px 20px',
-                background:'var(--primary)', color:'#fff', borderRadius:8,
-                textDecoration:'none', fontSize:14, fontWeight:600,
+                display:'inline-block', marginTop:16, padding:'9px 20px',
+                background:'var(--bg)', border:'1px solid var(--border)', color:'var(--text-1)',
+                borderRadius:8, textDecoration:'none', fontSize:13, fontWeight:600,
               }}>← Retour à la connexion</a>
             </div>
           )}

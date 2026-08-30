@@ -1,14 +1,18 @@
+require('dotenv').config();
 const nodemailer = require('nodemailer');
 const db         = require('../config/db');
 
 // ─── Email transporter ─────────────────────────────────────────
 function getTransporter() {
+  const user = (process.env.EMAIL_USER || '').trim();
+  const pass = (process.env.EMAIL_PASS || '').trim();
+
   if (process.env.EMAIL_HOST) {
     return nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
       port: Number(process.env.EMAIL_PORT) || 587,
       secure: process.env.EMAIL_SECURE === 'true',
-      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+      auth: { user, pass },
       tls: { rejectUnauthorized: false },
     });
   }
@@ -19,10 +23,7 @@ function getTransporter() {
       host: 'smtp.gmail.com',
       port: 587,
       secure: false, // STARTTLS
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
+      auth: { user, pass },
       tls: { rejectUnauthorized: false },
       connectionTimeout: 10000,
     });
@@ -30,7 +31,7 @@ function getTransporter() {
 
   return nodemailer.createTransport({
     service: process.env.EMAIL_SERVICE,
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+    auth: { user, pass },
     tls: { rejectUnauthorized: false },
   });
 }

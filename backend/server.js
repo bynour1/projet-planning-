@@ -146,7 +146,6 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ─── Routes ───────────────────────────────────────────────────
 app.use('/api/auth',     require('./routes/auth'));
-app.use('/api/auth',     require('./routes/reset'));
 app.use('/api/users',    require('./routes/users'));
 app.use('/api/planning', require('./routes/planning'));
 app.use('/api/events',   require('./routes/events'));
@@ -186,8 +185,8 @@ require('./cron/reminders')(db);
 
 // ─── Start ────────────────────────────────────────────────────
 const PORT = process.env.PORT || 8083;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🏥  Planning Médical — API démarrée`);
-  console.log(`📡  http://localhost:${PORT}`);
+  console.log(`📡  http://localhost:${PORT} & réseau local (0.0.0.0:${PORT})`);
   console.log(`🔌  Socket.IO actif\n`);
 });

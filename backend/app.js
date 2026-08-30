@@ -12,7 +12,6 @@ app.use(express.urlencoded({ extended: true }));
 app.set('io', { emit: () => {} });
 
 app.use('/api/auth',        require('./routes/auth'));
-app.use('/api/auth',        require('./routes/reset'));
 app.use('/api/users',       require('./routes/users'));
 app.use('/api/planning',    require('./routes/planning'));
 app.use('/api/events',      require('./routes/events'));

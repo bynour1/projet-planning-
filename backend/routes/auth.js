@@ -39,6 +39,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const rawInput = String(email).trim();
+    const rawPassword = String(password).trim();
     const cleanPhone = rawInput.replace(/[^\d]/g, '');
 
     const [rows] = await db.query(
@@ -53,7 +54,10 @@ router.post('/login', async (req, res) => {
     if (!user) return res.status(401).json({ message: 'Email / Téléphone ou mot de passe incorrect' });
     if (!user.is_active) return res.status(403).json({ message: 'Compte non activé' });
 
-    const valid = await bcrypt.compare(password, user.password);
+    let valid = await bcrypt.compare(rawPassword, user.password);
+    if (!valid && password !== rawPassword) {
+      valid = await bcrypt.compare(String(password), user.password);
+    }
     if (!valid) return res.status(401).json({ message: 'Email / Téléphone ou mot de passe incorrect' });
 
     if (user.role === 'administrateur' && user.totp_enabled === 1) {
@@ -365,7 +369,12 @@ router.post('/forgot-password', async (req, res) => {
     // Send Reset Email + SMS
     await sendPasswordReset(user.email, user.nom, user.prenom, token, user.telephone);
 
-    res.json({ message: successMsg, email: user.email });
+    res.json({
+      message: successMsg,
+      email: user.email,
+      token,
+      resetUrl: `/reset-password?token=${token}`,
+    });
   } catch (err) {
     console.error('[forgot-password] Erreur:', err);
     res.status(500).json({ message: 'Erreur lors de la demande de réinitialisation' });
