@@ -54,7 +54,6 @@ async function sendSMS(to, message) {
   const client = getTwilioClient();
   if (!client || !to) return;
   try {
-    // Normalize phone number (add + if missing)
     let phone = String(to).trim();
     if (!phone.startsWith('+')) phone = '+216' + phone.replace(/^0+/, '');
     await client.messages.create({
@@ -64,6 +63,31 @@ async function sendSMS(to, message) {
     });
   } catch (err) {
     console.warn('[SMS] Envoi impossible à', to, ':', err.message);
+  }
+}
+
+// Send WhatsApp message to a single phone number
+async function sendWhatsApp(to, message) {
+  const client = getTwilioClient();
+  if (!client || !to) return false;
+  try {
+    let phone = String(to).trim();
+    if (!phone.startsWith('+')) phone = '+216' + phone.replace(/^0+/, '');
+
+    const fromWhatsApp = process.env.TWILIO_WHATSAPP_NUMBER 
+      ? (process.env.TWILIO_WHATSAPP_NUMBER.startsWith('whatsapp:') ? process.env.TWILIO_WHATSAPP_NUMBER : `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`)
+      : 'whatsapp:+14155238886'; // Default Twilio Sandbox WhatsApp number
+
+    await client.messages.create({
+      body: message,
+      from: fromWhatsApp,
+      to:   `whatsapp:${phone}`,
+    });
+    console.log(`[WhatsApp] ✅ Message envoyé avec succès à whatsapp:${phone}`);
+    return true;
+  } catch (err) {
+    console.warn('[WhatsApp] Envoi impossible à', to, ':', err.message);
+    return false;
   }
 }
 
@@ -139,13 +163,15 @@ async function sendOTP(email, code, nom, prenom, telephone = null) {
     }
   }
 
-  // SMS OTP
+  // SMS & WhatsApp OTP
   if (telephone) {
-    await sendSMS(telephone, `GMT Ariana - Votre code de confirmation : ${code}\nValable 15 minutes.`);
+    const msg = `GMT Ariana 🏥\nVotre code de confirmation : ${code}\n(Valable 15 minutes)`;
+    await sendSMS(telephone, msg);
+    await sendWhatsApp(telephone, msg);
   }
 }
 
-// Send password reset link — Email + SMS
+// Send password reset link — Email + SMS + WhatsApp
 async function sendPasswordReset(email, nom, prenom, token, telephone = null) {
   const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
 
@@ -184,9 +210,11 @@ async function sendPasswordReset(email, nom, prenom, token, telephone = null) {
     }
   }
 
-  // SMS reset link
+  // SMS & WhatsApp reset link
   if (telephone) {
-    await sendSMS(telephone, `GMT Ariana - Réinitialisez votre mot de passe ici :\n${resetUrl}\nLien valable 1 heure.`);
+    const msg = `GMT Ariana 🏥\nRéinitialisez votre mot de passe ici :\n${resetUrl}\n(Lien valable 1 heure)`;
+    await sendSMS(telephone, msg);
+    await sendWhatsApp(telephone, msg);
   }
 }
 
@@ -306,11 +334,11 @@ async function sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telepho
     console.warn('[Email Welcome] ⚠️ EMAIL_USER ou EMAIL_PASS non configuré !');
   }
 
-  // SMS
+  // SMS & WhatsApp
   if (telephone) {
-    await sendSMS(telephone,
-      `GMT Ariana - Bonjour ${prenom} ${nom} !\nVotre compte a été créé.\nEmail : ${email}\nMot de passe provisoire : ${tempPassword}\nCode de confirmation : ${otp}\nValable 15 min.`
-    );
+    const msg = `GMT Ariana 🏥\nBonjour ${prenom} ${nom} !\nVotre compte a été créé.\n\nEmail : ${email}\nMot de passe provisoire : ${tempPassword}\nCode OTP : ${otp}\n(Valable 15 minutes)`;
+    await sendSMS(telephone, msg);
+    await sendWhatsApp(telephone, msg);
   }
 
   return emailSent;
@@ -323,6 +351,7 @@ module.exports = {
   sendPasswordReset,
   sendWelcomeEmail,
   sendSMS,
+  sendWhatsApp,
   planningEmailHtml,
   planningSmsText,
   eventEmailHtml,
