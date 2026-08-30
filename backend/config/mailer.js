@@ -11,13 +11,13 @@ function getTransporter() {
       auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
     });
   }
-  // Default to reliable Gmail SSL on port 465
+  // Default to Nodemailer's built-in Gmail service for maximum deliverability
   return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-    tls: { rejectUnauthorized: false }
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
   });
 }
 

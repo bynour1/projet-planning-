@@ -94,7 +94,7 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     res.status(201).json({
       message: emailError
         ? `Compte créé mais l'e-mail n'a pas pu être envoyé à ${email} (${emailError}).`
-        : `Compte créé avec succès. Un e-mail d'accès contenant les identifiants et le code de confirmation a été envoyé à ${email}.`,
+        : `Compte créé avec succès ! Un e-mail d'accès contenant les identifiants et le code de confirmation a été envoyé à ${email}. (Conseil : Vérifier aussi le dossier Spam / Courrier indésirable)`,
       userId: result.insertId,
       email,
       otp_sent: !emailError,
@@ -140,7 +140,7 @@ router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), as
     res.json({
       message: emailError
         ? `Erreur lors de l'envoi de l'e-mail à ${user.email}.`
-        : `E-mail d'accès et code de confirmation renvoyés à ${user.email}.`,
+        : `E-mail d'accès et code de confirmation renvoyés à ${user.email}. (Demandez à l'utilisateur de vérifier son dossier Spam)`,
       email: user.email,
     });
   } catch (err) {
