@@ -59,6 +59,29 @@ function playChime(type = 'message') {
   }
 }
 
+// Safe System/PWA Notification helper (prevents Chrome mobile freeze)
+function sendSystemNotification(title, body) {
+  if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready.then((reg) => {
+        reg.showNotification(title, {
+          body,
+          icon: '/logo-gmt.png',
+          badge: '/icon-192.png',
+          vibrate: [100, 50, 100],
+        });
+      }).catch(() => {
+        new Notification(title, { body, icon: '/logo-gmt.png' });
+      });
+    } else {
+      new Notification(title, { body, icon: '/logo-gmt.png' });
+    }
+  } catch {
+    // Ignore notification errors on restricted mobile browsers
+  }
+}
+
 export function SocketProvider({ children }) {
   const { user, token } = useAuth();
   const navigate = useNavigate();
@@ -82,9 +105,6 @@ export function SocketProvider({ children }) {
 
     socket.on('connect', () => {
       setConnected(true);
-      if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
     });
 
     socket.on('disconnect',   ()      => setConnected(false));
@@ -97,16 +117,9 @@ export function SocketProvider({ children }) {
       const isChatOpen = window.location.pathname === '/chat';
 
       // Notification Bureau (si onglet réduit ou en arrière-plan)
-      if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+      if (document.hidden) {
         const textContent = typeof msg.content === 'string' ? msg.content.slice(0, 80) : 'Document / Pièce jointe';
-        const notif = new Notification(`💬 ${msg.nom}`, {
-          body: textContent,
-          icon: '/logo-gmt.png',
-        });
-        notif.onclick = () => {
-          window.focus();
-          navigate('/chat');
-        };
+        sendSystemNotification(`💬 ${msg.nom}`, textContent);
       }
 
       // Notification dans l'application (si l'utilisateur n'est pas déjà sur /chat)
@@ -124,15 +137,8 @@ export function SocketProvider({ children }) {
     socket.on('planning_new', (data) => {
       if (user && data.creatorId === user.id) return; // Ne pas notifier l'admin lui-même
 
-      if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-        const notif = new Notification('📋 Nouveau planning — GMT Ariana', {
-          body: `${data.createdBy || 'L\'administrateur'} a programmé : ${data.titre} le ${data.date}`,
-          icon: '/logo-gmt.png',
-        });
-        notif.onclick = () => {
-          window.focus();
-          navigate('/planning');
-        };
+      if (document.hidden) {
+        sendSystemNotification('📋 Nouveau planning — GMT Ariana', `${data.createdBy || 'L\'admin'} : ${data.titre} (${data.date})`);
       }
 
       playChime('event');
@@ -146,15 +152,8 @@ export function SocketProvider({ children }) {
     socket.on('clino_new', (data) => {
       if (user && data.creatorId === user.id) return;
 
-      if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-        const notif = new Notification('🚗 Clino Mobile — GMT Ariana', {
-          body: `Nouvelle tournée : ${data.adresse} (${data.date})`,
-          icon: '/logo-gmt.png',
-        });
-        notif.onclick = () => {
-          window.focus();
-          navigate('/clino');
-        };
+      if (document.hidden) {
+        sendSystemNotification('🚗 Clino Mobile — GMT Ariana', `Tournée : ${data.adresse} (${data.date})`);
       }
 
       playChime('event');
@@ -168,15 +167,8 @@ export function SocketProvider({ children }) {
     socket.on('calendar_new', (data) => {
       if (user && data.creatorId === user.id) return;
 
-      if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-        const notif = new Notification('📅 Nouvel événement — GMT Ariana', {
-          body: `${data.titre}`,
-          icon: '/logo-gmt.png',
-        });
-        notif.onclick = () => {
-          window.focus();
-          navigate('/calendar');
-        };
+      if (document.hidden) {
+        sendSystemNotification('📅 Nouvel événement — GMT Ariana', `${data.titre}`);
       }
 
       playChime('event');
