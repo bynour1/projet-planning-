@@ -93,12 +93,10 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
 
     res.status(201).json({
       message: emailError
-        ? `Compte créé mais l'e-mail n'a pas pu être envoyé à ${email}. Communiquez les identifiants ci-dessous directement à l'utilisateur.`
-        : `Compte créé ! Un e-mail a été envoyé à ${email}. Si l'utilisateur ne le reçoit pas, communiquez-lui les identifiants ci-dessous.`,
+        ? `Compte créé mais l'e-mail n'a pas pu être envoyé à ${email} (${emailError}).`
+        : `Compte créé avec succès. Un e-mail d'accès contenant les identifiants et le code de confirmation a été envoyé à ${email}.`,
       userId: result.insertId,
       email,
-      tempPassword,
-      otp,
       otp_sent: !emailError,
       email_error: emailError || null,
     });
@@ -141,11 +139,9 @@ router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), as
 
     res.json({
       message: emailError
-        ? `E-mail non envoyé à ${user.email}. Communiquez les identifiants ci-dessous directement.`
-        : `E-mail renvoyé à ${user.email}. Si non reçu, communiquez les identifiants ci-dessous.`,
+        ? `Erreur lors de l'envoi de l'e-mail à ${user.email}.`
+        : `E-mail d'accès et code de confirmation renvoyés à ${user.email}.`,
       email: user.email,
-      tempPassword,
-      otp,
     });
   } catch (err) {
     console.error('[resend-welcome]', err);

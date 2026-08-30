@@ -243,46 +243,45 @@ async function sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telepho
 
   if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
     console.log(`[Email Welcome] Tentative d'envoi à ${email}...`);
+    const appUrl = process.env.FRONTEND_URL && !process.env.FRONTEND_URL.includes('localhost')
+      ? process.env.FRONTEND_URL
+      : null;
+
     const transporter = getTransporter();
     const info = await transporter.sendMail({
       from: `"GMT Ariana" <${process.env.EMAIL_USER}>`,
+      replyTo: process.env.EMAIL_USER,
       to: email,
       subject: 'Vos identifiants de connexion — GMT Ariana',
-      text: `Bonjour ${prenom} ${nom},\n\nUn compte a été créé pour vous sur la plateforme officielle du Groupement de Médecine du Travail de l'Ariana.\n\nVos informations de connexion :\nIdentifiant (Email) : ${email}\nMot de passe initial : ${tempPassword}\n\nLien d'accès : ${loginUrl}\nCode de confirmation : ${otp} (valable 15 minutes)\n\nLors de votre première connexion, il vous sera demandé de choisir un nouveau mot de passe personnalisé.\n\nGMT Ariana`,
+      text: `Bonjour ${prenom} ${nom},\n\nUn compte a été créé pour vous sur la plateforme GMT Ariana.\n\nVos identifiants de connexion :\nIdentifiant (Email) : ${email}\nMot de passe initial : ${tempPassword}\nCode de confirmation : ${otp} (valable 15 minutes)\n${appUrl ? '\nLien d\'accès : ' + appUrl : ''}\n\nLors de votre première connexion, il vous sera demandé de modifier votre mot de passe.\n\nGMT Ariana`,
       html: `
-          <div style="font-family:DM Sans,Segoe UI,Arial,sans-serif;max-width:520px;margin:auto;padding:32px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff">
-            <div style="text-align:center;margin-bottom:24px">
-              <div style="display:inline-block;background:#0284c7;border-radius:12px;padding:12px 24px">
-                <span style="color:#ffffff;font-size:18px;font-weight:800">🏥 GMT Ariana — Médecine du Travail</span>
-              </div>
-            </div>
+          <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;border:1px solid #e2e8f0;border-radius:8px;background:#ffffff">
+            <h2 style="color:#0284c7;margin-top:0">GMT Ariana — Médecine du Travail</h2>
             <p style="font-size:15px;color:#0f172a">Bonjour <strong>${prenom} ${nom}</strong>,</p>
-            <p style="color:#475569;font-size:14px;line-height:1.5">Un compte a été créé pour vous sur la plateforme officielle du <strong>Groupement de Médecine du Travail de l'Ariana</strong>.</p>
+            <p style="color:#475569;font-size:14px">Un compte a été créé pour vous sur la plateforme du <strong>Groupement de Médecine du Travail de l'Ariana</strong>.</p>
 
-            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:18px;margin:20px 0">
-              <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:#166534">🔑 Vos informations de connexion :</p>
-              <table style="width:100%;font-size:14px;border-collapse:collapse">
-                <tr><td style="color:#64748b;padding:6px 0;width:40%">Identifiant (Email) :</td><td style="font-weight:700;color:#0f172a">${email}</td></tr>
-                <tr><td style="color:#64748b;padding:6px 0">Mot de passe initial :</td><td><code style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:6px;font-size:15px;font-weight:800;letter-spacing:1px">${tempPassword}</code></td></tr>
-              </table>
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0">
+              <p style="margin:0 0 10px;font-size:14px;font-weight:bold;color:#166534">Vos informations de connexion :</p>
+              <p style="margin:4px 0;font-size:14px"><strong>Email :</strong> ${email}</p>
+              <p style="margin:4px 0;font-size:14px"><strong>Mot de passe initial :</strong> <code style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:4px;font-size:15px;font-weight:bold">${tempPassword}</code></p>
             </div>
 
+            <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin:20px 0;text-align:center">
+              <p style="margin:0 0 8px;font-size:13px;color:#475569">Code de confirmation (OTP) :</p>
+              <div style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#0f172a">${otp}</div>
+              <p style="margin:8px 0 0;font-size:12px;color:#94a3b8">Valable pendant 15 minutes.</p>
+            </div>
+
+            ${appUrl ? `
             <div style="text-align:center;margin:20px 0">
-              <a href="${loginUrl}" style="background:#0284c7;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;display:inline-block">
-                🚀 Accéder à la plateforme
+              <a href="${appUrl}/login" style="background:#0284c7;color:#ffffff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block">
+                Accéder à la plateforme
               </a>
-            </div>
-
-            <p style="font-size:13px;color:#475569;margin-top:20px">Pour finaliser l'activation de votre compte, communiquez ce <strong>code de confirmation</strong> à votre administrateur :</p>
-            <div style="font-size:32px;font-weight:900;letter-spacing:8px;color:#0f172a;background:#f8fafc;padding:16px;border-radius:10px;text-align:center;margin:12px 0;border:2px dashed #cbd5e1">
-              ${otp}
-            </div>
-            <p style="color:#94a3b8;font-size:12px;text-align:center">⏱ Ce code de confirmation expire dans 15 minutes.</p>
+            </div>` : ''}
 
             <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0"/>
-            <p style="font-size:12px;color:#94a3b8;text-align:center;line-height:1.4">
-              ⚠️ Lors de votre première connexion, il vous sera demandé de choisir un nouveau mot de passe personnalisé.<br/>
-              Ne partagez jamais vos identifiants.
+            <p style="font-size:12px;color:#94a3b8;line-height:1.4">
+              Pour des raisons de sécurité, veuillez changer votre mot de passe dès votre première connexion.
             </p>
           </div>
         `,
