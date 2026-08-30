@@ -12,7 +12,6 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import NavigationSelector from '../components/NavigationSelector';
 import SignaturePadModal from '../components/SignaturePadModal';
-import CalendarSyncModal from '../components/CalendarSyncModal';
 
 const DAYS_FR = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
 
@@ -576,7 +575,6 @@ export default function Planning({ toast }) {
   const [tec, setTec] = useState([]);
   const [ents, setEnts] = useState([]);
   const [modal, setModal] = useState(null);
-  const [syncModal, setSyncModal] = useState(false);
   const [sigModal, setSigModal] = useState(null);
   const [filters, setFilters] = useState({ role: '', entreprise: '', search: '' });
   const [loading, setLoading] = useState(true);
@@ -794,25 +792,6 @@ export default function Planning({ toast }) {
                 ], 'Planning_GMT_Ariana');
               });
             }} title="Exporter Excel (Programmes + Clino + Calendrier)">📊 Excel</button>
-            <button className="btn btn-outline btn-sm" onClick={() => {
-              import('../utils/exportUtils').then(({exportToICS}) => exportToICS(exportItems));
-            }} title="Exporter Calendrier .ics (Programmes + Clino + Calendrier)">📅 .ics</button>
-            <button
-              className="btn btn-outline btn-sm"
-              onClick={() => setSyncModal(true)}
-              title="Synchroniser l'agenda avec Google Calendar / iPhone / Outlook"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                fontWeight: 600,
-                color: '#0284c7',
-                borderColor: '#bae6fd',
-                background: '#f0f9ff'
-              }}
-            >
-              🔄 Synchroniser
-            </button>
           </div>
           <div style={{display:'flex',gap:2,background:'var(--bg)',borderRadius:8,padding:3}}>
             {[['week','📅 Semaine'],['month','📆 Mois'],['list','📋 Liste']].map(([v,l])=>(
@@ -902,7 +881,6 @@ export default function Planning({ toast }) {
         onSave={()=>{setModal(null);setTick(t=>t+1);toast('Programme enregistré ✓ — Email envoyé 📧','success');}} onClose={()=>setModal(null)}/>}
       {modal?.t==='e'&&<EventModal event={modal?.data || null}
         onSave={()=>{setModal(null);setTick(t=>t+1);toast('Événement créé ✓ — Email envoyé 📧','success');}} onClose={()=>setModal(null)}/>}
-      {syncModal&&<CalendarSyncModal user={user} onClose={()=>setSyncModal(false)} toast={toast}/>}
       {sigModal&&<SignaturePadModal event={sigModal} onClose={()=>setSigModal(null)} onSave={()=>{setSigModal(null);setTick(t=>t+1);}} toast={toast}/>}
     </div>
   );
