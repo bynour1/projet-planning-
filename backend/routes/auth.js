@@ -387,7 +387,7 @@ router.get('/reset-password', async (req, res) => {
       return res.status(400).json({ message: 'Lien de réinitialisation invalide ou expiré' });
     }
 
-    res.json({ email: rows[0].email });
+    res.json({ valid: true, email: rows[0].email });
   } catch (err) {
     console.error('[GET /reset-password] Erreur:', err);
     res.status(500).json({ message: 'Erreur serveur' });
@@ -396,11 +396,13 @@ router.get('/reset-password', async (req, res) => {
 
 // POST /api/auth/reset-password (public — validation du nouveau mot de passe)
 router.post('/reset-password', async (req, res) => {
-  const { token, password } = req.body;
-  if (!token || !password) {
+  const { token, password, new_password } = req.body;
+  const targetPassword = password || new_password;
+
+  if (!token || !targetPassword) {
     return res.status(400).json({ message: 'Token et nouveau mot de passe requis' });
   }
-  if (password.length < 6) {
+  if (targetPassword.length < 6) {
     return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères' });
   }
 
@@ -415,7 +417,7 @@ router.post('/reset-password', async (req, res) => {
     }
 
     const email = rows[0].email;
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(targetPassword, 10);
 
     // Update password and activate user if first_login
     await db.query('UPDATE users SET password = ?, first_login = 0, is_active = 1 WHERE email = ?', [hash, email]);

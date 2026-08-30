@@ -78,10 +78,10 @@ describe('Users page', () => {
     await waitFor(() => expect(screen.getByText('Vous')).toBeInTheDocument());
   });
 
-  it('shows "Activer" button for inactive users', async () => {
+  it('shows "Vérifier" button for inactive users', async () => {
     axios.get.mockResolvedValueOnce({ data: USERS_DATA });
     renderWithProviders(<Users toast={mockToast} />);
-    await waitFor(() => expect(screen.getByText('Activer')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Vérifier/i)).toBeInTheDocument());
   });
 
   it('shows empty state when no users', async () => {
