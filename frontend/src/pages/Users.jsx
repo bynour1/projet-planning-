@@ -425,8 +425,8 @@ export default function Users({ toast }) {
   async function handleResendEmail(u) {
     try {
       const res = await axios.post(`/api/users/${u.id}/resend-welcome`);
-      toast(res.data?.message || `E-mail d'accès renvoyé à ${u.email}`, 'success');
-      setCredModal({ email: u.email });
+      const d = res.data;
+      setCredModal({ email: d.email || u.email, tempPassword: d.tempPassword, otp: d.otp });
     } catch (err) {
       toast(err.response?.data?.message || 'Erreur lors du renvoi', 'error');
     }

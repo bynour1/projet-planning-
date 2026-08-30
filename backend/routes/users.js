@@ -120,22 +120,32 @@ router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), as
     const tempHash = await bcrypt.hash(tempPassword, 10);
     const otp = generateOTP();
 
-    await db.query('UPDATE users SET password = ?, first_login = 1, is_active = 1 WHERE id = ?', [tempHash, user.id]);
+    await db.query('UPDATE users SET password = ?, first_login = 1, is_active = 0 WHERE id = ?', [tempHash, user.id]);
     await db.query('DELETE FROM codes WHERE email = ?', [user.email]);
     await db.query('INSERT INTO codes (email, code, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE))', [user.email, otp]);
 
-    await sendWelcomeEmail({
-      email: user.email,
-      prenom: user.prenom,
-      nom: user.nom,
-      tempPassword,
-      otp,
-      telephone: user.telephone,
-    });
+    let emailError = null;
+    try {
+      await sendWelcomeEmail({
+        email: user.email,
+        prenom: user.prenom,
+        nom: user.nom,
+        tempPassword,
+        otp,
+        telephone: user.telephone,
+      });
+    } catch (err) {
+      console.error(`[resend-welcome] Erreur email à ${user.email}:`, err.message);
+      emailError = err.message;
+    }
 
     res.json({
-      message: `E-mail d'accès renvoyé directement à ${user.email}.`,
+      message: emailError
+        ? `E-mail non envoyé à ${user.email}. Communiquez les identifiants ci-dessous directement.`
+        : `E-mail renvoyé à ${user.email}. Si non reçu, communiquez les identifiants ci-dessous.`,
       email: user.email,
+      tempPassword,
+      otp,
     });
   } catch (err) {
     console.error('[resend-welcome]', err);
