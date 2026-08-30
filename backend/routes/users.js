@@ -93,10 +93,12 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
 
     res.status(201).json({
       message: emailError
-        ? `Compte créé mais l'e-mail n'a pas pu être envoyé à ${email} (${emailError}). Utilisez le bouton ✉️ pour renvoyer.`
-        : `Compte créé (inactif). Un e-mail contenant les identifiants et un code de confirmation a été envoyé à ${email}. Demandez le code à l'utilisateur pour activer son compte.`,
+        ? `Compte créé mais l'e-mail n'a pas pu être envoyé à ${email}. Communiquez les identifiants ci-dessous directement à l'utilisateur.`
+        : `Compte créé ! Un e-mail a été envoyé à ${email}. Si l'utilisateur ne le reçoit pas, communiquez-lui les identifiants ci-dessous.`,
       userId: result.insertId,
       email,
+      tempPassword,
+      otp,
       otp_sent: !emailError,
       email_error: emailError || null,
     });
