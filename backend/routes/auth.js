@@ -6,7 +6,8 @@ const { authenticate } = require('../middleware/auth');
 const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
-const { sendOTP, sendSMS } = require('../config/mailer');
+const crypto   = require('crypto');
+const { sendOTP, sendSMS, sendPasswordReset } = require('../config/mailer');
 
 // ─── Multer Storage for Avatars ────────────────────────────────
 const avatarDir = path.join(__dirname, '../uploads/avatars');
@@ -319,6 +320,110 @@ router.post('/force-change-password', authenticate, async (req, res) => {
     await db.query('UPDATE users SET password = ?, first_login = 0 WHERE id = ?', [hash, req.user.id]);
     res.json({ message: 'Mot de passe mis à jour avec succès' });
   } catch (err) {
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// ─── MOT DE PASSE OUBLIÉ & RÉINITIALISATION ──────────────────────
+
+// POST /api/auth/forgot-password (public)
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  if (!email || !String(email).trim()) {
+    return res.status(400).json({ message: 'E-mail ou numéro de téléphone requis' });
+  }
+
+  try {
+    const rawInput = String(email).trim();
+    const cleanPhone = rawInput.replace(/[^\d]/g, '');
+
+    const [rows] = await db.query(
+      `SELECT * FROM users WHERE email = ? 
+       OR telephone = ? 
+       OR telephone = ? 
+       OR REPLACE(REPLACE(telephone, ' ', ''), '+216', '') = ?`,
+      [rawInput, rawInput, `+216 ${rawInput}`, cleanPhone ? cleanPhone.slice(-8) : '___nomatch___']
+    );
+
+    const user = rows[0];
+
+    // Response message for user (same whether account exists or not for security)
+    const successMsg = 'Si cette adresse ou ce numéro correspond à un compte actif, un lien de réinitialisation vous a été envoyé.';
+
+    if (!user) {
+      return res.json({ message: successMsg });
+    }
+
+    // Generate secure token (valid 1 hour)
+    const token = crypto.randomBytes(32).toString('hex');
+    await db.query('DELETE FROM password_resets WHERE email = ?', [user.email]);
+    await db.query(
+      'INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 1 HOUR))',
+      [user.email, token]
+    );
+
+    // Send Reset Email + SMS
+    await sendPasswordReset(user.email, user.nom, user.prenom, token, user.telephone);
+
+    res.json({ message: successMsg, email: user.email });
+  } catch (err) {
+    console.error('[forgot-password] Erreur:', err);
+    res.status(500).json({ message: 'Erreur lors de la demande de réinitialisation' });
+  }
+});
+
+// GET /api/auth/reset-password (public — vérification du token)
+router.get('/reset-password', async (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.status(400).json({ message: 'Token manquant' });
+
+  try {
+    const [rows] = await db.query(
+      'SELECT email FROM password_resets WHERE token = ? AND used = 0 AND expires_at > NOW()',
+      [token]
+    );
+
+    if (!rows.length) {
+      return res.status(400).json({ message: 'Lien de réinitialisation invalide ou expiré' });
+    }
+
+    res.json({ email: rows[0].email });
+  } catch (err) {
+    console.error('[GET /reset-password] Erreur:', err);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// POST /api/auth/reset-password (public — validation du nouveau mot de passe)
+router.post('/reset-password', async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) {
+    return res.status(400).json({ message: 'Token et nouveau mot de passe requis' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères' });
+  }
+
+  try {
+    const [rows] = await db.query(
+      'SELECT email FROM password_resets WHERE token = ? AND used = 0 AND expires_at > NOW()',
+      [token]
+    );
+
+    if (!rows.length) {
+      return res.status(400).json({ message: 'Lien de réinitialisation invalide ou expiré' });
+    }
+
+    const email = rows[0].email;
+    const hash = await bcrypt.hash(password, 10);
+
+    // Update password and activate user if first_login
+    await db.query('UPDATE users SET password = ?, first_login = 0, is_active = 1 WHERE email = ?', [hash, email]);
+    await db.query('UPDATE password_resets SET used = 1 WHERE token = ?', [token]);
+
+    res.json({ message: 'Mot de passe réinitialisé avec succès ! Vous pouvez maintenant vous connecter.' });
+  } catch (err) {
+    console.error('[POST /reset-password] Erreur:', err);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
