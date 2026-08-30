@@ -239,15 +239,17 @@ function eventEmailHtml({ titre, type, date_debut, date_fin, lieu, createdBy }) 
 async function sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telephone = null }) {
   const loginUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login`;
 
+  let emailSent = false;
+
   if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-    try {
-      const transporter = getTransporter();
-      const info = await transporter.sendMail({
-        from: `"GMT Ariana" <${process.env.EMAIL_USER}>`,
-        to: email,
-        subject: 'Vos identifiants de connexion — GMT Ariana',
-        text: `Bonjour ${prenom} ${nom},\n\nUn compte a été créé pour vous sur la plateforme officielle du Groupement de Médecine du Travail de l'Ariana.\n\nVos informations de connexion :\nIdentifiant (Email) : ${email}\nMot de passe initial : ${tempPassword}\n\nLien d'accès : ${loginUrl}\nCode de confirmation : ${otp} (valable 15 minutes)\n\nLors de votre première connexion, il vous sera demandé de choisir un nouveau mot de passe personnalisé.\n\nGMT Ariana`,
-        html: `
+    console.log(`[Email Welcome] Tentative d'envoi à ${email}...`);
+    const transporter = getTransporter();
+    const info = await transporter.sendMail({
+      from: `"GMT Ariana" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: 'Vos identifiants de connexion — GMT Ariana',
+      text: `Bonjour ${prenom} ${nom},\n\nUn compte a été créé pour vous sur la plateforme officielle du Groupement de Médecine du Travail de l'Ariana.\n\nVos informations de connexion :\nIdentifiant (Email) : ${email}\nMot de passe initial : ${tempPassword}\n\nLien d'accès : ${loginUrl}\nCode de confirmation : ${otp} (valable 15 minutes)\n\nLors de votre première connexion, il vous sera demandé de choisir un nouveau mot de passe personnalisé.\n\nGMT Ariana`,
+      html: `
           <div style="font-family:DM Sans,Segoe UI,Arial,sans-serif;max-width:520px;margin:auto;padding:32px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff">
             <div style="text-align:center;margin-bottom:24px">
               <div style="display:inline-block;background:#0284c7;border-radius:12px;padding:12px 24px">
@@ -284,11 +286,11 @@ async function sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telepho
             </p>
           </div>
         `,
-      });
-      console.log(`[Email Welcome] Envoyé à ${email} (ID: ${info.messageId})`);
-    } catch (err) {
-      console.error(`[Email Welcome] Erreur envoi à ${email}:`, err.message);
-    }
+    });
+    console.log(`[Email Welcome] ✅ Envoyé avec succès à ${email} (ID: ${info.messageId})`);
+    emailSent = true;
+  } else {
+    console.warn('[Email Welcome] ⚠️ EMAIL_USER ou EMAIL_PASS non configuré !');
   }
 
   // SMS
@@ -297,6 +299,8 @@ async function sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telepho
       `GMT Ariana - Bonjour ${prenom} ${nom} !\nVotre compte a été créé.\nEmail : ${email}\nMot de passe provisoire : ${tempPassword}\nCode de confirmation : ${otp}\nValable 15 min.`
     );
   }
+
+  return emailSent;
 }
 
 module.exports = {

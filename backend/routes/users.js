@@ -73,7 +73,7 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     const tempHash = await bcrypt.hash(tempPassword, 10);
 
     const [result] = await db.query(
-      'INSERT INTO users (nom, prenom, email, password, role, telephone, is_active, first_login) VALUES (?,?,?,?,?,?,1,1)',
+      'INSERT INTO users (nom, prenom, email, password, role, telephone, is_active, first_login) VALUES (?,?,?,?,?,?,0,1)',
       [nom, prenom, email, tempHash, role, telephone || null]
     );
 
@@ -83,13 +83,22 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     await db.query('INSERT INTO codes (email, code, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE))', [email, otp]);
 
     // Envoyer l'email de bienvenue directement et uniquement à l'utilisateur
-    await sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telephone });
+    let emailError = null;
+    try {
+      await sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telephone });
+    } catch (err) {
+      console.error(`[POST /api/users] Erreur envoi email à ${email}:`, err.message);
+      emailError = err.message;
+    }
 
     res.status(201).json({
-      message: `Compte créé avec succès. Un e-mail d'accès officiel contenant les identifiants a été envoyé directement à ${email}.`,
+      message: emailError
+        ? `Compte créé mais l'e-mail n'a pas pu être envoyé à ${email} (${emailError}). Utilisez le bouton ✉️ pour renvoyer.`
+        : `Compte créé (inactif). Un e-mail contenant les identifiants et un code de confirmation a été envoyé à ${email}. Demandez le code à l'utilisateur pour activer son compte.`,
       userId: result.insertId,
       email,
-      otp_sent: true,
+      otp_sent: !emailError,
+      email_error: emailError || null,
     });
   } catch (err) {
     console.error(err);
@@ -153,6 +162,31 @@ router.post('/verify-otp', authenticate, authorize('administrateur'), async (req
 
     res.json({ message: 'Compte activé avec succès.' });
   } catch (err) {
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// ─── POST /api/users/resend-otp  (Admin only) ────────────────
+router.post('/resend-otp', authenticate, authorize('administrateur'), async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: 'Email requis' });
+
+  try {
+    const [userRows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+    if (!userRows.length) return res.status(404).json({ message: 'Utilisateur introuvable' });
+    const user = userRows[0];
+
+    const otp = generateOTP();
+    await db.query('DELETE FROM codes WHERE email = ?', [email]);
+    await db.query('INSERT INTO codes (email, code, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE))', [email, otp]);
+
+    // Envoyer uniquement le code OTP par email
+    const { sendOTP } = require('../config/mailer');
+    await sendOTP(email, otp, user.nom, user.prenom, user.telephone);
+
+    res.json({ message: `Nouveau code de confirmation envoyé à ${email}.` });
+  } catch (err) {
+    console.error('[resend-otp]', err);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });

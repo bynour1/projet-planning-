@@ -20,6 +20,8 @@ app.use('/api/clino',       require('./routes/clino'));
 app.use('/api/chat',        require('./routes/chat'));
 app.use('/api/routines',    require('./routes/routines'));
 app.use('/api/entreprises', require('./routes/entreprises'));
+app.use('/api/stats',       require('./routes/stats'));
+app.use('/api/search',      require('./routes/search'));
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 app.use((_req, res) => res.status(404).json({ message: 'Route introuvable' }));

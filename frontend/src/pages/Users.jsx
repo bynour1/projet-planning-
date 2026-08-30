@@ -262,6 +262,74 @@ function UserModal({ user: editUser, onSave, onClose }) {
   );
 }
 
+function OtpVerifyModal({ email, onClose, onVerified, toast }) {
+  const [code, setCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleVerify() {
+    if (!code || code.length < 6) { setError('Entrez le code à 6 chiffres'); return; }
+    setVerifying(true); setError('');
+    try {
+      const res = await axios.post('/api/users/verify-otp', { email, code });
+      toast(res.data?.message || 'Compte activé !', 'success');
+      onVerified();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Code invalide ou expiré');
+    } finally { setVerifying(false); }
+  }
+
+  async function handleResendOtp() {
+    setResending(true); setError('');
+    try {
+      const res = await axios.post('/api/users/resend-otp', { email });
+      toast(res.data?.message || 'Nouveau code envoyé', 'success');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Erreur renvoi');
+    } finally { setResending(false); }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 440, padding: 0, overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+        <div style={{ background: 'linear-gradient(135deg,#e0f2fe,#f0fdf4)', borderBottom: '1px solid #bae6fd', padding: '20px 24px 16px', textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>🔐</div>
+          <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--text-1)' }}>Vérification du compte</h3>
+          <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '4px 0 0' }}>Entrez le code reçu par <strong>{email}</strong></p>
+        </div>
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, fontSize: 12.5, color: '#92400e', lineHeight: 1.5 }}>
+            📧 L'utilisateur a reçu un <strong>code à 6 chiffres</strong> par e-mail. Demandez-lui de vous le communiquer pour activer son compte.
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>Code de confirmation</label>
+            <input
+              className="input"
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="• • • • • •"
+              value={code}
+              onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              onKeyDown={e => e.key === 'Enter' && handleVerify()}
+              style={{ height: 48, fontSize: 24, fontWeight: 800, letterSpacing: 10, textAlign: 'center' }}
+              autoFocus
+            />
+          </div>
+          {error && <div style={{ fontSize: 13, color: '#ef4444', textAlign: 'center', fontWeight: 600 }}>⚠️ {error}</div>}
+          <button className="btn btn-primary" onClick={handleVerify} disabled={verifying || code.length < 6} style={{ width: '100%', height: 42, fontSize: 14 }}>
+            {verifying ? <><span className="spinner" style={{ width: 15, height: 15 }}/> Vérification…</> : '✅ Activer le compte'}
+          </button>
+          <button className="btn btn-ghost" onClick={handleResendOtp} disabled={resending} style={{ width: '100%', fontSize: 12 }}>
+            {resending ? 'Envoi…' : '🔄 Renvoyer un nouveau code'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Users({ toast }) {
   const { user: me } = useAuth();
   const [users,   setUsers]   = useState([]);
@@ -270,6 +338,7 @@ export default function Users({ toast }) {
   const [search,  setSearch]  = useState('');
   const [loading, setLoading] = useState(true);
   const [filter,  setFilter]  = useState('all');
+  const [otpModal, setOtpModal] = useState(null); // { email } for OTP verification
 
   async function load() {
     try { const { data } = await axios.get('/api/users'); setUsers(data); }
@@ -282,13 +351,15 @@ export default function Users({ toast }) {
   async function handleCreated(data) {
     setModal(null);
     await load();
-    toast(data?.message || 'Utilisateur créé avec succès ! E-mail d\'accès envoyé.', 'success');
+    toast(data?.message || 'Compte créé ! Vérifiez le code pour activer.', 'success');
+    if (data?.email) setOtpModal({ email: data.email });
   }
 
   async function handleResendEmail(u) {
     try {
       const res = await axios.post(`/api/users/${u.id}/resend-welcome`);
       toast(res.data?.message || `E-mail d'accès renvoyé à ${u.email}`, 'success');
+      setOtpModal({ email: u.email });
     } catch (err) {
       toast(err.response?.data?.message || 'Erreur lors du renvoi', 'error');
     }
@@ -399,8 +470,8 @@ export default function Users({ toast }) {
                       {u.is_active ? '● Actif' : '○ Inactif'}
                     </span>
                     {!u.is_active && (
-                      <button className="btn btn-ghost btn-sm" style={{ marginLeft: 4, fontSize: 11 }}
-                        onClick={() => handleResendEmail(u)}>Activer</button>
+                      <button className="btn btn-ghost btn-sm" style={{ marginLeft: 4, fontSize: 11, color: '#0284c7', fontWeight: 700 }}
+                        onClick={() => setOtpModal({ email: u.email })}>🔐 Vérifier</button>
                     )}
                   </td>
                   <td style={{ fontSize: 12, color: 'var(--text-2)' }}>
@@ -431,6 +502,9 @@ export default function Users({ toast }) {
 
       {modal !== null && (
         <UserModal user={modal?.id ? modal : null} onSave={modal?.id ? () => { setModal(null); load(); toast('Mis à jour', 'success'); } : handleCreated} onClose={() => setModal(null)} />
+      )}
+      {otpModal && (
+        <OtpVerifyModal email={otpModal.email} toast={toast} onClose={() => setOtpModal(null)} onVerified={() => { setOtpModal(null); load(); }} />
       )}
       {confirm && (
         <ConfirmDialog title="Supprimer l'utilisateur ?" message="Cette action est irréversible." danger
