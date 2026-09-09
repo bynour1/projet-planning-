@@ -147,12 +147,10 @@ export function SocketProvider({ children }) {
       if (user && msg.user_id === user.id) return; // Ne pas notifier l'émetteur
 
       const isChatOpen = window.location.pathname === '/chat';
+      const textContent = typeof msg.content === 'string' ? msg.content.slice(0, 80) : 'Document / Pièce jointe';
 
-      // Notification Bureau (si onglet réduit ou en arrière-plan)
-      if (document.hidden) {
-        const textContent = typeof msg.content === 'string' ? msg.content.slice(0, 80) : 'Document / Pièce jointe';
-        sendSystemNotification(`💬 ${msg.nom}`, textContent);
-      }
+      // Notification Système / OS (Bannière mobile & bureau)
+      sendSystemNotification(`💬 ${msg.nom}`, textContent);
 
       // Notification dans l'application (si l'utilisateur n'est pas déjà sur /chat)
       if (!isChatOpen) {
@@ -169,9 +167,8 @@ export function SocketProvider({ children }) {
     socket.on('planning_new', (data) => {
       if (user && data.creatorId === user.id) return; // Ne pas notifier l'admin lui-même
 
-      if (document.hidden) {
-        sendSystemNotification('📋 Nouveau planning — GMT Ariana', `${data.createdBy || 'L\'admin'} : ${data.titre} (${data.date})`);
-      }
+      // Notification Système / OS (Bannière mobile & bureau)
+      sendSystemNotification('📋 Nouveau planning — GMT Ariana', `${data.createdBy || 'L\'admin'} : ${data.titre} (${data.date})`);
 
       playChime('event');
       toast(`📋 Nouveau planning ajouté par ${data.createdBy || 'l\'admin'} : ${data.titre} (${data.date})`, 'info', 6000, {
@@ -184,9 +181,7 @@ export function SocketProvider({ children }) {
     socket.on('clino_new', (data) => {
       if (user && data.creatorId === user.id) return;
 
-      if (document.hidden) {
-        sendSystemNotification('🚗 Clino Mobile — GMT Ariana', `Tournée : ${data.adresse} (${data.date})`);
-      }
+      sendSystemNotification('🚗 Clino Mobile — GMT Ariana', `Tournée : ${data.adresse} (${data.date})`);
 
       playChime('event');
       toast(`🚗 Nouvelle tournée Clino Mobile : ${data.adresse} (${data.date})`, 'info', 6000, {
@@ -199,9 +194,7 @@ export function SocketProvider({ children }) {
     socket.on('calendar_new', (data) => {
       if (user && data.creatorId === user.id) return;
 
-      if (document.hidden) {
-        sendSystemNotification('📅 Nouvel événement — GMT Ariana', `${data.titre}`);
-      }
+      sendSystemNotification('📅 Nouvel événement — GMT Ariana', `${data.titre}`);
 
       playChime('event');
       toast(`📅 Nouvel événement calendrier : ${data.titre}`, 'info', 6000, {

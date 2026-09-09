@@ -69,7 +69,10 @@ router.post('/messages', authenticate, async (req, res) => {
       [req.user.id, `${req.user.prenom} ${req.user.nom}`, req.user.role, content.trim()]
     );
     const [rows] = await db.query('SELECT * FROM messages WHERE id=?', [result.insertId]);
-    res.status(201).json(firstRow(rows));
+    const msg = firstRow(rows);
+    const io = req.app.get('io');
+    if (io) io.emit('new_message', msg);
+    res.status(201).json(msg);
   } catch { res.status(500).json({ message:'Erreur serveur' }); }
 });
 
