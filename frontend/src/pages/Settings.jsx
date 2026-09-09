@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 
 function roleColor(role) {
   if (role === 'administrateur') return '#0ea5e9';
@@ -11,10 +12,20 @@ function roleColor(role) {
 
 export default function Settings({ toast }) {
   const { user, refreshUser } = useAuth();
+  const { notificationPermission, requestNotificationPermission, testNotification } = useSocket() || {};
+  const [currentNotifPerm, setCurrentNotifPerm] = useState(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
+  );
   const [pwdForm, setPwdForm] = useState({ current_password: '', new_password: '', confirm: '' });
   const [saving,  setSaving]  = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [bioLoading, setBioLoading] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setCurrentNotifPerm(Notification.permission);
+    }
+  }, [notificationPermission]);
 
   useEffect(() => {
     setAvatarError(false);
@@ -245,6 +256,98 @@ export default function Settings({ toast }) {
                 Désactiver
               </button>
             )}
+          </div>
+        </div>
+
+        {/* Notifications & Alertes Card */}
+        <div className="card">
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>🔔 Notifications & Alertes Système</h3>
+          <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 16 }}>
+            Recevez des alertes en temps réel (son + bannière) pour les nouveaux plannings, messages de chat et tournées Clino Mobile.
+          </p>
+
+          <div
+            style={{
+              padding: 16,
+              background: 'var(--surface2)',
+              borderRadius: 'var(--radius)',
+              border: '1.5px solid var(--border)',
+              marginBottom: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 28 }}>
+                {currentNotifPerm === 'granted' ? '🔔' : currentNotifPerm === 'denied' ? '🔕' : '⚠️'}
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>
+                  {currentNotifPerm === 'granted'
+                    ? 'Notifications activées sur cet appareil'
+                    : currentNotifPerm === 'denied'
+                    ? 'Notifications bloquées par le navigateur'
+                    : 'Autorisation requise'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                  {currentNotifPerm === 'granted'
+                    ? 'Les alertes système s\'afficheront en direct'
+                    : currentNotifPerm === 'denied'
+                    ? 'Cliquez sur l\'icône cadenas à côté de l\'URL pour réautoriser'
+                    : 'Cliquez ci-dessous pour autoriser les alertes'}
+                </div>
+              </div>
+            </div>
+            <span
+              className={`badge ${
+                currentNotifPerm === 'granted'
+                  ? 'badge-green'
+                  : currentNotifPerm === 'denied'
+                  ? 'badge-red'
+                  : 'badge-yellow'
+              }`}
+            >
+              {currentNotifPerm === 'granted'
+                ? 'Autorisé'
+                : currentNotifPerm === 'denied'
+                ? 'Bloqué'
+                : 'En attente'}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {currentNotifPerm !== 'granted' && (
+              <button
+                className="btn btn-primary"
+                onClick={async () => {
+                  if (requestNotificationPermission) {
+                    const res = await requestNotificationPermission();
+                    setCurrentNotifPerm(res);
+                    if (res === 'granted') {
+                      toast('🔔 Notifications autorisées avec succès !', 'success');
+                    } else if (res === 'denied') {
+                      toast('⚠️ Autorisation refusée. Veuillez vérifier les paramètres de votre navigateur.', 'warning');
+                    }
+                  }
+                }}
+                style={{ flex: 1, minWidth: 180 }}
+              >
+                🔔 Demander l'autorisation
+              </button>
+            )}
+
+            <button
+              className="btn btn-outline"
+              onClick={() => {
+                if (testNotification) {
+                  testNotification('🔔 Test Notification GMT Ariana', 'Super ! Votre appareil reçoit bien les alertes en direct.');
+                }
+              }}
+              style={{ flex: 1, minWidth: 180 }}
+            >
+              🧪 Tester la notification
+            </button>
           </div>
         </div>
 

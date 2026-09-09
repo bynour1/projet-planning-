@@ -6,6 +6,7 @@ import { useToast, ToastContainer } from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
 import NetworkStatusBanner from './components/NetworkStatusBanner';
 import PWAUpdateNotification from './components/PWAUpdateNotification';
+import NotificationPermissionBanner from './components/NotificationPermissionBanner';
 import ErrorBoundary from './components/ErrorBoundary';
 
 import Sidebar        from './components/Sidebar';
@@ -62,6 +63,7 @@ function AppShell() {
   return (
     <SocketProvider>
       <PWAUpdateNotification />
+      <NotificationPermissionBanner />
       <GlobalSearch />
       <NetworkStatusBanner />
       <ToastContainer toasts={toasts}/>

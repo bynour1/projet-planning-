@@ -60,21 +60,25 @@ function playChime(type = 'message') {
 }
 
 // Safe System/PWA Notification helper (prevents Chrome mobile freeze)
-function sendSystemNotification(title, body) {
+export function sendSystemNotification(title, body) {
   if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') return;
   try {
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    if ('serviceWorker' in navigator) {
       navigator.serviceWorker.ready.then((reg) => {
         reg.showNotification(title, {
           body,
           icon: '/logo-gmt.png',
           badge: '/icon-192.png',
-          vibrate: [100, 50, 100],
+          vibrate: [150, 75, 150],
+          tag: 'gmt-notif-' + Date.now(),
+          renotify: true,
         });
       }).catch(() => {
-        new Notification(title, { body, icon: '/logo-gmt.png' });
+        if ('Notification' in window) {
+          new Notification(title, { body, icon: '/logo-gmt.png' });
+        }
       });
-    } else {
+    } else if ('Notification' in window) {
       new Notification(title, { body, icon: '/logo-gmt.png' });
     }
   } catch {
@@ -88,6 +92,34 @@ export function SocketProvider({ children }) {
   const socketRef  = useRef(null);
   const [connected, setConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [notificationPermission, setNotificationPermission] = useState(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
+  );
+
+  const requestNotificationPermission = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      return 'unsupported';
+    }
+    try {
+      const res = await Notification.requestPermission();
+      setNotificationPermission(res);
+      if (res === 'granted') {
+        playChime('event');
+        sendSystemNotification('🔔 Notifications GMT Ariana activées', 'Vous recevrez les alertes de plannings et messages en temps réel.');
+      }
+      return res;
+    } catch {
+      return Notification.permission;
+    }
+  };
+
+  const testNotification = (title = '🔔 Test Notification GMT Ariana', body = 'Le système d\'alertes fonctionne parfaitement sur cet appareil !') => {
+    playChime('event');
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      sendSystemNotification(title, body);
+    }
+    toast(body, 'info', 5000);
+  };
 
   useEffect(() => {
     if (!token) {
@@ -189,7 +221,19 @@ export function SocketProvider({ children }) {
   const on   = (event, cb)  => { socketRef.current?.on(event, cb);  return () => socketRef.current?.off(event, cb); };
 
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current, connected, onlineUsers, emit, on }}>
+    <SocketContext.Provider
+      value={{
+        socket: socketRef.current,
+        connected,
+        onlineUsers,
+        emit,
+        on,
+        notificationPermission,
+        requestNotificationPermission,
+        testNotification,
+        sendSystemNotification,
+      }}
+    >
       {children}
     </SocketContext.Provider>
   );
