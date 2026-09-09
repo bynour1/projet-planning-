@@ -128,8 +128,63 @@ export default function Settings({ toast }) {
 
   return (
     <div className="page-content">
-      <div className="page-header">
-        <div><h2>⚙️ Paramètres</h2><p>Gérer votre compte et la sécurité</p></div>
+      {/* Executive Header Banner */}
+      <div style={{
+        background: 'var(--surface)',
+        borderRadius: 16,
+        padding: '20px 24px',
+        border: '1px solid var(--border)',
+        borderTop: '4px solid #0284c7',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+        marginBottom: 20,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 16
+      }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <span style={{
+              background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+              color: '#fff',
+              fontSize: 11,
+              fontWeight: 800,
+              padding: '3px 10px',
+              borderRadius: 6,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5
+            }}>
+              ⚙️ Espace Personnel & Sécurité
+            </span>
+            <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>
+              Authentification & Profil
+            </span>
+          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0, color: 'var(--text)', letterSpacing: -0.5 }}>
+            Paramètres
+          </h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-2)' }}>
+            Gérer votre compte, vos préférences de sécurité et vos notifications
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{
+            background: 'var(--surface2)',
+            padding: '6px 14px',
+            borderRadius: 20,
+            fontSize: 12,
+            fontWeight: 700,
+            border: '1px solid var(--border)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6
+          }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }} />
+            Session active : {user?.email}
+          </span>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px),1fr))', gap: 16 }}>

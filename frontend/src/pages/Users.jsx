@@ -326,13 +326,69 @@ export default function Users({ toast }) {
   };
 
   return (
-    <div className="page-content">
-      <div className="page-header">
-        <div>
-          <h2>👥 Utilisateurs</h2>
-          <p>Gérer les membres de l'équipe</p>
+    <div className="page-content" style={{ maxWidth: 1400, margin: '0 auto' }}>
+      {/* ── BANNIÈRE EXECUTIVE HEADER ── */}
+      <div
+        style={{
+          background: 'var(--surface)',
+          borderRadius: 16,
+          padding: '22px 26px',
+          border: '1px solid var(--border)',
+          borderTop: '4px solid #0284c7',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+          marginBottom: 20,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 16,
+        }}
+      >
+        <div style={{ flex: '1 1 400px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 800,
+                background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+                color: '#fff',
+                padding: '3px 10px',
+                borderRadius: 6,
+                textTransform: 'uppercase',
+                letterSpacing: 0.6,
+                boxShadow: '0 2px 6px rgba(2,132,199,0.2)',
+              }}
+            >
+              Équipes & Accès Sécurisés
+            </span>
+            <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600 }}>• Annuaire du personnel médical</span>
+          </div>
+          <h2 style={{ fontSize: 24, fontWeight: 900, color: 'var(--text)', letterSpacing: -0.5, margin: 0 }}>
+            👥 Utilisateurs
+          </h2>
+          <p style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4, margin: 0 }}>
+            Gérer les membres de l'équipe, rôles (médecins, techniciens, chauffeurs, administrateurs) et accès au planning.
+          </p>
         </div>
-        <button className="btn btn-primary" onClick={() => setModal({})}>+ Créer un utilisateur</button>
+
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-primary"
+            onClick={() => setModal({})}
+            style={{
+              fontWeight: 800,
+              fontSize: 13,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '9px 18px',
+              borderRadius: 10,
+              boxShadow: '0 4px 14px rgba(14,165,233,.35)',
+            }}
+          >
+            <span>➕</span> + Créer un utilisateur
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

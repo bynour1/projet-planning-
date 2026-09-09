@@ -140,8 +140,64 @@ export function exportToExcel(data, columns, filename) {
     return obj;
   }));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Planning');
+  XLSX.utils.book_append_sheet(wb, ws, 'Données');
   XLSX.writeFile(wb, `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+export function exportToWord(data, columns, title = 'Document GMT Ariana') {
+  const dateStr = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const tableHeaders = columns.map(c => `<th style="background-color: #0f172a; color: #ffffff; padding: 8px 10px; border: 1px solid #cbd5e1; text-align: left; font-size: 11px;">${c.header}</th>`).join('');
+  const tableRows = data.map((row, idx) => {
+    const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+    const cells = columns.map(c => {
+      const val = row[c.key] !== undefined && row[c.key] !== null && row[c.key] !== '' ? row[c.key] : '—';
+      return `<td style="padding: 7px 10px; border: 1px solid #cbd5e1; font-size: 10.5px; color: #334155;">${val}</td>`;
+    }).join('');
+    return `<tr style="background-color: ${bg};">${cells}</tr>`;
+  }).join('');
+
+  const htmlContent = `
+    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+    <head>
+      <meta charset='utf-8'>
+      <title>${title}</title>
+      <style>
+        body { font-family: 'Segoe UI', Calibri, Arial, sans-serif; margin: 24px; color: #1e293b; line-height: 1.4; }
+        .header { border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 18px; }
+        h1 { color: #0f172a; font-size: 16pt; margin: 0 0 4px 0; font-weight: bold; }
+        .subtitle { color: #0284c7; font-size: 11pt; font-weight: bold; margin: 0 0 6px 0; }
+        .meta { font-size: 9pt; color: #64748b; margin-bottom: 12px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+        .footer { margin-top: 24px; font-size: 8pt; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; text-align: center; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>GROUPEMENT DE MÉDECINE DU TRAVAIL DE L'ARIANA</h1>
+        <div class="subtitle">${title}</div>
+        <div class="meta">Date d'édition : ${dateStr} à ${timeStr} · Total enregistrements : <strong>${data.length}</strong></div>
+      </div>
+      <table>
+        <thead><tr>${tableHeaders}</tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+      <div class="footer">
+        Document Confidentiel — Groupement de Médecine du Travail de l'Ariana · Usage Interne Professionnel
+      </div>
+    </body>
+    </html>
+  `;
+
+  const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${title.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0, 10)}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export function exportToICS(events) {

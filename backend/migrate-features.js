@@ -9,6 +9,17 @@ async function migrate() {
   } catch (err) {
     console.warn('Role column modification note:', err.message);
   }
+
+  // Entreprises : Effectif, Visites médicales & Bilans
+  try {
+    await db.query('ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS effectif_total INT DEFAULT 0');
+    await db.query('ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS nb_visites_faites INT DEFAULT 0');
+    await db.query('ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS nb_bilans_faits INT DEFAULT 0');
+    await db.query('ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS nb_bilans_manquants INT DEFAULT 0');
+  } catch (err) {
+    console.warn('Entreprises columns note:', err.message);
+  }
+
   console.log('Migration done');
   process.exit(0);
 }

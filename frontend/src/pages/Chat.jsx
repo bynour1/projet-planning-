@@ -617,13 +617,52 @@ export default function Chat({ toast }) {
       ══════════════════════════════════ */}
       <div className="chat-main">
 
-        {/* ── Header ── */}
-        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <span style={{ fontSize: 20 }}>💬</span>
+        {/* ── Executive Header ── */}
+        <div style={{
+          padding: '12px 18px',
+          borderBottom: '1px solid var(--border)',
+          borderTop: '3px solid #0284c7',
+          background: 'var(--surface)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          flexShrink: 0
+        }}>
+          <div style={{
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 18,
+            boxShadow: '0 2px 8px rgba(2,132,199,0.25)',
+            flexShrink: 0
+          }}>
+            💬
+          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>Chat Équipe</div>
-            <div style={{ fontSize: 11, color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {onlineUsers.length} en ligne · Partage docs & IA
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)' }}>Chat Équipe</span>
+              <span style={{
+                background: '#10b98118',
+                color: '#10b981',
+                fontSize: 11,
+                fontWeight: 700,
+                padding: '1px 8px',
+                borderRadius: 12,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
+                {onlineUsers.length} en ligne
+              </span>
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+              Messagerie d'équipe sécurisée · Documents & Assistant Médical IA (@ia)
             </div>
           </div>
           {/* Bouton recherche */}
@@ -631,14 +670,14 @@ export default function Chat({ toast }) {
             type="button"
             title="Rechercher dans les messages"
             onClick={() => { setSearchOpen(o => !o); setSearchQuery(''); }}
-            style={{ background: searchOpen ? 'var(--primary)' : 'var(--border)', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: searchOpen ? '#fff' : 'var(--text-2)', fontSize: 13, transition: 'all .15s' }}
+            style={{ background: searchOpen ? 'var(--primary)' : 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: searchOpen ? '#fff' : 'var(--text-2)', fontSize: 13, transition: 'all .15s' }}
           >🔎</button>
           {/* Bouton Infos / Membres / IA sur mobile */}
           <button
             type="button"
             onClick={() => setShowInfo(o => !o)}
             className="btn btn-outline btn-sm"
-            style={{ padding: '5px 9px', fontSize: 12 }}
+            style={{ padding: '5px 9px', fontSize: 12, borderRadius: 8 }}
             title="Membres en ligne & Assistant IA"
           >
             {showInfo ? '✕' : '👥 Infos'}

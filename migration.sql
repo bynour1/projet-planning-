@@ -59,3 +59,11 @@ ALTER TABLE clino_mobile
   ADD COLUMN IF NOT EXISTS technicien_id INT DEFAULT NULL AFTER medecin_id,
   ADD COLUMN IF NOT EXISTS technicien_nom VARCHAR(255) DEFAULT NULL AFTER medecin_nom;
 
+-- ─── Colonnes Effectif, Visites & Bilans dans entreprises ─────
+ALTER TABLE entreprises
+  ADD COLUMN IF NOT EXISTS effectif_total INT DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS nb_visites_faites INT DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS nb_bilans_faits INT DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS nb_bilans_manquants INT DEFAULT 0;
+
+

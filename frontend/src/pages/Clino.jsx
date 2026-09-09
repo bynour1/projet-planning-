@@ -258,7 +258,7 @@ export default function Clino({ toast }) {
   const [modal,       setModal]       = useState(null);
   const [sigModal,    setSigModal]    = useState(null);
   const [confirm,     setConfirm]     = useState(null);
-  const [filters,     setFilters]     = useState({ role: '', search: '' });
+  const [filters,     setFilters]     = useState({ role: '', search: '', date: '' });
   const [loading,     setLoading]     = useState(true);
   const [selectedDate,setSelectedDate]= useState(format(new Date(),'yyyy-MM-dd'));
   const [activeTab,   setActiveTab]   = useState('list'); // 'list'|'programme'
@@ -278,9 +278,10 @@ export default function Clino({ toast }) {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const off = on('clino_refresh', load);
-    const offP = on('planning_refresh', load);
-    return () => { off?.(); offP?.(); };
+    const u1 = on?.('clino:created', load);
+    const u2 = on?.('clino:updated', load);
+    const u3 = on?.('clino:deleted', load);
+    return () => { u1?.(); u2?.(); u3?.(); };
   }, [on, load]);
 
   useEffect(() => {
@@ -294,6 +295,10 @@ export default function Clino({ toast }) {
   }
 
   const filtered = items.filter(it => {
+    if (filters.date) {
+      const itemDate = String(it.date || '').slice(0, 10);
+      if (itemDate !== filters.date) return false;
+    }
     if (filters.role === 'medecin') {
       const hasMed = Boolean(it.medecin_id || it.medecin_nom || it.medecin_full);
       if (!hasMed) return false;
@@ -313,7 +318,7 @@ export default function Clino({ toast }) {
     return true;
   });
 
-  const hasActiveFilters = Boolean(filters.role || filters.search);
+  const hasActiveFilters = Boolean(filters.role || filters.search || filters.date);
 
   const allDates = [...new Set([
     ...items.map(i => i.date ? String(i.date).slice(0, 10) : null),
@@ -338,12 +343,48 @@ export default function Clino({ toast }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Toolbar */}
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, flexWrap: 'wrap', gap: 10 }}>
+      {/* Executive Header Banner */}
+      <div style={{
+        background: 'var(--surface)',
+        borderRadius: 16,
+        padding: '20px 24px',
+        margin: '16px 20px 12px',
+        border: '1px solid var(--border)',
+        borderTop: '4px solid #0284c7',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 16,
+        flexShrink: 0
+      }}>
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>🚗 Clino Mobile</h2>
-          <p style={{ fontSize: 12, color: 'var(--text-2)' }}>Planning journalier & programme des tournées</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <span style={{
+              background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+              color: '#fff',
+              fontSize: 11,
+              fontWeight: 800,
+              padding: '3px 10px',
+              borderRadius: 6,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5
+            }}>
+              🚗 Unité Médicale Mobile
+            </span>
+            <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>
+              Logistique & Déplacements Terrain
+            </span>
+          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0, color: 'var(--text)', letterSpacing: -0.5 }}>
+            Clino Mobile
+          </h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-2)' }}>
+            Planning journalier, tournées médicales et programme des interventions sur site
+          </p>
         </div>
+
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Export buttons */}
           <div style={{ display: 'flex', gap: 4 }}>
@@ -387,6 +428,25 @@ export default function Clino({ toast }) {
             <button
               className="btn btn-outline btn-sm"
               onClick={() => {
+                import('../utils/exportUtils').then(({ exportToWord }) => {
+                  exportToWord(exportClinoItems, [
+                    { header: 'Date', key: 'date_display' },
+                    { header: 'Heure', key: 'heure_debut' },
+                    { header: 'Programme', key: 'titre' },
+                    { header: 'Médecin', key: 'medecin_nom' },
+                    { header: 'Technicien', key: 'technicien_nom' },
+                    { header: 'Adresse / Destination', key: 'adresse' },
+                    { header: 'Commentaires / Notes', key: 'commentaire' },
+                  ], 'Tournees Clino Mobile GMT Ariana');
+                });
+              }}
+              title="Exporter Clino Mobile en Word (.doc)"
+            >
+              📝 Word
+            </button>
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => {
                 import('../utils/exportUtils').then(({ exportToICS }) => exportToICS(exportClinoItems));
               }}
               title="Exporter Clino Mobile au format Calendrier .ics"
@@ -396,18 +456,26 @@ export default function Clino({ toast }) {
           </div>
 
           {/* Tab switcher */}
-          <div style={{ display: 'flex', gap: 2, background: 'var(--bg)', borderRadius: 8, padding: 3 }}>
+          <div style={{ display: 'flex', gap: 2, background: 'var(--bg)', borderRadius: 8, padding: 3, border: '1px solid var(--border)' }}>
             {[['list', '📋 Liste'], ['programme', '📅 Programme jour']].map(([v, l]) => (
               <button key={v} className={`btn btn-sm ${activeTab === v ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setActiveTab(v)} style={{ padding: '4px 10px', fontSize: 12 }}>{l}</button>
             ))}
           </div>
-          {isAdmin && <button className="btn btn-primary btn-sm" onClick={() => setModal({})}>+ Programme</button>}
+          {isAdmin && (
+            <button
+              className="btn btn-primary"
+              style={{ padding: '8px 16px', fontWeight: 800, fontSize: 13, borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6 }}
+              onClick={() => setModal({})}
+            >
+              + Programme
+            </button>
+          )}
         </div>
       </div>
 
       {/* Filter Bar (Rôle: Médecins / Techniciens, Recherche) */}
-      <div style={{ display: 'flex', gap: 10, padding: '10px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 10, padding: '10px 20px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 4 }}>
           🏷️ Filtres :
         </span>
@@ -424,6 +492,19 @@ export default function Clino({ toast }) {
           <option value="technicien">🔧 Techniciens uniquement</option>
         </select>
 
+        {/* Filter by Date */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>📅</span>
+          <input
+            type="date"
+            className="input"
+            value={filters.date}
+            onChange={e => setFilters(f => ({ ...f, date: e.target.value }))}
+            style={{ width: 'auto', fontSize: 12, padding: '4px 8px', height: 32, borderRadius: 8 }}
+            title="Filtrer par date de tournée"
+          />
+        </div>
+
         {/* Search input */}
         <input
           className="input"
@@ -438,7 +519,7 @@ export default function Clino({ toast }) {
           <>
             <button
               className="btn btn-ghost btn-sm"
-              onClick={() => setFilters({ role: '', search: '' })}
+              onClick={() => setFilters({ role: '', search: '', date: '' })}
               style={{ fontSize: 12, padding: '4px 8px', color: 'var(--danger)' }}
               title="Réinitialiser tous les filtres"
             >

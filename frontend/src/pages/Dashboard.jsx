@@ -181,63 +181,65 @@ export default function Dashboard({ toast }) {
 
       {/* ─── Top Executive Banner ─── */}
       <div style={{
-        background: 'linear-gradient(135deg, #0369a1 0%, #0284c7 50%, #0ea5e9 100%)',
+        background: 'var(--surface)',
         borderRadius: 16,
-        padding: '22px 26px',
-        color: '#ffffff',
+        padding: '20px 24px',
+        border: '1px solid var(--border)',
+        borderTop: '4px solid #0284c7',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: 16,
-        boxShadow: '0 8px 24px -4px rgba(2, 132, 199, 0.35)',
+        gap: 16
       }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
             <span style={{
-              background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: 16,
-              fontSize: 11.5, fontWeight: 700, backdropFilter: 'blur(4px)', display: 'inline-flex', alignItems: 'center', gap: 5
+              background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+              color: '#fff',
+              fontSize: 11,
+              fontWeight: 800,
+              padding: '3px 10px',
+              borderRadius: 6,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5
             }}>
               <span>{roleMeta.icon}</span> {roleMeta.label}
             </span>
-            <span style={{ fontSize: 11.5, color: '#bae6fd', fontWeight: 500 }}>
-              ● Connecté en direct
+            <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>
+              ● Connecté en direct · GMT Ariana
             </span>
           </div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, margin: 0, letterSpacing: '-0.3px', color: '#fff' }}>
+          <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0, color: 'var(--text)', letterSpacing: -0.5 }}>
             Bonjour, {user?.prenom || 'Système'} 👋
-          </h2>
-          <p style={{ margin: '3px 0 0', fontSize: 13, color: '#e0f2fe', textTransform: 'capitalize' }}>
-            {todayFormatted} · GMT Ariana Santé au Travail
+          </h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-2)', textTransform: 'capitalize' }}>
+            {todayFormatted} · Tableau de bord exécutif, statistiques & activités du jour
           </p>
         </div>
 
         {/* Quick actions in header */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button
-            className="btn"
+            className="btn btn-outline btn-sm"
             onClick={() => navigate('/planning')}
-            style={{
-              background: '#ffffff', color: '#0369a1', fontWeight: 700,
-              fontSize: 12.5, padding: '8px 14px', borderRadius: 10,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-            }}
+            style={{ fontWeight: 700, fontSize: 12.5, padding: '8px 14px', borderRadius: 10 }}
           >
-            ➕ Planifier
+            📋 Planning
           </button>
           <button
-            className="btn"
+            className="btn btn-outline btn-sm"
             onClick={() => navigate('/entreprises')}
-            style={{
-              background: 'rgba(255,255,255,0.18)', color: '#ffffff',
-              border: '1px solid rgba(255,255,255,0.3)', fontWeight: 600,
-              fontSize: 12.5, padding: '8px 12px', borderRadius: 10,
-            }}
+            style={{ fontWeight: 700, fontSize: 12.5, padding: '8px 14px', borderRadius: 10 }}
           >
             🏢 Entreprises
           </button>
           <button
-            className="btn"
+            className="btn btn-primary btn-sm"
             onClick={() => {
               setRefreshing(true);
               load();
@@ -245,13 +247,18 @@ export default function Dashboard({ toast }) {
             }}
             disabled={refreshing}
             style={{
-              background: 'rgba(255,255,255,0.18)', color: '#ffffff',
-              border: '1px solid rgba(255,255,255,0.3)', fontWeight: 600,
-              fontSize: 12.5, padding: '8px 12px', borderRadius: 10,
+              fontWeight: 800,
+              fontSize: 12.5,
+              padding: '8px 16px',
+              borderRadius: 10,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              boxShadow: '0 4px 14px rgba(14,165,233,.35)'
             }}
             title="Actualiser les données"
           >
-            {refreshing ? '⏳' : '🔄'}
+            {refreshing ? '⏳ Actualisation...' : '🔄 Actualiser'}
           </button>
         </div>
       </div>

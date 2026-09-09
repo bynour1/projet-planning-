@@ -47,30 +47,82 @@ router.get('/:id', authenticate, async (req, res) => {
 
 // POST /api/entreprises  (Admin only)
 router.post('/', authenticate, authorize('administrateur'), async (req, res) => {
-  const { nom, secteur, adresse, telephone, email, site_web, description, convensionne } = req.body;
+  const {
+    nom, secteur, adresse, telephone, email, site_web, description, convensionne,
+    effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants,
+  } = req.body;
   if (!nom?.trim()) return res.status(400).json({ message: 'Nom requis' });
   try {
     const [result] = await db.query(
-      'INSERT INTO entreprises (nom,secteur,adresse,telephone,email,site_web,description,convensionne) VALUES (?,?,?,?,?,?,?,?)',
-      [nom.trim(), secteur||null, adresse||null, telephone||null, email||null, site_web||null, description||null, convensionne?1:0]
+      `INSERT INTO entreprises (
+        nom, secteur, adresse, telephone, email, site_web, description, convensionne,
+        effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        nom.trim(), secteur||null, adresse||null, telephone||null, email||null, site_web||null, description||null,
+        convensionne ? 1 : 0,
+        parseInt(effectif_total) || 0,
+        parseInt(nb_visites_faites) || 0,
+        parseInt(nb_bilans_faits) || 0,
+        parseInt(nb_bilans_manquants) || 0,
+      ]
     );
     res.status(201).json({ message: 'Entreprise créée', id: result.insertId });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
 // PUT /api/entreprises/:id  (Admin only)
 router.put('/:id', authenticate, authorize('administrateur'), async (req, res) => {
-  const { nom, secteur, adresse, telephone, email, site_web, description, convensionne } = req.body;
+  const {
+    nom, secteur, adresse, telephone, email, site_web, description, convensionne,
+    effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants,
+  } = req.body;
   if (!nom?.trim()) return res.status(400).json({ message: 'Nom requis' });
   try {
     await db.query(
-      'UPDATE entreprises SET nom=?,secteur=?,adresse=?,telephone=?,email=?,site_web=?,description=?,convensionne=? WHERE id=?',
-      [nom.trim(), secteur||null, adresse||null, telephone||null, email||null, site_web||null, description||null, convensionne?1:0, req.params.id]
+      `UPDATE entreprises SET
+        nom=?, secteur=?, adresse=?, telephone=?, email=?, site_web=?, description=?, convensionne=?,
+        effectif_total=?, nb_visites_faites=?, nb_bilans_faits=?, nb_bilans_manquants=?
+      WHERE id=?`,
+      [
+        nom.trim(), secteur||null, adresse||null, telephone||null, email||null, site_web||null, description||null,
+        convensionne ? 1 : 0,
+        parseInt(effectif_total) || 0,
+        parseInt(nb_visites_faites) || 0,
+        parseInt(nb_bilans_faits) || 0,
+        parseInt(nb_bilans_manquants) || 0,
+        req.params.id,
+      ]
     );
     res.json({ message: 'Entreprise mise à jour' });
   } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// PATCH /api/entreprises/:id/bilan  (Admin only - mise à jour rapide des chiffres)
+router.patch('/:id/bilan', authenticate, authorize('administrateur'), async (req, res) => {
+  const { effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants } = req.body;
+  try {
+    await db.query(
+      `UPDATE entreprises SET
+        effectif_total=?, nb_visites_faites=?, nb_bilans_faits=?, nb_bilans_manquants=?
+      WHERE id=?`,
+      [
+        parseInt(effectif_total) || 0,
+        parseInt(nb_visites_faites) || 0,
+        parseInt(nb_bilans_faits) || 0,
+        parseInt(nb_bilans_manquants) || 0,
+        req.params.id,
+      ]
+    );
+    res.json({ message: 'Bilan et effectif mis à jour' });
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });

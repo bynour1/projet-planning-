@@ -64,25 +64,79 @@ export default function Schedule({ toast }) {
   }
 
   return (
-    <div className="page-content">
-      {/* Header */}
-      <div className="page-header">
-        <div>
-          <h2>🗓 Vue Semaine</h2>
-          <p style={{ textTransform:'capitalize' }}>
-            {format(weekStart, 'd MMM', { locale:fr })} – {format(weekEnd, 'd MMM yyyy', { locale:fr })}
+    <div className="page-content" style={{ maxWidth: 1400, margin: '0 auto' }}>
+      {/* ── BANNIÈRE EXECUTIVE HEADER ── */}
+      <div
+        style={{
+          background: 'var(--surface)',
+          borderRadius: 16,
+          padding: '22px 26px',
+          border: '1px solid var(--border)',
+          borderTop: '4px solid #0284c7',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+          marginBottom: 20,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 16,
+        }}
+      >
+        <div style={{ flex: '1 1 400px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 800,
+                background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+                color: '#fff',
+                padding: '3px 10px',
+                borderRadius: 6,
+                textTransform: 'uppercase',
+                letterSpacing: 0.6,
+                boxShadow: '0 2px 6px rgba(2,132,199,0.2)',
+              }}
+            >
+              Planning & Tournées Médicales
+            </span>
+            <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600 }}>• Calendrier hebdomadaire</span>
+          </div>
+          <h2 style={{ fontSize: 24, fontWeight: 900, color: 'var(--text)', letterSpacing: -0.5, margin: 0 }}>
+            🗓 Vue Semaine
+          </h2>
+          <p style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4, margin: 0, textTransform: 'capitalize' }}>
+            {format(weekStart, 'd MMMM', { locale: fr })} – {format(weekEnd, 'd MMMM yyyy', { locale: fr })} • Coordination des visites et interventions sur site.
           </p>
         </div>
-        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-          <button className="btn btn-outline btn-sm" onClick={() => setWeekStart(w => subWeeks(w, 1))}>‹</button>
-          <button className="btn btn-ghost btn-sm" onClick={() => {
-            const ws = startOfWeek(new Date(), { weekStartsOn:1 });
-            setWeekStart(ws);
-            setSelDay(getInitialDay(ws));
-          }}>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-outline"
+            onClick={() => setWeekStart(w => subWeeks(w, 1))}
+            style={{ fontWeight: 800, fontSize: 16, padding: '8px 14px', borderRadius: 10 }}
+            title="Semaine précédente"
+          >
+            ‹
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={() => {
+              const ws = startOfWeek(new Date(), { weekStartsOn: 1 });
+              setWeekStart(ws);
+              setSelDay(getInitialDay(ws));
+            }}
+            style={{ fontWeight: 700, fontSize: 13, padding: '8px 16px', borderRadius: 10 }}
+          >
             Aujourd'hui
           </button>
-          <button className="btn btn-outline btn-sm" onClick={() => setWeekStart(w => addWeeks(w, 1))}>›</button>
+          <button
+            className="btn btn-outline"
+            onClick={() => setWeekStart(w => addWeeks(w, 1))}
+            style={{ fontWeight: 800, fontSize: 16, padding: '8px 14px', borderRadius: 10 }}
+            title="Semaine suivante"
+          >
+            ›
+          </button>
         </div>
       </div>
 

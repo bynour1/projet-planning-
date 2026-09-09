@@ -576,7 +576,7 @@ export default function Planning({ toast }) {
   const [ents, setEnts] = useState([]);
   const [modal, setModal] = useState(null);
   const [sigModal, setSigModal] = useState(null);
-  const [filters, setFilters] = useState({ role: '', entreprise: '', search: '' });
+  const [filters, setFilters] = useState({ role: '', entreprise: '', search: '', date: '' });
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
@@ -616,6 +616,7 @@ export default function Planning({ toast }) {
   const filterWeek=arr=>arr.filter(e=>{const d=toRaw(e.date||e.date_debut?.slice(0,10)||'');return d>=format(weekStart,'yyyy-MM-dd')&&d<=format(weekEnd,'yyyy-MM-dd');});
 
   const filteredPe = pe.filter(e => {
+    if (filters.date && toRaw(e.date) !== filters.date) return false;
     if (filters.role === 'medecin') {
       const hasMed = Boolean(e.medecin_id || (e.medecin_nom && e.medecin_nom !== '—' && e.medecin_nom !== '-'));
       if (!hasMed) return false;
@@ -641,6 +642,7 @@ export default function Planning({ toast }) {
   });
 
   const filteredCl = cl.filter(e => {
+    if (filters.date && toRaw(e.date) !== filters.date) return false;
     if (filters.role === 'medecin') {
       const hasMed = Boolean(e.medecin_id || e.medecin_nom || e.medecin_full);
       if (!hasMed) return false;
@@ -668,6 +670,7 @@ export default function Planning({ toast }) {
   });
 
   const filteredCe = ce.filter(e => {
+    if (filters.date && toRaw(e.date_debut?.slice(0, 10)) !== filters.date) return false;
     if (filters.role) return false;
     if (filters.entreprise) {
       const q = filters.entreprise.toLowerCase();
@@ -739,32 +742,51 @@ export default function Planning({ toast }) {
     <div style={{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}}>
       <TodayBanner pe={pe} ce={ce} cl={cl}/>
 
-      {/* Toolbar */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 20px',borderBottom:'1px solid var(--border)',background:'var(--surface)',flexShrink:0,flexWrap:'wrap',gap:10}}>
-        <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-          {view==='week'&&<>
-            <button className="btn btn-outline btn-sm" onClick={()=>setWeekStart(w=>subWeeks(w,1))}>‹ Prev</button>
-            <button className="btn btn-outline btn-sm" onClick={()=>setWeekStart(w=>addWeeks(w,1))}>Next ›</button>
-          </>}
-          {view==='month'&&<>
-            <button className="btn btn-outline btn-sm" onClick={()=>setMonthDate(d=>subMonths(d,1))}>‹ Prev</button>
-            <button className="btn btn-outline btn-sm" onClick={()=>setMonthDate(d=>addMonths(d,1))}>Next ›</button>
-          </>}
-          <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-            <span style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#0284c7'}}>
-              <span style={{width:10,height:10,background:'#e0f2fe',border:'2px solid #0ea5e9',borderRadius:2,display:'inline-block'}}/> Programme
+      {/* Executive Header Banner */}
+      <div style={{
+        background: 'var(--surface)',
+        borderRadius: 16,
+        padding: '20px 24px',
+        margin: '16px 20px 12px',
+        border: '1px solid var(--border)',
+        borderTop: '4px solid #0284c7',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 16,
+        flexShrink: 0
+      }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <span style={{
+              background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+              color: '#fff',
+              fontSize: 11,
+              fontWeight: 800,
+              padding: '3px 10px',
+              borderRadius: 6,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5
+            }}>
+              📋 Tournées & Événements
             </span>
-            <span style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#854d0e'}}>
-              <span style={{width:10,height:10,background:'#fef9c3',border:'2px solid #eab308',borderRadius:2,display:'inline-block'}}/> Calendrier
-            </span>
-            <span style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#065f46'}}>
-              <span style={{width:10,height:10,background:'#d1fae5',border:'2px solid #059669',borderRadius:2,display:'inline-block'}}/> Clino Mobile
+            <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>
+              GMT Ariana Santé au Travail
             </span>
           </div>
+          <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0, color: 'var(--text)', letterSpacing: -0.5 }}>
+            Planning Médical
+          </h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-2)' }}>
+            Calendrier hebdomadaire, mensuel et programmation des visites médicales
+          </p>
         </div>
-        <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Export buttons */}
-          <div style={{display:'flex',gap:4}}>
+          <div style={{ display: 'flex', gap: 4 }}>
             <button className="btn btn-outline btn-sm" onClick={() => {
               import('../utils/exportUtils').then(({exportToPDF}) => {
                 exportToPDF(exportItems, [
@@ -792,16 +814,46 @@ export default function Planning({ toast }) {
                 ], 'Planning_GMT_Ariana');
               });
             }} title="Exporter Excel (Programmes + Clino + Calendrier)">📊 Excel</button>
+            <button className="btn btn-outline btn-sm" onClick={() => {
+              import('../utils/exportUtils').then(({exportToWord}) => {
+                exportToWord(exportItems, [
+                  {header:'Type',key:'type_label'},
+                  {header:'Date',key:'date_display'},
+                  {header:'Horaire',key:'heure_display'},
+                  {header:'Titre / Sujet',key:'titre'},
+                  {header:'Médecin',key:'medecin_nom'},
+                  {header:'Technicien',key:'technicien_nom'},
+                  {header:'Adresse / Lieu',key:'adresse'},
+                  {header:'Notes',key:'commentaire'},
+                ], 'Planning Medical GMT Ariana');
+              });
+            }} title="Exporter Word (Document .doc officiel)">📝 Word</button>
           </div>
-          <div style={{display:'flex',gap:2,background:'var(--bg)',borderRadius:8,padding:3}}>
+
+          {/* Navigation and views */}
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            {view==='week'&&<>
+              <button className="btn btn-outline btn-sm" onClick={()=>setWeekStart(w=>subWeeks(w,1))}>‹</button>
+              <button className="btn btn-outline btn-sm" onClick={()=>setWeekStart(startOfWeek(new Date(),{weekStartsOn:1}))}>Aujourd'hui</button>
+              <button className="btn btn-outline btn-sm" onClick={()=>setWeekStart(w=>addWeeks(w,1))}>›</button>
+            </>}
+            {view==='month'&&<>
+              <button className="btn btn-outline btn-sm" onClick={()=>setMonthDate(d=>subMonths(d,1))}>‹</button>
+              <button className="btn btn-outline btn-sm" onClick={()=>setMonthDate(new Date())}>Aujourd'hui</button>
+              <button className="btn btn-outline btn-sm" onClick={()=>setMonthDate(d=>addMonths(d,1))}>›</button>
+            </>}
+          </div>
+
+          <div style={{display:'flex',gap:2,background:'var(--bg)',borderRadius:8,padding:3,border:'1px solid var(--border)'}}>
             {[['week','📅 Semaine'],['month','📆 Mois'],['list','📋 Liste']].map(([v,l])=>(
               <button key={v} className={`btn btn-sm ${view===v?'btn-primary':'btn-ghost'}`}
                 onClick={()=>setView(v)} style={{padding:'4px 10px',fontSize:12}}>{l}</button>
             ))}
           </div>
+
           {isAdmin&&<>
-            <button className="btn btn-primary btn-sm" onClick={()=>setModal({t:'p'})}>+ Programme</button>
-            <button className="btn btn-outline btn-sm" onClick={()=>setModal({t:'e'})}>+ Événement</button>
+            <button className="btn btn-primary btn-sm" style={{ fontWeight: 800, borderRadius: 8 }} onClick={()=>setModal({t:'p'})}>+ Programme</button>
+            <button className="btn btn-outline btn-sm" style={{ fontWeight: 800, borderRadius: 8 }} onClick={()=>setModal({t:'e'})}>+ Événement</button>
           </>}
         </div>
       </div>
@@ -823,6 +875,19 @@ export default function Planning({ toast }) {
           <option value="medecin">👨‍⚕️ Médecins uniquement</option>
           <option value="technicien">🔧 Techniciens uniquement</option>
         </select>
+
+        {/* Filter by Date */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>📅</span>
+          <input
+            type="date"
+            className="input"
+            value={filters.date}
+            onChange={e=>setFilters(f=>({...f,date:e.target.value}))}
+            style={{ width: 'auto', fontSize: 12, padding: '4px 8px', height: 32, borderRadius: 8 }}
+            title="Filtrer par date exacte"
+          />
+        </div>
 
         {/* Filter by Company */}
         {ents.length > 0 ? (
@@ -860,7 +925,7 @@ export default function Planning({ toast }) {
           <>
             <button
               className="btn btn-ghost btn-sm"
-              onClick={()=>setFilters({role:'',entreprise:'',search:''})}
+              onClick={()=>setFilters({role:'',entreprise:'',search:'',date:''})}
               style={{fontSize:12,padding:'4px 8px',color:'var(--danger)'}}
               title="Réinitialiser tous les filtres"
             >
