@@ -47,7 +47,7 @@ describe('Dashboard — Admin', () => {
   it('shows my planning section', async () => {
     setupMocks(MOCK_ADMIN);
     renderWithProviders(<Dashboard toast={mockToast} />, { user: MOCK_ADMIN });
-    await waitFor(() => expect(screen.getByText(/prochaines interventions/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/prochaines visites/i)).toBeInTheDocument());
   });
 });
 

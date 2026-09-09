@@ -311,7 +311,7 @@ export default function Dashboard({ toast }) {
                       Programme d'aujourd'hui
                     </h3>
                     <p style={{ fontSize: 11.5, color: 'var(--text-2)', margin: '2px 0 0' }}>
-                      {todayEvents.length} intervention(s) prévue(s) ce jour
+                      {todayEvents.length} visite(s) médicale(s) prévue(s) ce jour
                     </p>
                   </div>
                 </div>
@@ -355,15 +355,15 @@ export default function Dashboard({ toast }) {
             </div>
           )}
 
-          {/* Prochaines interventions & Visites médicales */}
+          {/* Prochaines Visites Médicales */}
           <div className="card" style={{ padding: '18px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div>
                 <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text)' }}>
-                  📋 Prochaines interventions & Visites
+                  📋 Prochaines Visites Médicales
                 </h3>
                 <p style={{ fontSize: 11.5, color: 'var(--text-2)', margin: '2px 0 0' }}>
-                  Planning des visites et examens médicaux assignés
+                  Planning des consultations et examens médicaux assignés
                 </p>
               </div>
               <button
@@ -382,7 +382,7 @@ export default function Dashboard({ toast }) {
               }}>
                 <span style={{ fontSize: 22 }}>📅</span>
                 <p style={{ fontWeight: 600, fontSize: 13, margin: '6px 0 2px', color: 'var(--text)' }}>
-                  Aucune intervention programmée pour le moment
+                  Aucune visite médicale programmée pour le moment
                 </p>
                 <p style={{ fontSize: 11.5, color: 'var(--text-2)', margin: '0 0 10px' }}>
                   Vous pouvez ajouter une nouvelle visite médicale au calendrier.
@@ -423,15 +423,15 @@ export default function Dashboard({ toast }) {
             )}
           </div>
 
-          {/* Entreprises Conventionnées Partenaires */}
+          {/* Interventions (Entreprises Conventionnées) */}
           <div className="card" style={{ padding: '18px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div>
                 <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text)' }}>
-                  🏢 Entreprises Conventionnées
+                  🏢 Interventions (Entreprises Conventionnées)
                 </h3>
                 <p style={{ fontSize: 11.5, color: 'var(--text-2)', margin: '2px 0 0' }}>
-                  Annuaire des entreprises partenaires sous convention
+                  Annuaire des entreprises partenaires sous convention d'intervention
                 </p>
               </div>
               <button
