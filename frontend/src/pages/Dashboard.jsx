@@ -1,10 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, CartesianGrid
-} from 'recharts';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { format, isToday, isTomorrow, parseISO, differenceInDays } from 'date-fns';
@@ -82,28 +78,25 @@ export default function Dashboard({ toast }) {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [todayEvents, setTodayEvents] = useState([]);
   const [myPlanning, setMyPlanning] = useState([]);
-  const [monthlyStats, setMonthlyStats] = useState([]);
-  const [medecinStats, setMedecinStats] = useState([]);
+  const [convEntreprises, setConvEntreprises] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [usersRes, eventsRes, planningRes, clinoRes, myRes, monthlyRes, medecinRes, todayRes, entreprisesRes] = await Promise.all([
+      const [usersRes, eventsRes, planningRes, clinoRes, myRes, todayRes, entreprisesRes] = await Promise.all([
         user?.role === 'administrateur' ? axios.get('/api/users') : Promise.resolve({ data: [] }),
         axios.get('/api/events'),
         axios.get('/api/planning'),
         axios.get('/api/clino'),
         axios.get('/api/planning/mine'),
-        axios.get('/api/stats/monthly').catch(() => ({ data: [] })),
-        user?.role === 'administrateur' ? axios.get('/api/stats/by-medecin').catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
         axios.get('/api/planning/today').catch(() => ({ data: [] })),
         axios.get('/api/entreprises').catch(() => ({ data: [] })),
       ]);
 
       const todayStr = new Date().toISOString().split('T')[0];
       const allEnt = entreprisesRes?.data || [];
-      const convEnt = allEnt.filter(e => e.convensionne === 1 || e.convensionne === true);
+      const convEnt = allEnt.filter(e => e.convensionne === 1 || e.convensionne === true || e.convensionne === '1');
       const entCount = convEnt.length > 0 ? convEnt.length : allEnt.length;
 
       setStats({
@@ -114,6 +107,7 @@ export default function Dashboard({ toast }) {
         entreprises: entCount,
       });
 
+      setConvEntreprises((convEnt.length > 0 ? convEnt : allEnt).slice(0, 5));
       setTodayEvents(todayRes?.data || []);
 
       setUpcomingEvents(
@@ -122,9 +116,10 @@ export default function Dashboard({ toast }) {
           .sort((a, b) => (a?.date_debut || '').localeCompare(b?.date_debut || ''))
       );
 
-      setMyPlanning((myRes?.data || []).slice(0, 6));
-      setMonthlyStats(monthlyRes?.data || []);
-      setMedecinStats(medecinRes?.data || []);
+      const mine = myRes?.data || [];
+      const allPlan = planningRes?.data || [];
+      const displayPlanning = (mine.length > 0 ? mine : allPlan).slice(0, 6);
+      setMyPlanning(displayPlanning);
     } catch (err) {
       toast?.('Erreur lors du chargement des données', 'error');
     } finally {
@@ -360,12 +355,12 @@ export default function Dashboard({ toast }) {
             </div>
           )}
 
-          {/* Mes prochaines interventions */}
+          {/* Prochaines interventions & Visites médicales */}
           <div className="card" style={{ padding: '18px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div>
                 <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text)' }}>
-                  📋 Mes prochaines interventions
+                  📋 Prochaines interventions & Visites
                 </h3>
                 <p style={{ fontSize: 11.5, color: 'var(--text-2)', margin: '2px 0 0' }}>
                   Planning des visites et examens médicaux assignés
@@ -376,17 +371,29 @@ export default function Dashboard({ toast }) {
                 onClick={() => navigate('/planning')}
                 style={{ fontSize: 11.5 }}
               >
-                Planning complet
+                Planning complet ➔
               </button>
             </div>
 
             {myPlanning.length === 0 ? (
-              <div className="empty-state" style={{ padding: '24px 12px', background: 'var(--surface2)', borderRadius: 10 }}>
-                <div className="empty-icon" style={{ fontSize: 26, marginBottom: 4 }}>📋</div>
-                <p style={{ fontWeight: 600, fontSize: 13, margin: 0 }}>Aucune intervention assignée</p>
-                <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
-                  Vos prochaines visites médicales s'afficheront ici.
-                </span>
+              <div style={{
+                padding: '20px 16px', background: 'var(--surface2)', borderRadius: 10,
+                textAlign: 'center', border: '1px dashed var(--border)'
+              }}>
+                <span style={{ fontSize: 22 }}>📅</span>
+                <p style={{ fontWeight: 600, fontSize: 13, margin: '6px 0 2px', color: 'var(--text)' }}>
+                  Aucune intervention programmée pour le moment
+                </p>
+                <p style={{ fontSize: 11.5, color: 'var(--text-2)', margin: '0 0 10px' }}>
+                  Vous pouvez ajouter une nouvelle visite médicale au calendrier.
+                </p>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => navigate('/planning')}
+                  style={{ fontSize: 11.5 }}
+                >
+                  ➕ Ajouter une visite
+                </button>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -401,14 +408,14 @@ export default function Dashboard({ toast }) {
                   >
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--text)' }}>
-                        {p.titre || 'Visite médicale'}
+                        {p.titre || p.type_visite || 'Visite médicale'}
                       </div>
                       <div style={{ fontSize: 11.5, color: 'var(--text-2)', marginTop: 2 }}>
-                        📅 {p.date} {p.heure_debut ? `· ⏰ ${p.heure_debut}` : ''} {p.adresse ? `· 📍 ${p.adresse}` : ''}
+                        📅 {p.date} {p.heure_debut ? `· ⏰ ${p.heure_debut}` : ''} {p.medecin_nom ? `· 👨‍⚕️ ${p.medecin_nom}` : ''} {p.adresse ? `· 📍 ${p.adresse}` : ''}
                       </div>
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '2px 7px', borderRadius: 6, whiteSpace: 'nowrap' }}>
-                      Assigné
+                      Planifié
                     </span>
                   </div>
                 ))}
@@ -416,42 +423,64 @@ export default function Dashboard({ toast }) {
             )}
           </div>
 
-          {/* Monthly Activity Analytics Chart */}
+          {/* Entreprises Conventionnées Partenaires */}
           <div className="card" style={{ padding: '18px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div>
                 <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text)' }}>
-                  📈 Activité & Volume / mois
+                  🏢 Entreprises Conventionnées
                 </h3>
                 <p style={{ fontSize: 11.5, color: 'var(--text-2)', margin: '2px 0 0' }}>
-                  Suivi semestriel du nombre d'interventions
+                  Annuaire des entreprises partenaires sous convention
                 </p>
               </div>
-              <span style={{ fontSize: 11, fontWeight: 700, background: '#e0f2fe', color: '#0369a1', padding: '2px 7px', borderRadius: 6 }}>
-                6 mois
-              </span>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => navigate('/entreprises')}
+                style={{ fontSize: 11.5, color: 'var(--primary)' }}
+              >
+                Gérer ({stats.entreprises}) ➔
+              </button>
             </div>
 
-            <div style={{ height: 230 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyStats} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.6} />
-                  <XAxis dataKey="month" style={{ fontSize: 11, fill: 'var(--text-3)' }} tickLine={false} />
-                  <YAxis style={{ fontSize: 11, fill: 'var(--text-3)' }} tickLine={false} axisLine={false} allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{
-                      background: 'var(--surface)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 8,
-                      boxShadow: 'var(--shadow-md)',
-                      fontSize: 12,
+            {convEntreprises.length === 0 ? (
+              <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-2)', fontSize: 12.5 }}>
+                Aucune entreprise enregistrée.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {convEntreprises.map(ent => (
+                  <div
+                    key={ent.id}
+                    onClick={() => navigate('/entreprises')}
+                    style={{
+                      padding: '10px 12px', background: 'var(--surface2)', borderRadius: 10,
+                      border: '1px solid var(--border)', borderLeft: '3px solid #10b981',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
+                      cursor: 'pointer', transition: 'all 0.15s ease'
                     }}
-                  />
-                  <Bar dataKey="count" name="Interventions" fill="#0ea5e9" radius={[5, 5, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+                    onMouseEnter={e => { e.currentTarget.style.transform = 'translateX(2px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>
+                        {ent.nom}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>
+                        {ent.secteur ? `🏷️ ${ent.secteur}` : 'Secteur général'}
+                        {ent.adresse ? ` · 📍 ${ent.adresse}` : ''}
+                        {ent.telephone ? ` · 📞 ${ent.telephone}` : ''}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '2px 8px', borderRadius: 6, whiteSpace: 'nowrap' }}>
+                      Conventionnée
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
+
         </div>
 
         {/* ─── Right Column: Announcements, Team Breakdown, Quick Access ─── */}
@@ -544,59 +573,6 @@ export default function Dashboard({ toast }) {
             </div>
           )}
 
-          {/* Doctor Allocation (Admin) */}
-          {isAdmin && (
-            <div className="card" style={{ padding: '18px 20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text)' }}>
-                    👥 Charge par médecin
-                  </h3>
-                  <p style={{ fontSize: 11.5, color: 'var(--text-2)', margin: '2px 0 0' }}>
-                    Répartition des consultations médicales
-                  </p>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 700, background: '#f0fdf4', color: '#166534', padding: '2px 7px', borderRadius: 6 }}>
-                  Équipe
-                </span>
-              </div>
-
-              <div style={{ height: 210 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={medecinStats}
-                      dataKey="count"
-                      nameKey="medecin"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={40}
-                      outerRadius={70}
-                      paddingAngle={3}
-                    >
-                      {medecinStats.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={['#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#3b82f6'][index % 6]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        background: 'var(--surface)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 8,
-                        boxShadow: 'var(--shadow-md)',
-                        fontSize: 12,
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-
           {/* Raccourcis Métier */}
           <div className="card" style={{ padding: '18px 20px' }}>
             <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px', color: 'var(--text)' }}>
@@ -606,7 +582,7 @@ export default function Dashboard({ toast }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
                 { title: '📅 Planning Médical', desc: 'Gestion des visites périodiques et d\'embauche', path: '/planning', color: '#10b981' },
-                { title: '🏢 Adhérents & Entreprises', desc: 'Fiches et suivi des entreprises adhérentes', path: '/entreprises', color: '#0ea5e9' },
+                { title: '🏢 Entreprises Conventionnées', desc: 'Fiches et suivi des entreprises partenaires', path: '/entreprises', color: '#0ea5e9' },
                 { title: '🚗 Clino Mobile', desc: 'Tournées médicales et visites sur site', path: '/clino', color: '#8b5cf6' },
                 { title: '💬 Chat d\'Équipe', desc: 'Échanges internes et partage de documents', path: '/chat', color: '#f59e0b' },
               ].map(item => (
@@ -635,6 +611,7 @@ export default function Dashboard({ toast }) {
               ))}
             </div>
           </div>
+
         </div>
       </div>
     </div>
