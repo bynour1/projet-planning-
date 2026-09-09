@@ -20,7 +20,6 @@ import Chat           from './pages/Chat';
 import Users          from './pages/Users';
 import Settings       from './pages/Settings';
 import ForcePassword  from './pages/ForcePassword';
-import Routines       from './pages/Routines';
 import Schedule       from './pages/Schedule';
 import Entreprises    from './pages/Entreprises';
 
@@ -107,7 +106,6 @@ function AppShell() {
                 <Route path="/entreprises"  element={<Entreprises  toast={addToast}/>}/>
                 <Route path="/users"        element={<Users        toast={addToast}/>}/>
                 <Route path="/settings"     element={<Settings     toast={addToast}/>}/>
-                <Route path="/routines"     element={<Routines     toast={addToast}/>}/>
                 <Route path="*"             element={<Navigate to="/dashboard" replace/>}/>
               </>
             )}

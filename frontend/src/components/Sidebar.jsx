@@ -11,7 +11,6 @@ const ICONS = {
   planning:    '📋',
   clino:       '🚗',
   chat:        '💬',
-  routines:    '🔄',
   entreprises: '🏢',
   settings:    '⚙',
 };
@@ -99,10 +98,6 @@ export default function Sidebar({ mobileOpen, onCloseMobile }) {
                   {onlineUsers.length} en ligne
                 </span>
               )}
-            </NavLink>
-
-            <NavLink to="/routines" className={navClass} onClick={handleLinkClick}>
-              <span className="icon">{ICONS.routines}</span> Mes Routines
             </NavLink>
 
             <NavLink to="/entreprises" className={navClass} onClick={handleLinkClick}>
