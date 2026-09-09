@@ -39,50 +39,153 @@ async function downloadAndOpen(url, originalname, mimetype) {
   } catch { alert("Impossible d'ouvrir le fichier."); }
 }
 
+function formatMessageDate(dateStr) {
+  try {
+    const d = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
+    if (!d || isNaN(d.getTime())) return '';
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const msgDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.round((today - msgDate) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return "Aujourd'hui";
+    if (diffDays === 1) return "Hier";
+    if (diffDays < 7) return format(d, 'EEEE d MMMM', { locale: fr });
+    return format(d, 'EEEE d MMMM yyyy', { locale: fr });
+  } catch {
+    return String(dateStr || '').slice(0, 10);
+  }
+}
+
+function isDifferentDay(d1, d2) {
+  if (!d1) return true;
+  if (!d2) return false;
+  try {
+    return String(d1).slice(0, 10) !== String(d2).slice(0, 10);
+  } catch {
+    return true;
+  }
+}
+
 /* ═══════════════════════════════════════════════════════
    IA — Simulateur médical intelligent (sans clé API)
 ═══════════════════════════════════════════════════════ */
 const AI_RESPONSES = [
+  // ─── Salutations ───
   {
-    keywords: ['bonjour', 'salut', 'hello', 'bonsoir'],
-    response: "Bonjour ! Je suis votre assistant médical IA. Je peux vous aider à :\n• Rédiger des comptes-rendus\n• Répondre aux questions médicales courantes\n• Organiser les plannings\n• Analyser les symptômes (à titre indicatif)\n\nComment puis-je vous aider ?",
+    keywords: ['bonjour', 'salut', 'hello', 'bonsoir', 'coucou', 'salem', 'salam'],
+    response: "Bonjour ! 👋 Je suis l'assistant IA médical de **GMT Ariana Santé au Travail**.\n\nJe peux vous assister en temps réel pour :\n• 💊 **Médicaments & Posologies** (Doliprane, Spasfon, Ibuprofène, etc.)\n• 📋 **Comptes-rendus & Fiches d'aptitude** médicales\n• 🩺 **Visites de médecine du travail** (embauche, périodique, reprise)\n• 🏢 **Entreprises conventionnées & suivi des effectifs**\n• 🚗 **Unité Clino Mobile & Examens** (ECG, visiotest, audiométrie)\n• 🚨 **Protocoles d'urgence et numéros SAMU (190)**\n\nComment puis-je vous aider aujourd'hui ?",
+  },
+
+  // ─── Médicaments spécifiques ───
+  {
+    keywords: ['doliprane', 'dolipranne', 'paracetamol', 'paracetamol', 'efferalgan', 'dafalgan', 'panadol', 'perfalgan'],
+    response: "💊 **Doliprane (Paracétamol)** :\n\n• **Classe thérapeutique :** Antalgique (contre la douleur) et antipyrétique (contre la fièvre).\n• **Indications :** Soulage les douleurs légères à modérées (maux de tête, douleurs dentaires, courbatures, états grippaux, règles douloureuses) et fait baisser la fièvre.\n• **Posologie Adulte :**\n  - **500 mg à 1 g par prise**, à renouveler toutes les **4 à 6 heures** si nécessaire.\n  - **Dose maximale quotidienne :** Ne jamais dépasser **3 g par jour** (ou 4 g/jour uniquement sur avis médical formel).\n• **Précautions & Contre-indications :**\n  - ⚠️ Contre-indiqué en cas d'insuffisance hépatique sévère (maladie grave du foie) ou d'allergie au paracétamol.\n  - ⚠️ Risque grave de toxicité pour le foie en cas de surdosage.\n  - ⚠️ Ne pas cumuler avec d'autres médicaments contenant déjà du paracétamol (ex: Fervex, Actifed).",
   },
   {
-    keywords: ['compte-rendu', 'compte rendu', 'rapport', 'résumé', 'résumer'],
-    response: "Voici un modèle de compte-rendu d'intervention :\n\n**Compte-rendu d'intervention**\n📅 Date : [DATE]\n👤 Patient : [NOM PRÉNOM]\n🩺 Médecin : [Dr. NOM]\n🔧 Technicien : [NOM]\n\n**Motif :** [Description]\n**Actes réalisés :** [Liste des actes]\n**Observations :** [Notes cliniques]\n**Suites à donner :** [Recommandations]\n\nSouhaitez-vous que je personnalise ce modèle ?",
+    keywords: ['ibuprofene', 'ibuprofène', 'advil', 'nurofen', 'antarene', 'antarène', 'profenid', 'profénid', 'ketoprofene', 'kétoprofène', 'ains'],
+    response: "💊 **Ibuprofène / AINS (Anti-inflammatoire non stéroïdien)** :\n\n• **Classe :** AINS, antalgique et antipyrétique.\n• **Indications :** Traitement des douleurs inflammatoires (articulaires, lombalgies, tendinites, céphalées, douleurs dentaires) et fièvre.\n• **Posologie Adulte :** 200 mg à 400 mg par prise **au cours d'un repas**, max 1200 mg par 24h. Espacez les prises d'au moins 6 heures.\n• **Contre-indications majeures :**\n  - ⚠️ Ulcère de l'estomac ou antécédent d'hémorragie digestive.\n  - ⚠️ Insuffisance rénale, hépatique ou cardiaque sévère.\n  - ⚠️ Grossesse (contre-indiqué formellement à partir du 6ème mois).\n  - ⚠️ Ne jamais associer deux AINS en même temps (ex: Ibuprofène + Aspirine ou Voltarène).",
   },
   {
-    keywords: ['planning', 'planification', 'agenda', 'rendez-vous', 'rdv'],
-    response: "Pour optimiser votre planning médical, je recommande :\n\n📋 **Bonnes pratiques :**\n• Réserver 15 min de tampon entre les interventions\n• Grouper les visites par zone géographique\n• Prévoir les urgences en fin de journée\n• Confirmer les rendez-vous 24h à l'avance\n\nVoulez-vous que j'analyse le planning actuel ?",
+    keywords: ['spasfon', 'phloroglucinol', 'spasme', 'maux de ventre', 'ventre'],
+    response: "💊 **Spasfon (Phloroglucinol)** :\n\n• **Classe :** Antispasmodique musculotrope.\n• **Indications :** Traitement symptomatique des douleurs spasmodiques du tube digestif (maux de ventre, coliques), des voies biliaires et urinaires (coliques néphrétiques) et gynécologiques (règles douloureuses).\n• **Posologie Adulte :** 2 comprimés ou 2 lyocs par prise au moment des crises, jusqu'à 3 fois par jour (max 6 cp/jour).\n• **Tolérance :** Bien toléré, sans effet atropinique.",
   },
   {
-    keywords: ['symptôme', 'symptomes', 'douleur', 'fièvre', 'température'],
-    response: "⚠️ **Note importante :** Je fournis des informations générales uniquement. Consultez toujours un médecin.\n\nSymptômes courants à surveiller :\n• Fièvre > 38.5°C → Consultation urgente\n• Douleur thoracique → Appel SAMU (15)\n• Difficultés respiratoires → Urgences\n\nQuel symptôme souhaitez-vous explorer ?",
+    keywords: ['amoxicilline', 'amoxicilline', 'augmentin', 'clamoxyl', 'antibiotique', 'antibiotiques', 'infection'],
+    response: "💊 **Amoxicilline / Augmentin (Antibiotique Bêta-lactamine)** :\n\n• **Classe :** Antibiotique de la famille des pénicillines.\n• **Indications :** Traitement des infections bactériennes confirmées (angines bactériennes, sinusites, otites, bronchites, infections dentaires et urinaires).\n• **Règles d'utilisation :**\n  - ⚠️ Inefficace contre les virus (grippe, rhume, bronchite virale simple).\n  - ⚠️ Prescription médicale stricte requise.\n  - ⚠️ Toujours terminer la durée complète prescrite même en cas d'amélioration rapide pour éviter les résistances bactériennes.\n  - ⚠️ Contre-indiqué en cas d'allergie connue aux pénicillines.",
   },
   {
-    keywords: ['médicament', 'traitement', 'ordonnance', 'posologie', 'dose'],
-    response: "💊 **Rappel posologie générale** (à titre indicatif) :\n\n• **Paracétamol** : 1g max 4x/jour, espacé de 6h\n• **Ibuprofène** : 400mg max 3x/jour avec repas\n• **Amoxicilline** : selon prescription médicale\n\n⚠️ Ces informations ne remplacent pas l'avis du médecin traitant ni l'ordonnance.",
+    keywords: ['aspirine', 'aspegic', 'aspégic', 'kardegic', 'kardégic', 'acetylsalicylique'],
+    response: "💊 **Aspirine (Acide acétylsalicylique)** :\n\n• **Classe :** AINS, antalgique, antipyrétique et antiagrégant plaquettaire.\n• **Indications :** Douleurs et fièvre (à dose antalgique 500mg-1g) ou prévention cardiovasculaire (à faible dose 75-160mg sous forme Kardégic).\n• **Précautions :** Risque de saignement, ulcère gastrique. Contre-indiqué en cas d'hémophilie ou d'ulcère évolutif.",
   },
   {
-    keywords: ['urgence', 'urgences', 'samu', 'appel', 'secours'],
-    response: "🚨 **Numéros d'urgence Tunisie :**\n\n• **SAMU** : 190\n• **Police** : 197\n• **Pompiers** : 198\n• **Urgences médicales** : 71 578 000\n\nEn cas d'urgence vitale, composez le 190 immédiatement.",
+    keywords: ['solupred', 'prednisolone', 'cortancyl', 'corticoide', 'corticoïde', 'corticoides'],
+    response: "💊 **Solupred / Prednisolone (Corticoïde par voie orale)** :\n\n• **Classe :** Anti-inflammatoire stéroïdien puissant.\n• **Indications :** Traitement des affections inflammatoires sévères (crises d'asthme, réactions allergiques aiguës, sinusites aiguës sévères, poussées articulaires).\n• **Conseils de prise :** À prendre le matin au petit-déjeuner pour respecter le rythme hormonal naturel et limiter les troubles du sommeil.",
   },
   {
-    keywords: ['merci', 'thanks', 'parfait', 'super', 'excellent', 'bravo'],
-    response: "Avec plaisir ! 😊 Je suis là pour vous aider à tout moment. N'hésitez pas à me poser d'autres questions.",
+    keywords: ['ventoline', 'salbutamol', 'asthme', 'bronchodilatateur'],
+    response: "🫁 **Ventoline (Salbutamol)** :\n\n• **Classe :** Bronchodilatateur bêta-2 mimétique d'action rapide.\n• **Indications :** Traitement d'urgence des crises d'asthme et des épisodes de gêne respiratoire obstructive.\n• **Utilisation :** 1 à 2 bouffées par inhalation. En cas de crise sévère ne cédant pas sous 10 minutes, renouveler et appeler le SAMU (190).",
   },
   {
-    keywords: ['aide', 'help', 'que peux-tu', 'fonctionnalité', 'quoi faire'],
-    response: "Je peux vous aider avec :\n\n🩺 **Médical**\n• Informations sur les symptômes et traitements\n• Numéros d'urgence\n• Protocoles de soins\n\n📋 **Administratif**\n• Rédaction de comptes-rendus\n• Modèles de documents\n• Organisation du planning\n\n💬 **Général**\n• Répondre à vos questions\n• Fournir des conseils pratiques\n\nTapez votre question !",
+    keywords: ['medicament', 'médicament', 'traitement', 'ordonnance', 'posologie', 'dose'],
+    response: "💊 **Guide Général des Médicaments Courants :**\n\n• **Anti-douleur / Fièvre :** Paracétamol (Doliprane) en 1ère intention (500mg-1g, max 3-4g/j).\n• **Anti-inflammatoire :** Ibuprofène (200-400mg au cours des repas).\n• **Antispasmodique :** Spasfon (2 cp par prise si douleurs abdominales).\n• **Antibiotiques / Corticoïdes :** Strictement sur prescription médicale.\n\n*N'hésitez pas à me demander des précisions sur un médicament spécifique (ex: Doliprane, Spasfon, Ibuprofène).* 🩺",
+  },
+
+  // ─── Médecine du Travail & Visites ───
+  {
+    keywords: ['compte-rendu', 'compte rendu', 'rapport', 'résumé', 'résumer', 'fiche', 'aptitude', 'inaptitude'],
+    response: "Voici la structure standard d'une **Fiche d'Aptitude / Compte-rendu Médical du Travail** :\n\n**Fiche Médicale d'Aptitude**\n🏢 **Entreprise** : [Nom de l'entreprise conventionnée]\n👤 **Salarié** : [Nom & Prénom] — Poste : [Intitulé du poste]\n🩺 **Médecin examinateur** : [Dr. Nom]\n📅 **Date** : [Date du jour]\n\n**Type d'examen :**\n[ ] Visite d'embauche  [ ] Visite périodique  [ ] Visite de reprise  [ ] Visite spontanée\n\n**Examens complémentaires réalisés :**\n• Visiotest / Acuité visuelle : Normal\n• Audiométrie : Normal\n• ECG de repos : Sans anomalie\n• Bandelette urinaire : Négative\n\n**Conclusion Médicale :**\n✅ **APTE** au poste de travail sans restriction\n*(ou Apte avec aménagements / Inapte temporaire)*",
+  },
+  {
+    keywords: ['visite', 'embauche', 'périodique', 'reprise', 'spontanée'],
+    response: "📋 **Protocole des Visites Médicales du Travail** :\n\n1. **Visite d'embauche** : Obligatoire avant l'embauche ou avant la fin de la période d'essai pour vérifier l'adéquation au poste.\n2. **Visite périodique** : Surveillance annuelle ou biennale selon les risques professionnels (bruit, produits chimiques, travail de nuit).\n3. **Visite de reprise** : Après un arrêt de travail pour accident du travail ou maladie > 21 jours.\n4. **Visite occasionnelle / spontanée** : À la demande du salarié ou de l'employeur.",
+  },
+  {
+    keywords: ['entreprise', 'convention', 'conventionné', 'conventionnée', 'société', 'adhérent', 'contrat'],
+    response: "🏢 **Gestion des Entreprises Conventionnées** :\n\n• **Suivi des effectifs** : Planification des visites périodiques annuelles par groupe d'employés.\n• **Fiche d'entreprise** : Évaluation des risques professionnels et des postes à risque.\n• **Interventions sur site** : Déplacement de l'équipe médicale ou de l'unité mobile Clino sur les locaux de l'entreprise.\n• **Rapports annuels** : Synthèse d'activité remise à la direction de l'entreprise partenaire.",
+  },
+  {
+    keywords: ['clino', 'camion', 'mobile', 'tournée', 'chauffeur'],
+    response: "🚗 **Unité Médicale Clino Mobile** :\n\nL'unité mobile est équipée pour réaliser les examens sur site d'entreprise :\n• 👁️ **Visiotest** (acuité, champ visuel, vision des couleurs)\n• 👂 **Audiométrie en cabine insonorisée** (dépistage de surdité professionnelle)\n• ❤️ **Électrocardiogramme (ECG)**\n• 🫁 **Spirométrie / EFR** (capacité respiratoire)\n\n*Pensez à vérifier l'alimentation électrique et la stabilité du véhicule avant le début des consultations.*",
+  },
+  {
+    keywords: ['ecg', 'visiotest', 'audiométrie', 'spirométrie', 'examen', 'audiometrie', 'radio'],
+    response: "🩺 **Examens Complémentaires en Santé au Travail** :\n\n• **ECG** : Recommandé pour les postes de sécurité, chauffeurs, travaux en hauteur et surveillance cardiovasculaire.\n• **Audiogramme** : Indispensable pour exposition au bruit > 85 dB(A).\n• **Visiotest** : Contrôle vision de près/loin, phories et stéréoscopie (travail sur écran, conduite d'engins).\n• **Spirométrie** : Suivi des salariés exposés aux poussières, solvants, fumées.",
+  },
+  {
+    keywords: ['planning', 'planification', 'agenda', 'rendez-vous', 'rdv', 'horaire', 'retard'],
+    response: "📅 **Organisation Optimale du Planning Médical** :\n\n• **Durée standard** : 15 à 20 min par consultation de médecine du travail.\n• **Regroupement** : Programmer les visites d'une même entreprise sur des demi-journées dédiées pour limiter les temps d'attente.\n• **Tampon** : Prévoir 30 minutes de battement en milieu de matinée pour les urgences ou retards.\n• **Rappels** : Confirmer la liste des salariés 48h à l'avance avec le DRH de l'entreprise.",
+  },
+
+  // ─── Symptômes & Urgences ───
+  {
+    keywords: ['symptôme', 'symptomes', 'douleur', 'fièvre', 'toux', 'mal de tete', 'céphalée', 'tension', 'fatigue', 'malaise'],
+    response: "⚠️ **Rappel Déontologique :** Informations à titre indicatif, ne remplace pas un examen clinique approfondi.\n\n🔍 **Signes d'alerte en milieu professionnel :**\n• **Douleur thoracique constrictive** → Risque coronarien aigu → SAMU 190\n• **Déficit neurologique brutal (AVC)** → FAST (Visage, Bras, Parole) → Urgence absolue 190\n• **Céphalée aiguë + HTA sévère** → Repos immédiat, prise de tension\n• **Malaise vagal / Hypoglycémie** → Allonger jambes surélevées, resucrage si conscient",
+  },
+  {
+    keywords: ['urgence', 'urgences', 'samu', 'secours', '190', 'police', 'pompier', '198', '197', 'blessure', 'accident'],
+    response: "🚨 **Numéros d'Urgence & Secours (Tunisie)** :\n\n• 🚑 **SAMU** : **190**\n• 🚒 **Protection Civile / Pompiers** : **198**\n• 🚓 **Police Secours** : **197**\n• 🏥 **Centre Anti-Poisons** : **71 335 500**\n• 🏥 **Urgences Ariana** : **71 715 000**\n\n**Protocole immédiat en cas d'accident sur site :**\n1. Protéger la victime et les témoins (supprimer le danger)\n2. Alerter le SAMU (190) en précisant la localisation exacte et l'état de conscience\n3. Secourir selon gestes de premiers secours (PLS si inconscient qui respire).",
+  },
+  {
+    keywords: ['merci', 'thanks', 'parfait', 'super', 'excellent', 'bravo', 'top'],
+    response: "Je vous en prie ! 😊 Toujours à votre disposition pour vous assister dans vos missions médicales et administratives. N'hésitez pas !",
+  },
+  {
+    keywords: ['aide', 'help', 'que peux-tu', 'fonctionnalité', 'commandes', 'menu', 'quoi faire'],
+    response: "🤖 **Guide de l'Assistant IA Médical :**\n\nVous pouvez me demander n'importe quand :\n\n• 💊 *« C'est quoi Doliprane ? »* ou *« Posologie Ibuprofène »*\n• 📋 *« Modèle de Fiche d'aptitude »* ou *« Compte-rendu »*\n• 🩺 *« Visite d'embauche »* ou *« Visite de reprise »*\n• 🏢 *« Entreprises conventionnées »*\n• 🚗 *« Clino Mobile et examens »* (ECG, audio, visiotest)\n• 🚨 *« Urgences et numéros SAMU »*\n• 📅 *« Optimisation planning »*\n\n💡 *Astuce : Vous pouvez aussi taper `@ia votre question` dans la zone de texte à tout moment !*",
   },
 ];
 
+function normalizeStr(str) {
+  return (str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function getAIResponse(question) {
-  const q = question.toLowerCase();
+  const normQ = normalizeStr(question);
+  
+  // 1. Direct match in keyword database
   for (const entry of AI_RESPONSES) {
-    if (entry.keywords.some(k => q.includes(k))) return entry.response;
+    if (entry.keywords.some(k => {
+      const normK = normalizeStr(k);
+      return normQ.includes(normK) || (normK.length >= 4 && normQ.replace(/([a-z])\1+/g, '$1').includes(normK.replace(/([a-z])\1+/g, '$1')));
+    })) {
+      return entry.response;
+    }
   }
-  return `Je comprends votre question : "${question}"\n\nEn tant qu'assistant médical, je peux vous aider avec les interventions, plannings, comptes-rendus et informations médicales générales.\n\n💡 Essayez de me demander : un compte-rendu, des infos sur un symptôme, le planning, ou tapez "aide" pour voir toutes mes fonctionnalités.`;
+
+  // 2. Intelligent dynamic fallback for questions about medications or symptoms
+  if (normQ.includes('c est quoi') || normQ.includes('qu est ce que') || normQ.includes('a quoi sert') || normQ.includes('comment prendre') || normQ.includes('definition')) {
+    const subject = question.replace(/(c'est quoi|qu'est-ce que|a quoi sert|comment prendre|définition de|definition de|parle moi de)\s*/gi, '').trim();
+    return `ℹ️ **Information Médicale sur : ${subject || question}**\n\n• **Conseil :** Pour toute utilisation de médicament ou analyse d'un symptôme (${subject || 'terme recherché'}), veillez à vérifier la posologie adaptée auprès du médecin du travail ou de votre pharmacien.\n• **Règle générale :** Ne dépassez jamais les doses prescrites et signalez toute allergie ou antécédent médical.\n\n💡 Pour voir les fiches complètes déjà disponibles, demandez-moi : *Doliprane*, *Ibuprofène*, *Spasfon*, *Amoxicilline*, *Fiche d'aptitude*, *Clino Mobile*, ou tapez **"aide"**.`;
+  }
+
+  return `Je comprends votre question : "${question}"\n\nEn tant qu'assistant IA médical de **GMT Ariana**, je suis spécialisé en médecine du travail, pharmacologie courante (Doliprane, Ibuprofène, etc.), examens cliniques et protocoles d'entreprises conventionnées.\n\n💡 Essayez de me demander : *C'est quoi Doliprane ?*, *un modèle de compte-rendu*, *des informations sur une visite d'embauche*, ou tapez **"aide"** pour voir toutes mes capacités.`;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -246,26 +349,29 @@ export default function Chat({ toast }) {
     e?.preventDefault();
     if (!text.trim()) return;
 
-    if (aiMode) {
+    const raw = text.trim();
+    const isAiTrigger = aiMode || /^(@ia|@ai|\/ia|\/ai|\/assistant)\b/i.test(raw);
+
+    if (isAiTrigger) {
+      const cleanQuestion = raw.replace(/^(@ia|@ai|\/ia|\/ai|\/assistant)\s*/i, '') || raw;
       // Message user dans le chat local
       const userMsg = {
         id: `local-${Date.now()}`,
         user_id: user?.id,
         nom: `${user?.prenom} ${user?.nom}`,
         role: user?.role,
-        content: text.trim(),
+        content: cleanQuestion,
         type: 'text',
         created_at: new Date().toISOString(),
         isLocal: true,
       };
       setMessages(p => [...p, userMsg]);
-      const question = text.trim();
       setText('');
       setAiLoading(true);
 
       // Simuler un délai de réflexion IA
       setTimeout(() => {
-        const answer = getAIResponse(question);
+        const answer = getAIResponse(cleanQuestion);
         const aiMsg = {
           id: `ai-${Date.now()}`,
           user_id: 'ai',
@@ -278,14 +384,14 @@ export default function Chat({ toast }) {
         };
         setMessages(p => [...p, aiMsg]);
         setAiLoading(false);
-      }, 800 + Math.random() * 600);
+      }, 400);
       return;
     }
 
     // Message normal
     const payload = replyTo
-      ? { content: text.trim(), replyTo: { id: replyTo.id, nom: replyTo.nom, content: replyTo.content } }
-      : { content: text.trim() };
+      ? { content: raw, replyTo: { id: replyTo.id, nom: replyTo.nom, content: replyTo.content } }
+      : { content: raw };
 
     emit('send_message', payload);
     emit('typing', false);
@@ -442,12 +548,34 @@ export default function Chat({ toast }) {
 
   function handleDelete(id) { emit('delete_message', id); }
 
-  /* ── Réaction emoji ── */
-  function addReaction(msgId, emoji) {
+  /* ── Réaction emoji (Ajout / Retrait toggle) ── */
+  function toggleReaction(msgId, emoji) {
     setReactions(prev => {
-      const msgR = prev[msgId] || {};
-      const count = msgR[emoji] || 0;
-      return { ...prev, [msgId]: { ...msgR, [emoji]: count + 1 } };
+      const msgR = { ...(prev[msgId] || {}) };
+      const currentCount = typeof msgR[emoji] === 'number' ? msgR[emoji] : 0;
+      const isMine = msgR[`_me_${emoji}`] === true;
+
+      if (isMine) {
+        // Retirer ma réaction
+        const newCount = currentCount - 1;
+        if (newCount <= 0) {
+          delete msgR[emoji];
+        } else {
+          msgR[emoji] = newCount;
+        }
+        delete msgR[`_me_${emoji}`];
+      } else {
+        // Ajouter ma réaction
+        msgR[emoji] = currentCount + 1;
+        msgR[`_me_${emoji}`] = true;
+      }
+
+      if (Object.keys(msgR).length === 0) {
+        const copy = { ...prev };
+        delete copy[msgId];
+        return copy;
+      }
+      return { ...prev, [msgId]: msgR };
     });
     setEmojiPickerFor(null);
   }
@@ -566,7 +694,8 @@ export default function Chat({ toast }) {
             const mine       = isMine(msg);
             const color      = msg.isAI ? '#6366f1' : roleColor(msg.role);
             const prevMsg    = i > 0 ? filteredMessages[i - 1] : null;
-            const showHeader = !prevMsg || prevMsg.user_id !== msg.user_id;
+            const isNewDay   = !prevMsg || isDifferentDay(msg.created_at, prevMsg.created_at);
+            const showHeader = isNewDay || !prevMsg || prevMsg.user_id !== msg.user_id;
             const isFile     = msg.type === 'file';
             const isLocation = msg.type === 'location' || (typeof msg.content === 'string' && msg.content.includes('"type":"location"'));
             const msgRx      = reactions[msg.id] || {};
@@ -583,139 +712,197 @@ export default function Chat({ toast }) {
             const highlight = searchQuery && msg.content?.toLowerCase().includes(searchQuery.toLowerCase());
 
             return (
-              <div key={msg.id}
-                style={{ display: 'flex', flexDirection: mine ? 'row-reverse' : 'row', gap: 8, alignItems: 'flex-end', marginBottom: hasRx ? 20 : 4, position: 'relative', outline: highlight ? '2px solid #fbbf24' : 'none', borderRadius: 12, padding: highlight ? '2px 4px' : 0 }}
-                onMouseEnter={() => setHoveredMsg(msg.id)}
-                onMouseLeave={() => { setHoveredMsg(null); setEmojiPickerFor(null); }}
-              >
-                {/* Avatar */}
-                {!mine && showHeader && (
-                  <div style={{ width: 30, height: 30, borderRadius: '50%', background: color + '22', color, fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {msg.isAI ? '🤖' : getInitials(msg.nom)}
+              <React.Fragment key={msg.id}>
+                {/* Séparateur de date */}
+                {isNewDay && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '16px 0 10px',
+                    position: 'relative',
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      left: '8%',
+                      right: '8%',
+                      height: 1,
+                      background: 'var(--border)',
+                      opacity: 0.7,
+                    }} />
+                    <span style={{
+                      position: 'relative',
+                      background: 'var(--surface2)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text-2)',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: '3px 12px',
+                      borderRadius: 16,
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                      textTransform: 'capitalize',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                    }}>
+                      📅 {formatMessageDate(msg.created_at)}
+                    </span>
                   </div>
                 )}
-                {!mine && !showHeader && <div style={{ width: 30, flexShrink: 0 }} />}
 
-                <div style={{ maxWidth: '68%', display: 'flex', flexDirection: 'column', gap: 2, alignItems: mine ? 'flex-end' : 'flex-start' }}>
-                  {/* Nom */}
-                  {showHeader && (
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color }}>
-                        {msg.isAI ? '🤖 Assistant IA' : (mine ? 'Vous' : msg.nom)}
-                      </span>
-                      {!msg.isAI && (
-                        <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 10, fontWeight: 700, background: color + '22', color }}>
-                          {roleBadge(msg.role)}
-                        </span>
-                      )}
-                      {msg.isAI && (
-                        <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 10, fontWeight: 700, background: '#6366f122', color: '#6366f1' }}>
-                          IA
-                        </span>
-                      )}
+                <div
+                  style={{ display: 'flex', flexDirection: mine ? 'row-reverse' : 'row', gap: 8, alignItems: 'flex-end', marginBottom: hasRx ? 20 : 4, position: 'relative', outline: highlight ? '2px solid #fbbf24' : 'none', borderRadius: 12, padding: highlight ? '2px 4px' : 0 }}
+                  onMouseEnter={() => setHoveredMsg(msg.id)}
+                  onMouseLeave={() => { setHoveredMsg(null); setEmojiPickerFor(null); }}
+                >
+                  {/* Avatar */}
+                  {!mine && showHeader && (
+                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: color + '22', color, fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {msg.isAI ? '🤖' : getInitials(msg.nom)}
                     </div>
                   )}
+                  {!mine && !showHeader && <div style={{ width: 30, flexShrink: 0 }} />}
 
-                  <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', flexDirection: mine ? 'row-reverse' : 'row' }}>
-                    {/* Bulle */}
-                    <div style={{
-                      padding: (isFile || isLocation) ? '6px 8px' : '9px 13px',
-                      borderRadius: mine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                      background: msg.isAI
-                        ? 'linear-gradient(135deg,#6366f115,#8b5cf615)'
-                        : mine ? 'var(--primary)' : 'var(--surface)',
-                      color: mine && !msg.isAI ? '#fff' : 'var(--text)',
-                      border: msg.isAI ? '1px solid #6366f130' : mine ? 'none' : '1px solid var(--border)',
-                      fontSize: 14, lineHeight: 1.5, boxShadow: 'var(--shadow)', maxWidth: 340,
-                    }}>
-                      {/* Citation (reply) */}
-                      {replyData && (
-                        <div style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, marginBottom: 6, background: mine ? 'rgba(255,255,255,.2)' : 'var(--surface2)', borderLeft: '3px solid ' + (mine ? 'rgba(255,255,255,.5)' : 'var(--primary)'), color: mine ? 'rgba(255,255,255,.8)' : 'var(--text-2)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          ↩ <strong>{replyData.nom}</strong> : {replyData.content?.slice(0, 60)}
-                        </div>
-                      )}
-
-                      {/* Contenu */}
-                      {isFile ? (
-                        <FileMessage content={msg.content} isMine={mine} />
-                      ) : isLocation ? (
-                        <LocationMessage content={msg.content} isMine={mine} />
-                      ) : msg.isAI ? (
-                        <MarkdownText text={msg.content} />
-                      ) : (replyData ? (
-                        (() => {
-                          try {
-                            const p = JSON.parse(msg.content);
-                            return p.text || msg.content;
-                          } catch { return msg.content; }
-                        })()
-                      ) : msg.content)}
-                    </div>
-
-                    {/* Actions contextuelles au hover */}
-                    {hoveredMsg === msg.id && (
-                      <div style={{ display: 'flex', flexDirection: mine ? 'row' : 'row-reverse', gap: 2, alignItems: 'center', opacity: 1, transition: 'opacity .15s' }}>
-                        {/* Emoji picker trigger */}
-                        <button type="button" title="Réagir"
-                          onClick={() => setEmojiPickerFor(p => p === msg.id ? null : msg.id)}
-                          style={actionBtnStyle}>😀</button>
-                        {/* Reply */}
+                  <div style={{ maxWidth: '68%', display: 'flex', flexDirection: 'column', gap: 2, alignItems: mine ? 'flex-end' : 'flex-start' }}>
+                    {/* Nom */}
+                    {showHeader && (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color }}>
+                          {msg.isAI ? '🤖 Assistant IA' : (mine ? 'Vous' : msg.nom)}
+                        </span>
                         {!msg.isAI && (
-                          <button type="button" title="Répondre"
-                            onClick={() => { setReplyTo({ id: msg.id, nom: msg.nom || 'Vous', content: msg.content }); inputRef.current?.focus(); }}
-                            style={actionBtnStyle}>↩</button>
+                          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 10, fontWeight: 700, background: color + '22', color }}>
+                            {roleBadge(msg.role)}
+                          </span>
                         )}
-                        {/* Copy */}
-                        <button type="button" title="Copier"
-                          onClick={() => copyMessage(msg.content)}
-                          style={actionBtnStyle}>📋</button>
-                        {/* Pin (admin only) */}
-                        {isAdmin && !msg.isAI && (
-                          <button type="button" title={pinnedMsg?.id === msg.id ? 'Désépingler' : 'Épingler'}
-                            onClick={() => pinMessage(msg)}
-                            style={{ ...actionBtnStyle, color: pinnedMsg?.id === msg.id ? '#f59e0b' : undefined }}>📌</button>
-                        )}
-                        {/* Delete */}
-                        {(mine || isAdmin) && !msg.isAI && (
-                          <button type="button" title="Supprimer"
-                            onClick={() => handleDelete(msg.id)}
-                            style={{ ...actionBtnStyle, color: 'var(--danger)' }}>✕</button>
+                        {msg.isAI && (
+                          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 10, fontWeight: 700, background: '#6366f122', color: '#6366f1' }}>
+                            IA
+                          </span>
                         )}
                       </div>
                     )}
-                  </div>
 
-                  {/* Emoji Picker */}
-                  {emojiPickerFor === msg.id && (
-                    <div style={{ display: 'flex', gap: 4, padding: '6px 8px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, boxShadow: '0 4px 16px rgba(0,0,0,.15)', zIndex: 100 }}>
-                      {QUICK_EMOJIS.map(em => (
-                        <button key={em} type="button" onClick={() => addReaction(msg.id, em)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, padding: '2px 3px', borderRadius: 6, transition: 'transform .1s' }}
-                          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.3)'}
-                          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                        >{em}</button>
-                      ))}
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', flexDirection: mine ? 'row-reverse' : 'row' }}>
+                      {/* Bulle */}
+                      <div style={{
+                        padding: (isFile || isLocation) ? '6px 8px' : '9px 13px',
+                        borderRadius: mine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                        background: msg.isAI
+                          ? 'linear-gradient(135deg,#6366f115,#8b5cf615)'
+                          : mine ? 'var(--primary)' : 'var(--surface)',
+                        color: mine && !msg.isAI ? '#fff' : 'var(--text)',
+                        border: msg.isAI ? '1px solid #6366f130' : mine ? 'none' : '1px solid var(--border)',
+                        fontSize: 14, lineHeight: 1.5, boxShadow: 'var(--shadow)', maxWidth: 340,
+                      }}>
+                        {/* Citation (reply) */}
+                        {replyData && (
+                          <div style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, marginBottom: 6, background: mine ? 'rgba(255,255,255,.2)' : 'var(--surface2)', borderLeft: '3px solid ' + (mine ? 'rgba(255,255,255,.5)' : 'var(--primary)'), color: mine ? 'rgba(255,255,255,.8)' : 'var(--text-2)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            ↩ <strong>{replyData.nom}</strong> : {replyData.content?.slice(0, 60)}
+                          </div>
+                        )}
+
+                        {/* Contenu */}
+                        {isFile ? (
+                          <FileMessage content={msg.content} isMine={mine} />
+                        ) : isLocation ? (
+                          <LocationMessage content={msg.content} isMine={mine} />
+                        ) : msg.isAI ? (
+                          <MarkdownText text={msg.content} />
+                        ) : (replyData ? (
+                          (() => {
+                            try {
+                              const p = JSON.parse(msg.content);
+                              return p.text || msg.content;
+                            } catch { return msg.content; }
+                          })()
+                        ) : msg.content)}
+                      </div>
+
+                      {/* Actions contextuelles au hover */}
+                      {hoveredMsg === msg.id && (
+                        <div style={{ display: 'flex', flexDirection: mine ? 'row' : 'row-reverse', gap: 2, alignItems: 'center', opacity: 1, transition: 'opacity .15s' }}>
+                          {/* Emoji picker trigger */}
+                          <button type="button" title="Réagir"
+                            onClick={() => setEmojiPickerFor(p => p === msg.id ? null : msg.id)}
+                            style={actionBtnStyle}>😀</button>
+                          {/* Reply */}
+                          {!msg.isAI && (
+                            <button type="button" title="Répondre"
+                              onClick={() => { setReplyTo({ id: msg.id, nom: msg.nom || 'Vous', content: msg.content }); inputRef.current?.focus(); }}
+                              style={actionBtnStyle}>↩</button>
+                          )}
+                          {/* Copy */}
+                          <button type="button" title="Copier"
+                            onClick={() => copyMessage(msg.content)}
+                            style={actionBtnStyle}>📋</button>
+                          {/* Pin (admin only) */}
+                          {isAdmin && !msg.isAI && (
+                            <button type="button" title={pinnedMsg?.id === msg.id ? 'Désépingler' : 'Épingler'}
+                              onClick={() => pinMessage(msg)}
+                              style={{ ...actionBtnStyle, color: pinnedMsg?.id === msg.id ? '#f59e0b' : undefined }}>📌</button>
+                          )}
+                          {/* Delete */}
+                          {(mine || isAdmin) && !msg.isAI && (
+                            <button type="button" title="Supprimer"
+                              onClick={() => handleDelete(msg.id)}
+                              style={{ ...actionBtnStyle, color: 'var(--danger)' }}>✕</button>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
 
-                  {/* Réactions affichées */}
-                  {hasRx && (
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
-                      {Object.entries(msgRx).map(([em, cnt]) => (
-                        <span key={em} onClick={() => addReaction(msg.id, em)}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 12, padding: '2px 7px', borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--border)', cursor: 'pointer', userSelect: 'none' }}>
-                          {em} <span style={{ fontWeight: 700, fontSize: 11 }}>{cnt}</span>
-                        </span>
-                      ))}
+                    {/* Emoji Picker */}
+                    {emojiPickerFor === msg.id && (
+                      <div style={{ display: 'flex', gap: 4, padding: '6px 8px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, boxShadow: '0 4px 16px rgba(0,0,0,.15)', zIndex: 100 }}>
+                        {QUICK_EMOJIS.map(em => (
+                          <button key={em} type="button" onClick={() => toggleReaction(msg.id, em)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, padding: '2px 3px', borderRadius: 6, transition: 'transform .1s' }}
+                            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.3)'}
+                            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                          >{em}</button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Réactions affichées */}
+                    {hasRx && (
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
+                        {Object.entries(msgRx)
+                          .filter(([k]) => !k.startsWith('_'))
+                          .map(([em, cnt]) => {
+                            if (!cnt || cnt <= 0) return null;
+                            const isMineReaction = msgRx[`_me_${em}`] === true;
+                            return (
+                              <span
+                                key={em}
+                                onClick={() => toggleReaction(msg.id, em)}
+                                title={isMineReaction ? "Cliquer pour retirer votre réaction" : "Cliquer pour réagir"}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 12,
+                                  padding: '2px 7px', borderRadius: 12,
+                                  background: isMineReaction ? '#e0f2fe' : 'var(--surface)',
+                                  border: isMineReaction ? '1px solid #0ea5e9' : '1px solid var(--border)',
+                                  cursor: 'pointer', userSelect: 'none', transition: 'all .15s ease'
+                                }}
+                              >
+                                {em} <span style={{ fontWeight: 700, fontSize: 11, color: isMineReaction ? '#0284c7' : 'inherit' }}>{cnt}</span>
+                              </span>
+                            );
+                          })}
+                      </div>
+                    )}
+
+                    {/* Heure avec infobulle date complète */}
+                    <div
+                      style={{ fontSize: 10, color: 'var(--text-3)', cursor: 'default' }}
+                      title={format(new Date(msg.created_at), 'EEEE d MMMM yyyy à HH:mm', { locale: fr })}
+                    >
+                      {format(new Date(msg.created_at), 'HH:mm', { locale: fr })}
                     </div>
-                  )}
-
-                  {/* Heure */}
-                  <div style={{ fontSize: 10, color: 'var(--text-3)' }}>
-                    {format(new Date(msg.created_at), 'HH:mm', { locale: fr })}
                   </div>
                 </div>
-              </div>
+              </React.Fragment>
             );
           })}
 

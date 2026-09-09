@@ -91,4 +91,28 @@ describe('Chat page', () => {
     await userEvent.click(screen.getByRole('button', { name: /envoyer/i }));
     expect(input.value).toBe('');
   });
+
+  it('triggers AI response when typing @ia prefix', async () => {
+    axios.get.mockResolvedValueOnce({ data: [] });
+    renderWithProviders(<Chat toast={mockToast} />);
+    await waitFor(() => screen.getByPlaceholderText(/votre message/i));
+    const input = screen.getByPlaceholderText(/votre message/i);
+    await userEvent.type(input, '@ia bonjour');
+    await userEvent.click(screen.getByRole('button', { name: /envoyer/i }));
+    await waitFor(() => expect(screen.getByText(/assistant IA médical/i)).toBeInTheDocument(), { timeout: 3000 });
+  });
+
+  it('renders date separators between messages from different days', async () => {
+    const MESSAGES_WITH_DATES = [
+      { id:1, user_id:1, nom:'Admin', role:'administrateur', content:'Hier msg', created_at:'2026-05-16T10:00:00' },
+      { id:2, user_id:2, nom:'Doc',   role:'medecin',        content:'Aujourd msg', created_at:'2026-05-17T10:00:00' },
+    ];
+    axios.get.mockResolvedValueOnce({ data: MESSAGES_WITH_DATES });
+    renderWithProviders(<Chat toast={mockToast} />);
+    await waitFor(() => {
+      expect(screen.getByText('Hier msg')).toBeInTheDocument();
+      expect(screen.getByText('Aujourd msg')).toBeInTheDocument();
+      expect(screen.getAllByText(/📅/).length).toBeGreaterThanOrEqual(1);
+    });
+  });
 });
