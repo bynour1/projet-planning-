@@ -59,30 +59,39 @@ function playChime(type = 'message') {
   }
 }
 
-// Safe System/PWA Notification helper (prevents Chrome mobile freeze)
+// Safe System/PWA Notification helper (prevents hanging on serviceWorker.ready)
 export function sendSystemNotification(title, body) {
   if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') return;
+
   try {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then((reg) => {
-        reg.showNotification(title, {
-          body,
-          icon: '/logo-gmt.png',
-          badge: '/icon-192.png',
-          vibrate: [150, 75, 150],
-          tag: 'gmt-notif-' + Date.now(),
-          renotify: true,
-        });
-      }).catch(() => {
-        if ('Notification' in window) {
-          new Notification(title, { body, icon: '/logo-gmt.png' });
+    // 1. Try modern Service Worker notification if controller is active (PWA installed)
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (reg && 'showNotification' in reg) {
+          reg.showNotification(title, {
+            body,
+            icon: '/logo-gmt.png',
+            badge: '/icon-192.png',
+            vibrate: [150, 75, 150],
+            tag: 'gmt-notif-' + Date.now(),
+            renotify: true,
+          });
+          return;
         }
+        new Notification(title, { body, icon: '/logo-gmt.png' });
+      }).catch(() => {
+        new Notification(title, { body, icon: '/logo-gmt.png' });
       });
-    } else if ('Notification' in window) {
-      new Notification(title, { body, icon: '/logo-gmt.png' });
+    } else {
+      // 2. Direct browser Web Notification (instant on Desktop Chrome, Firefox, Edge, Safari)
+      new Notification(title, {
+        body,
+        icon: '/logo-gmt.png',
+        badge: '/icon-192.png',
+      });
     }
   } catch {
-    // Ignore notification errors on restricted mobile browsers
+    // Ignore restricted mobile browser errors
   }
 }
 
@@ -149,12 +158,14 @@ export function SocketProvider({ children }) {
       const isChatOpen = window.location.pathname === '/chat';
       const textContent = typeof msg.content === 'string' ? msg.content.slice(0, 80) : 'Document / Pièce jointe';
 
+      // Carillon sonore systématique
+      playChime('message');
+
       // Notification Système / OS (Bannière mobile & bureau)
       sendSystemNotification(`💬 ${msg.nom}`, textContent);
 
       // Notification dans l'application (si l'utilisateur n'est pas déjà sur /chat)
       if (!isChatOpen) {
-        playChime('message');
         const textPreview = typeof msg.content === 'string' ? msg.content.slice(0, 60) : 'Document partagé';
         toast(`💬 ${msg.nom} : "${textPreview}"`, 'info', 5000, {
           actionLabel: 'Répondre',
