@@ -78,7 +78,7 @@ export default function Dashboard({ toast }) {
   const { on }   = useSocket();
   const navigate = useNavigate();
 
-  const [stats, setStats] = useState({ users: 0, events: 0, planning: 0, clino: 0 });
+  const [stats, setStats] = useState({ users: 0, events: 0, planning: 0, clino: 0, entreprises: 0 });
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [todayEvents, setTodayEvents] = useState([]);
   const [myPlanning, setMyPlanning] = useState([]);
@@ -89,7 +89,7 @@ export default function Dashboard({ toast }) {
 
   const load = useCallback(async () => {
     try {
-      const [usersRes, eventsRes, planningRes, clinoRes, myRes, monthlyRes, medecinRes, todayRes] = await Promise.all([
+      const [usersRes, eventsRes, planningRes, clinoRes, myRes, monthlyRes, medecinRes, todayRes, entreprisesRes] = await Promise.all([
         user?.role === 'administrateur' ? axios.get('/api/users') : Promise.resolve({ data: [] }),
         axios.get('/api/events'),
         axios.get('/api/planning'),
@@ -98,15 +98,20 @@ export default function Dashboard({ toast }) {
         axios.get('/api/stats/monthly').catch(() => ({ data: [] })),
         user?.role === 'administrateur' ? axios.get('/api/stats/by-medecin').catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
         axios.get('/api/planning/today').catch(() => ({ data: [] })),
+        axios.get('/api/entreprises').catch(() => ({ data: [] })),
       ]);
 
       const todayStr = new Date().toISOString().split('T')[0];
+      const allEnt = entreprisesRes?.data || [];
+      const convEnt = allEnt.filter(e => e.convensionne === 1 || e.convensionne === true);
+      const entCount = convEnt.length > 0 ? convEnt.length : allEnt.length;
 
       setStats({
-        users:    usersRes?.data?.length || 0,
-        events:   eventsRes?.data?.length || 0,
-        planning: planningRes?.data?.length || 0,
-        clino:    clinoRes?.data?.length || 0,
+        users:       usersRes?.data?.length || 0,
+        events:      eventsRes?.data?.length || 0,
+        planning:    planningRes?.data?.length || 0,
+        clino:       clinoRes?.data?.length || 0,
+        entreprises: entCount,
       });
 
       setTodayEvents(todayRes?.data || []);
@@ -269,12 +274,12 @@ export default function Dashboard({ toast }) {
           />
         )}
         <StatCard
-          icon="📋"
-          label="Interventions"
-          value={stats.planning}
-          subtext="Total"
+          icon="🏢"
+          label="Interventions (Entreprises conventionnées)"
+          value={stats.entreprises}
+          subtext="Conventionnées"
           color="#10b981"
-          onClick={() => navigate('/planning')}
+          onClick={() => navigate('/entreprises')}
         />
         <StatCard
           icon="📅"
