@@ -371,9 +371,6 @@ router.post('/forgot-password', async (req, res) => {
 
     res.json({
       message: successMsg,
-      email: user.email,
-      token,
-      resetUrl: `/reset-password?token=${token}`,
     });
   } catch (err) {
     console.error('[forgot-password] Erreur:', err);

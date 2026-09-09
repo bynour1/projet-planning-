@@ -73,7 +73,7 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     const tempHash = await bcrypt.hash(tempPassword, 10);
 
     const [result] = await db.query(
-      'INSERT INTO users (nom, prenom, email, password, role, telephone, is_active, first_login) VALUES (?,?,?,?,?,?,0,1)',
+      'INSERT INTO users (nom, prenom, email, password, role, telephone, is_active, first_login) VALUES (?,?,?,?,?,?,1,1)',
       [nom, prenom, email, tempHash, role, telephone || null]
     );
 
@@ -94,11 +94,9 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     res.status(201).json({
       message: emailError
         ? `Compte créé mais l'e-mail n'a pas pu être envoyé à ${email} (${emailError}).`
-        : `Compte créé avec succès ! Un e-mail d'accès contenant les identifiants et le code de confirmation a été envoyé à ${email}.`,
+        : `Compte créé avec succès ! Les identifiants et le code ont été envoyés par e-mail à ${email}.`,
       userId: result.insertId,
       email,
-      tempPassword,
-      otp,
       otp_sent: !emailError,
       email_error: emailError || null,
     });
@@ -120,7 +118,7 @@ router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), as
     const tempHash = await bcrypt.hash(tempPassword, 10);
     const otp = generateOTP();
 
-    await db.query('UPDATE users SET password = ?, first_login = 1, is_active = 0 WHERE id = ?', [tempHash, user.id]);
+    await db.query('UPDATE users SET password = ?, first_login = 1, is_active = 1 WHERE id = ?', [tempHash, user.id]);
     await db.query('DELETE FROM codes WHERE email = ?', [user.email]);
     await db.query('INSERT INTO codes (email, code, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE))', [user.email, otp]);
 
@@ -142,10 +140,8 @@ router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), as
     res.json({
       message: emailError
         ? `Erreur lors de l'envoi de l'e-mail à ${user.email}.`
-        : `E-mail d'accès et code de confirmation renvoyés à ${user.email}.`,
+        : `E-mail d'accès contenant les identifiants renvoyé à ${user.email}.`,
       email: user.email,
-      tempPassword,
-      otp,
       email_error: emailError || null,
     });
   } catch (err) {
@@ -197,7 +193,7 @@ router.post('/resend-otp', authenticate, authorize('administrateur'), async (req
     const { sendOTP } = require('../config/mailer');
     await sendOTP(email, otp, user.nom, user.prenom, user.telephone);
 
-    res.json({ message: `Nouveau code de confirmation envoyé à ${email}.`, otp });
+    res.json({ message: `Nouveau code de confirmation envoyé à ${email}.` });
   } catch (err) {
     console.error('[resend-otp]', err);
     res.status(500).json({ message: 'Erreur serveur' });

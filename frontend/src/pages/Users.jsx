@@ -262,127 +262,6 @@ function UserModal({ user: editUser, onSave, onClose }) {
   );
 }
 
-function OtpVerifyModal({ otpData, onClose, onVerified, toast }) {
-  const email = typeof otpData === 'string' ? otpData : otpData?.email;
-  const [tempPass, setTempPass] = useState(typeof otpData === 'object' ? otpData?.tempPassword : null);
-  const [currentOtp, setCurrentOtp] = useState(typeof otpData === 'object' ? otpData?.otp : null);
-  const [code, setCode] = useState(typeof otpData === 'object' && otpData?.otp ? otpData.otp : '');
-  const [verifying, setVerifying] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [error, setError] = useState('');
-
-  async function handleVerify() {
-    if (!code || code.length < 6) { setError('Entrez le code à 6 chiffres'); return; }
-    setVerifying(true); setError('');
-    try {
-      const res = await axios.post('/api/users/verify-otp', { email, code });
-      toast(res.data?.message || 'Compte activé !', 'success');
-      onVerified();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Code invalide ou expiré');
-    } finally { setVerifying(false); }
-  }
-
-  async function handleResendOtp() {
-    setResending(true); setError('');
-    try {
-      const res = await axios.post('/api/users/resend-otp', { email });
-      if (res.data?.otp) {
-        setCurrentOtp(res.data.otp);
-        setCode(res.data.otp);
-      }
-      toast(res.data?.message || 'Nouveau code envoyé par e-mail', 'success');
-    } catch (err) {
-      setError(err.response?.data?.message || 'Erreur lors de l\'envoi');
-    } finally { setResending(false); }
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 460, padding: 0, overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-        <div style={{ background: 'linear-gradient(135deg,#e0f2fe,#f0fdf4)', borderBottom: '1px solid #bae6fd', padding: '20px 24px 16px', textAlign: 'center' }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>🔐</div>
-          <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--text-1)' }}>Activation & Identifiants du compte</h3>
-          <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '4px 0 0' }}>{email}</p>
-        </div>
-
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {tempPass && (
-            <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 10, padding: '12px 14px' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
-                🔑 Mot de passe provisoire d'accès :
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', padding: '6px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
-                <code style={{ fontSize: 15, fontWeight: 800, color: '#0284c7', letterSpacing: 1 }}>{tempPass}</code>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => {
-                    navigator.clipboard.writeText(tempPass);
-                    toast('Mot de passe copié !', 'info');
-                  }}
-                  style={{ fontSize: 11, padding: '3px 10px', height: 28 }}
-                >
-                  📋 Copier
-                </button>
-              </div>
-              <p style={{ fontSize: 11, color: '#64748b', margin: '6px 0 0', lineHeight: 1.4 }}>
-                Transmettez ce mot de passe temporaire à l'utilisateur s'il ne reçoit pas l'e-mail.
-              </p>
-            </div>
-          )}
-
-          <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, fontSize: 12, color: '#166534', lineHeight: 1.5 }}>
-            📧 Un e-mail d'activation a été envoyé. Saisissez ou validez le code à 6 chiffres ci-dessous pour activer le compte.
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>
-                Code de confirmation OTP
-              </label>
-              {currentOtp && (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => {
-                    navigator.clipboard.writeText(currentOtp);
-                    toast('Code OTP copié !', 'info');
-                  }}
-                  style={{ fontSize: 11, padding: '1px 6px', height: 22, color: '#0284c7' }}
-                >
-                  📋 Copier OTP ({currentOtp})
-                </button>
-              )}
-            </div>
-            <input
-              className="input"
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="• • • • • •"
-              value={code}
-              onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              onKeyDown={e => e.key === 'Enter' && handleVerify()}
-              style={{ height: 48, fontSize: 24, fontWeight: 800, letterSpacing: 10, textAlign: 'center' }}
-              autoFocus
-            />
-          </div>
-
-          {error && <div style={{ fontSize: 13, color: '#ef4444', textAlign: 'center', fontWeight: 600 }}>⚠️ {error}</div>}
-
-          <button className="btn btn-primary" onClick={handleVerify} disabled={verifying || code.length < 6} style={{ width: '100%', height: 42, fontSize: 14 }}>
-            {verifying ? <><span className="spinner" style={{ width: 15, height: 15 }}/> Vérification…</> : '✅ Activer le compte'}
-          </button>
-          <button className="btn btn-ghost" onClick={handleResendOtp} disabled={resending} style={{ width: '100%', fontSize: 12 }}>
-            {resending ? 'Envoi…' : '🔄 Renvoyer un nouveau code OTP'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function Users({ toast }) {
   const { user: me } = useAuth();
   const [users,   setUsers]   = useState([]);
@@ -391,7 +270,6 @@ export default function Users({ toast }) {
   const [search,  setSearch]  = useState('');
   const [loading, setLoading] = useState(true);
   const [filter,  setFilter]  = useState('all');
-  const [otpModal, setOtpModal] = useState(null); // { email, tempPassword, otp }
 
   async function load() {
     try { const { data } = await axios.get('/api/users'); setUsers(data); }
@@ -404,17 +282,14 @@ export default function Users({ toast }) {
   async function handleCreated(data) {
     setModal(null);
     await load();
-    toast(data?.message || 'Compte créé ! E-mail d\'accès envoyé.', 'success');
-    if (data?.email) {
-      setOtpModal({ email: data.email, tempPassword: data.tempPassword, otp: data.otp });
-    }
+    toast(data?.message || 'Compte créé avec succès ! Les identifiants ont été envoyés par e-mail.', 'success');
   }
 
   async function handleResendEmail(u) {
     try {
       const res = await axios.post(`/api/users/${u.id}/resend-welcome`);
       toast(res.data?.message || `E-mail d'accès renvoyé à ${u.email}`, 'success');
-      setOtpModal({ email: u.email, tempPassword: res.data?.tempPassword, otp: res.data?.otp });
+      await load();
     } catch (err) {
       toast(err.response?.data?.message || 'Erreur lors du renvoi', 'error');
     }
@@ -524,10 +399,6 @@ export default function Users({ toast }) {
                     <span className={`badge ${u.is_active ? 'badge-green' : 'badge-red'}`}>
                       {u.is_active ? '● Actif' : '○ Inactif'}
                     </span>
-                    {!u.is_active && (
-                      <button className="btn btn-ghost btn-sm" style={{ marginLeft: 4, fontSize: 11, color: '#0284c7', fontWeight: 700 }}
-                        onClick={() => setOtpModal({ email: u.email })}>🔐 Vérifier</button>
-                    )}
                   </td>
                   <td style={{ fontSize: 12, color: 'var(--text-2)' }}>
                     {new Date(u.created_at).toLocaleDateString('fr')}
@@ -557,9 +428,6 @@ export default function Users({ toast }) {
 
       {modal !== null && (
         <UserModal user={modal?.id ? modal : null} onSave={modal?.id ? () => { setModal(null); load(); toast('Mis à jour', 'success'); } : handleCreated} onClose={() => setModal(null)} />
-      )}
-      {otpModal && (
-        <OtpVerifyModal otpData={otpModal} toast={toast} onClose={() => setOtpModal(null)} onVerified={() => { setOtpModal(null); load(); }} />
       )}
       {confirm && (
         <ConfirmDialog title="Supprimer l'utilisateur ?" message="Cette action est irréversible." danger

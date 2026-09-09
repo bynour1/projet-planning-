@@ -5,6 +5,7 @@ import { SocketProvider }        from './context/SocketContext';
 import { useToast, ToastContainer } from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
 import NetworkStatusBanner from './components/NetworkStatusBanner';
+import PWAUpdateNotification from './components/PWAUpdateNotification';
 import ErrorBoundary from './components/ErrorBoundary';
 
 import Sidebar        from './components/Sidebar';
@@ -36,6 +37,7 @@ function AppShell() {
 
   if (!user) return (
     <>
+      <PWAUpdateNotification />
       <ToastContainer toasts={toasts}/>
       <Routes>
         <Route path="/login"           element={<Login          toast={addToast}/>}/>
@@ -48,6 +50,7 @@ function AppShell() {
 
   if (user.first_login) return (
     <>
+      <PWAUpdateNotification />
       <ToastContainer toasts={toasts}/>
       <Routes>
         <Route path="*" element={<ForcePassword toast={addToast}/>}/>
@@ -59,6 +62,7 @@ function AppShell() {
 
   return (
     <SocketProvider>
+      <PWAUpdateNotification />
       <GlobalSearch />
       <NetworkStatusBanner />
       <ToastContainer toasts={toasts}/>

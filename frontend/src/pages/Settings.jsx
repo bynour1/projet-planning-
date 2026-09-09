@@ -321,24 +321,61 @@ export default function Settings({ toast }) {
           </div>
         )}
 
-        {/* App info */}
+        {/* App info & Mises à jour */}
         <div className="card">
-          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>ℹ️ À propos</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>ℹ️ À propos</h3>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: '#dcfce7', color: '#166534' }}>
+              ● À jour
+            </span>
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
-              { label: 'Application',  value: 'GMT Ariana' },
-              { label: 'Version',      value: '2.0.0' },
-              { label: 'Backend',      value: 'Node.js + Express' },
+              { label: 'Application',  value: 'GMT Ariana — Santé au travail' },
+              { label: 'Version installée', value: '2.4.0 (PWA Live)' },
+              { label: 'Statut PWA',    value: (typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)')?.matches) ? '📱 Application autonome' : '🌐 Navigateur Web' },
+              { label: 'Backend API',  value: 'Node.js + Express' },
               { label: 'Frontend',     value: 'React + Vite' },
-              { label: 'Base de données', value: 'MySQL (XAMPP)' },
               { label: 'Biométrie',    value: 'WebAuthn / Passkey' },
               { label: 'Temps réel',   value: 'Socket.IO' },
             ].map(f => (
               <div key={f.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
                 <span style={{ color: 'var(--text-2)' }}>{f.label}</span>
-                <span style={{ fontWeight: 500 }}>{f.value}</span>
+                <span style={{ fontWeight: 600 }}>{f.value}</span>
               </div>
             ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('check-pwa-update'));
+                if ('serviceWorker' in navigator) {
+                  navigator.serviceWorker.ready.then(reg => reg.update()).catch(() => {});
+                }
+                toast('Recherche de mises à jour effectuée !', 'info');
+              }}
+              style={{ flex: 1, justifyContent: 'center', minWidth: 160 }}
+            >
+              🔍 Vérifier les mises à jour
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={async () => {
+                if ('caches' in window) {
+                  const keys = await caches.keys();
+                  await Promise.all(keys.map(k => caches.delete(k)));
+                }
+                toast('Cache vidé, rechargement…', 'info');
+                setTimeout(() => window.location.reload(), 400);
+              }}
+              style={{ justifyContent: 'center', color: 'var(--danger)', fontSize: 12 }}
+            >
+              🔄 Forcer l'actualisation
+            </button>
           </div>
         </div>
       </div>

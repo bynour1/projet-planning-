@@ -1,7 +1,6 @@
-const CACHE_NAME = 'gmt-ariana-v2';
+const CACHE_NAME = 'gmt-ariana-v4';
 const ASSETS_TO_CACHE = [
   '/',
-  '/index.html',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
@@ -26,20 +25,38 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
-// Fetch with 4-second timeout to prevent mobile Chrome network hang ("Chrome ne répond pas")
+// Listen for SKIP_WAITING message from client
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+// Fetch handler: Never intercept local development or API traffic
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
   const url = new URL(e.request.url);
 
-  // Skip backend API & Socket.io traffic
-  if (url.pathname.startsWith('/api') || url.pathname.startsWith('/socket.io')) return;
+  // In development or for dynamic APIs/assets, bypass Service Worker completely
+  if (
+    url.hostname === 'localhost' ||
+    url.hostname === '127.0.0.1' ||
+    url.pathname.startsWith('/api') ||
+    url.pathname.startsWith('/socket.io') ||
+    url.pathname.startsWith('/@') ||
+    url.pathname.startsWith('/src') ||
+    url.pathname.startsWith('/node_modules') ||
+    url.pathname.includes('vite') ||
+    url.pathname.includes('hot-update')
+  ) {
+    return;
+  }
 
   e.respondWith(
     caches.match(e.request).then((cachedResponse) => {
-      // 1. Return cached version immediately if available
+      // Return cached version if found
       if (cachedResponse) {
-        // Refresh cache in background (Stale-While-Revalidate)
         fetch(e.request)
           .then((networkResponse) => {
             if (networkResponse && networkResponse.status === 200) {
@@ -50,7 +67,7 @@ self.addEventListener('fetch', (e) => {
         return cachedResponse;
       }
 
-      // 2. Otherwise fetch from network with a 4s timeout limit
+      // Otherwise fetch from network with timeout fallback
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Network timeout')), 4000)
       );

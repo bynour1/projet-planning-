@@ -9,7 +9,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       devOptions: {
-        enabled: true,
+        enabled: false,
       },
       includeAssets: ['icon-192.png', 'icon-512.png', 'logo-gmt.png'],
       manifest: {
