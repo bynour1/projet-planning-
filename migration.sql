@@ -71,11 +71,28 @@ ALTER TABLE clino_mobile
   ADD COLUMN IF NOT EXISTS technicien_id INT DEFAULT NULL AFTER medecin_id,
   ADD COLUMN IF NOT EXISTS technicien_nom VARCHAR(255) DEFAULT NULL AFTER medecin_nom;
 
--- ─── Colonnes Effectif, Visites & Bilans dans entreprises ─────
+-- ─── Colonnes Effectif, Visites, Bilans & Campagnes dans entreprises ─────
 ALTER TABLE entreprises
   ADD COLUMN IF NOT EXISTS effectif_total INT DEFAULT 0,
   ADD COLUMN IF NOT EXISTS nb_visites_faites INT DEFAULT 0,
   ADD COLUMN IF NOT EXISTS nb_bilans_faits INT DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS nb_bilans_manquants INT DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS nb_bilans_manquants INT DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS annee_campagne INT DEFAULT 2026,
+  ADD COLUMN IF NOT EXISTS date_derniere_visite DATE DEFAULT NULL;
+
+-- ─── Table HISTORIQUE CAMPAGNES ANNUELLES ─────────────────────
+CREATE TABLE IF NOT EXISTS entreprise_campagnes_annuelles (
+  id                INT AUTO_INCREMENT PRIMARY KEY,
+  entreprise_id     INT NOT NULL,
+  annee             INT NOT NULL,
+  effectif_total    INT NOT NULL,
+  nb_visites_faites INT NOT NULL,
+  nb_bilans_faits   INT DEFAULT 0,
+  taux_realisation  DECIMAL(5,2) DEFAULT 0,
+  date_cloture      DATE NOT NULL,
+  created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (entreprise_id) REFERENCES entreprises(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 
 

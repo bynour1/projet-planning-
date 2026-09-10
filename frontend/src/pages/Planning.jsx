@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import {
   format, startOfWeek, addDays, addWeeks, subWeeks,
@@ -563,6 +564,7 @@ function ListView({pe,ce,cl = [],isAdmin,medecins,techniciens,onRefresh,toast,on
 export default function Planning({ toast }) {
   const { user } = useAuth();
   const { on }   = useSocket();
+  const location = useLocation();
   const isAdmin  = user?.role==='administrateur';
 
   const [view,      setView]     = useState('week');
@@ -579,6 +581,23 @@ export default function Planning({ toast }) {
   const [filters, setFilters] = useState({ role: '', entreprise: '', search: '', date: '' });
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    if (location.state?.prefillEntreprise || location.state?.prefillAdresse) {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      setModal({
+        t: 'p',
+        data: {
+          titre: `Visite médicale - ${location.state.prefillEntreprise || ''}`,
+          adresse: location.state.prefillAdresse || '',
+          date: today,
+          heure_debut: '08:30',
+          heure_fin: '12:30',
+        },
+      });
+      toast?.(`Planification de la visite pour ${location.state.prefillEntreprise}`, 'info');
+    }
+  }, [location.state, toast]);
 
   const loadAll = useCallback(async()=>{
     try{

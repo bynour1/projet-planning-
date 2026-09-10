@@ -108,6 +108,90 @@ describe('PUT /api/entreprises/:id (Admin)', () => {
   });
 });
 
+describe('PATCH /api/entreprises/:id/bilan (Admin)', () => {
+  it('403 for medecin', async () => {
+    expect((await request(app).patch('/api/entreprises/1/bilan').set('Authorization', MED).send({ effectif_total: 50 })).status).toBe(403);
+  });
+  it('updates bilan and effectif', async () => {
+    db.query.mockResolvedValueOnce([{}]);
+    const res = await request(app).patch('/api/entreprises/1/bilan').set('Authorization', ADM)
+      .send({ effectif_total: 60, nb_visites_faites: 30, nb_bilans_faits: 25, nb_bilans_manquants: 5, annee_campagne: 2026 });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toContain('Bilan et effectif mis à jour');
+  });
+});
+
+describe('POST /api/entreprises/:id/nouvelle-campagne (Admin)', () => {
+  it('403 for medecin', async () => {
+    expect((await request(app).post('/api/entreprises/1/nouvelle-campagne').set('Authorization', MED).send({ nouvelle_annee: 2027 })).status).toBe(403);
+  });
+  it('404 if entreprise not found', async () => {
+    db.query.mockResolvedValueOnce([[]]);
+    const res = await request(app).post('/api/entreprises/99/nouvelle-campagne').set('Authorization', ADM).send({ nouvelle_annee: 2027 });
+    expect(res.status).toBe(404);
+  });
+  it('archives past campaign and resets for new year', async () => {
+    db.query.mockResolvedValueOnce([[{ id: 1, nom: 'Test Ent', effectif_total: 100, nb_visites_faites: 100, annee_campagne: 2026 }]]);
+    db.query.mockResolvedValueOnce([{}]); // insert archive
+    db.query.mockResolvedValueOnce([{}]); // update reset
+    const res = await request(app).post('/api/entreprises/1/nouvelle-campagne').set('Authorization', ADM)
+      .send({ nouvelle_annee: 2027 });
+    expect(res.status).toBe(200);
+    expect(res.body.annee).toBe(2027);
+    expect(res.body.message).toContain('initialisée avec succès');
+  });
+});
+
+describe('POST /api/entreprises/import (Admin)', () => {
+  it('401 without token', async () => {
+    const res = await request(app).post('/api/entreprises/import').send({ items: [] });
+    expect(res.status).toBe(401);
+  });
+
+  it('403 for medecin', async () => {
+    const res = await request(app).post('/api/entreprises/import').set('Authorization', MED).send({ items: [] });
+    expect(res.status).toBe(403);
+  });
+
+  it('400 if items empty or not array', async () => {
+    const res = await request(app).post('/api/entreprises/import').set('Authorization', ADM).send({ items: [] });
+    expect(res.status).toBe(400);
+  });
+
+  it('imports new entreprises and updates existing ones', async () => {
+    // Row 1: not found -> INSERT
+    db.query.mockResolvedValueOnce([[]]);
+    db.query.mockResolvedValueOnce([{ insertId: 101 }]);
+    // Row 2: found -> UPDATE
+    db.query.mockResolvedValueOnce([[{ id: 1 }]]);
+    db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+
+    const items = [
+      {
+        nom: 'Nouvelle Société SARL',
+        secteur: 'Industrie',
+        adresse: 'Tunis',
+        telephone: '71 111 222',
+        email: 'contact@nouveaute.tn',
+        convensionne: 'Oui',
+        effectif_total: 80,
+        nb_visites_faites: 20,
+      },
+      {
+        nom: 'Clinique Les Oliviers',
+        effectif_total: 100,
+        nb_visites_faites: 50,
+      },
+    ];
+
+    const res = await request(app).post('/api/entreprises/import').set('Authorization', ADM).send({ items, updateExisting: true });
+    expect(res.status).toBe(200);
+    expect(res.body.created).toBe(1);
+    expect(res.body.updated).toBe(1);
+    expect(res.body.total).toBe(2);
+  });
+});
+
 describe('DELETE /api/entreprises/:id (Admin)', () => {
   it('403 for medecin', async () => {
     expect((await request(app).delete('/api/entreprises/1').set('Authorization', MED)).status).toBe(403);

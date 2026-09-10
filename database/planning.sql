@@ -110,11 +110,27 @@ CREATE TABLE IF NOT EXISTS entreprises (
   date_debut_convention DATE         DEFAULT NULL,
   date_fin_convention   DATE         DEFAULT NULL,
   renouvelable          TINYINT(1)   DEFAULT 0,
+  annee_campagne        INT          DEFAULT 2026,
+  date_derniere_visite  DATE         DEFAULT NULL,
   effectif_total        INT          DEFAULT 0,
   nb_visites_faites     INT          DEFAULT 0,
   nb_bilans_faits       INT          DEFAULT 0,
   nb_bilans_manquants   INT          DEFAULT 0,
   created_at            TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ─── Table ENTREPRISE_CAMPAGNES_ANNUELLES (Historique) ───────────
+CREATE TABLE IF NOT EXISTS entreprise_campagnes_annuelles (
+  id                INT AUTO_INCREMENT PRIMARY KEY,
+  entreprise_id     INT NOT NULL,
+  annee             INT NOT NULL,
+  effectif_total    INT NOT NULL,
+  nb_visites_faites INT NOT NULL,
+  nb_bilans_faits   INT DEFAULT 0,
+  taux_realisation  DECIMAL(5,2) DEFAULT 0,
+  date_cloture      DATE NOT NULL,
+  created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (entreprise_id) REFERENCES entreprises(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ─── Table ENTREPRISE_AVIS ───────────────────────────────────────
@@ -129,4 +145,5 @@ CREATE TABLE IF NOT EXISTS entreprise_avis (
   FOREIGN KEY (entreprise_id) REFERENCES entreprises(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id)       REFERENCES users(id)       ON DELETE CASCADE
 ) ENGINE=InnoDB;
+
 

@@ -39,7 +39,19 @@ router.get('/:id', authenticate, async (req, res) => {
       ORDER BY a.created_at DESC
     `, [req.params.id]);
 
-    res.json({ ...rows[0], avis });
+    let campagnes = [];
+    try {
+      const [campRows] = await db.query(`
+        SELECT * FROM entreprise_campagnes_annuelles
+        WHERE entreprise_id = ?
+        ORDER BY annee DESC
+      `, [req.params.id]);
+      campagnes = campRows || [];
+    } catch {
+      campagnes = [];
+    }
+
+    res.json({ ...rows[0], avis, campagnes });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });
   }
@@ -50,6 +62,7 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
   const {
     nom, secteur, adresse, telephone, email, site_web, description, convensionne,
     date_debut_convention, date_fin_convention, renouvelable,
+    annee_campagne, date_derniere_visite,
     effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants,
   } = req.body;
   if (!nom?.trim()) return res.status(400).json({ message: 'Nom requis' });
@@ -58,14 +71,17 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
       `INSERT INTO entreprises (
         nom, secteur, adresse, telephone, email, site_web, description, convensionne,
         date_debut_convention, date_fin_convention, renouvelable,
+        annee_campagne, date_derniere_visite,
         effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         nom.trim(), secteur||null, adresse||null, telephone||null, email||null, site_web||null, description||null,
         convensionne ? 1 : 0,
         date_debut_convention || null,
         date_fin_convention || null,
         renouvelable ? 1 : 0,
+        parseInt(annee_campagne) || new Date().getFullYear(),
+        date_derniere_visite || null,
         parseInt(effectif_total) || 0,
         parseInt(nb_visites_faites) || 0,
         parseInt(nb_bilans_faits) || 0,
@@ -84,6 +100,7 @@ router.put('/:id', authenticate, authorize('administrateur'), async (req, res) =
   const {
     nom, secteur, adresse, telephone, email, site_web, description, convensionne,
     date_debut_convention, date_fin_convention, renouvelable,
+    annee_campagne, date_derniere_visite,
     effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants,
   } = req.body;
   if (!nom?.trim()) return res.status(400).json({ message: 'Nom requis' });
@@ -92,6 +109,7 @@ router.put('/:id', authenticate, authorize('administrateur'), async (req, res) =
       `UPDATE entreprises SET
         nom=?, secteur=?, adresse=?, telephone=?, email=?, site_web=?, description=?, convensionne=?,
         date_debut_convention=?, date_fin_convention=?, renouvelable=?,
+        annee_campagne=?, date_derniere_visite=?,
         effectif_total=?, nb_visites_faites=?, nb_bilans_faits=?, nb_bilans_manquants=?
       WHERE id=?`,
       [
@@ -100,6 +118,8 @@ router.put('/:id', authenticate, authorize('administrateur'), async (req, res) =
         date_debut_convention || null,
         date_fin_convention || null,
         renouvelable ? 1 : 0,
+        parseInt(annee_campagne) || new Date().getFullYear(),
+        date_derniere_visite || null,
         parseInt(effectif_total) || 0,
         parseInt(nb_visites_faites) || 0,
         parseInt(nb_bilans_faits) || 0,
@@ -116,17 +136,23 @@ router.put('/:id', authenticate, authorize('administrateur'), async (req, res) =
 
 // PATCH /api/entreprises/:id/bilan  (Admin only - mise à jour rapide des chiffres)
 router.patch('/:id/bilan', authenticate, authorize('administrateur'), async (req, res) => {
-  const { effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants } = req.body;
+  const {
+    effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants,
+    annee_campagne, date_derniere_visite
+  } = req.body;
   try {
     await db.query(
       `UPDATE entreprises SET
-        effectif_total=?, nb_visites_faites=?, nb_bilans_faits=?, nb_bilans_manquants=?
+        effectif_total=?, nb_visites_faites=?, nb_bilans_faits=?, nb_bilans_manquants=?,
+        annee_campagne=COALESCE(?, annee_campagne), date_derniere_visite=COALESCE(?, date_derniere_visite)
       WHERE id=?`,
       [
         parseInt(effectif_total) || 0,
         parseInt(nb_visites_faites) || 0,
         parseInt(nb_bilans_faits) || 0,
         parseInt(nb_bilans_manquants) || 0,
+        annee_campagne ? parseInt(annee_campagne) : null,
+        date_derniere_visite || null,
         req.params.id,
       ]
     );
@@ -136,6 +162,55 @@ router.patch('/:id/bilan', authenticate, authorize('administrateur'), async (req
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
+
+// POST /api/entreprises/:id/nouvelle-campagne (Admin only - Réinitialisation annuelle & Archivage)
+router.post('/:id/nouvelle-campagne', authenticate, authorize('administrateur'), async (req, res) => {
+  const { nouvelle_annee } = req.body;
+  const targetYear = parseInt(nouvelle_annee, 10) || (new Date().getFullYear());
+
+  try {
+    const [rows] = await db.query('SELECT * FROM entreprises WHERE id=?', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ message: 'Entreprise introuvable' });
+
+    const ent = rows[0];
+    const prevYear = ent.annee_campagne || (targetYear - 1);
+    const effTotal = parseInt(ent.effectif_total, 10) || 0;
+    const vf = parseInt(ent.nb_visites_faites, 10) || 0;
+    const bf = parseInt(ent.nb_bilans_faits, 10) || 0;
+    const taux = effTotal > 0 ? Math.min(100, Math.round((vf / effTotal) * 100 * 100) / 100) : 0;
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Archiver la campagne précédente dans la table historique
+    try {
+      await db.query(`
+        INSERT INTO entreprise_campagnes_annuelles (
+          entreprise_id, annee, effectif_total, nb_visites_faites, nb_bilans_faits, taux_realisation, date_cloture
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [ent.id, prevYear, effTotal, vf, bf, taux, today]);
+    } catch (e) {
+      console.warn('Note: Archivage de la campagne:', e.message);
+    }
+
+    // Réinitialiser pour la nouvelle année
+    await db.query(`
+      UPDATE entreprises SET
+        annee_campagne = ?,
+        nb_visites_faites = 0,
+        nb_bilans_faits = 0,
+        nb_bilans_manquants = 0
+      WHERE id = ?
+    `, [targetYear, req.params.id]);
+
+    res.json({
+      message: `Campagne ${targetYear} initialisée avec succès. Effectif réinitialisé pour la nouvelle année.`,
+      annee: targetYear,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
 
 // DELETE /api/entreprises/:id  (Admin only)
 router.delete('/:id', authenticate, authorize('administrateur'), async (req, res) => {
@@ -165,6 +240,141 @@ router.get('/:id/avis', authenticate, async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });
   }
+});
+
+// POST /api/entreprises/import  (Admin only - Import en masse Excel / CSV)
+router.post('/import', authenticate, authorize('administrateur'), async (req, res) => {
+  const { items, updateExisting = true } = req.body;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: 'Aucune donnée à importer (liste vide ou invalide)' });
+  }
+
+  let created = 0;
+  let updated = 0;
+  let skipped = 0;
+  const errors = [];
+  const currentYear = new Date().getFullYear();
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const rowNum = i + 1;
+
+    const nom = typeof item.nom === 'string' ? item.nom.trim() : (item.nom ? String(item.nom).trim() : '');
+    if (!nom) {
+      errors.push({ row: rowNum, message: 'Nom d\'entreprise manquant' });
+      continue;
+    }
+
+    // Normalisation des champs
+    const secteur = item.secteur ? String(item.secteur).trim() : null;
+    const adresse = item.adresse ? String(item.adresse).trim() : null;
+    const telephone = item.telephone ? String(item.telephone).trim() : null;
+    const email = item.email ? String(item.email).trim() : null;
+    const site_web = item.site_web ? String(item.site_web).trim() : null;
+    const description = item.description ? String(item.description).trim() : null;
+
+    // Conventionné (Oui/Non/1/0/true/false)
+    let convensionne = 1; // Par défaut conventionné lors d'un import de conventionnés
+    if (item.convensionne !== undefined && item.convensionne !== null) {
+      const cStr = String(item.convensionne).trim().toLowerCase();
+      if (cStr === '0' || cStr === 'false' || cStr === 'non' || cStr === 'non conventionnée' || cStr === 'no') {
+        convensionne = 0;
+      }
+    }
+
+    // Dates convention
+    const date_debut_convention = item.date_debut_convention ? String(item.date_debut_convention).slice(0, 10) : null;
+    const date_fin_convention = item.date_fin_convention ? String(item.date_fin_convention).slice(0, 10) : null;
+    const date_derniere_visite = item.date_derniere_visite ? String(item.date_derniere_visite).slice(0, 10) : null;
+
+    // Renouvelable
+    let renouvelable = 1;
+    if (item.renouvelable !== undefined && item.renouvelable !== null) {
+      const rStr = String(item.renouvelable).trim().toLowerCase();
+      if (rStr === '0' || rStr === 'false' || rStr === 'non' || rStr === 'no') {
+        renouvelable = 0;
+      }
+    }
+
+    // Année et effectifs
+    const annee_campagne = parseInt(item.annee_campagne, 10) || currentYear;
+    const effectif_total = Math.max(0, parseInt(item.effectif_total, 10) || 0);
+    const nb_visites_faites = Math.max(0, parseInt(item.nb_visites_faites, 10) || 0);
+    const nb_bilans_faits = Math.max(0, parseInt(item.nb_bilans_faits, 10) || 0);
+    const nb_bilans_manquants = Math.max(0, parseInt(item.nb_bilans_manquants, 10) || 0);
+
+    try {
+      // Vérifier si l'entreprise existe déjà par son nom (insensible à la casse)
+      const [existing] = await db.query(
+        'SELECT id FROM entreprises WHERE LOWER(TRIM(nom)) = LOWER(TRIM(?)) LIMIT 1',
+        [nom]
+      );
+
+      if (existing && existing.length > 0) {
+        if (updateExisting) {
+          await db.query(
+            `UPDATE entreprises SET
+              nom = ?,
+              secteur = COALESCE(?, secteur),
+              adresse = COALESCE(?, adresse),
+              telephone = COALESCE(?, telephone),
+              email = COALESCE(?, email),
+              site_web = COALESCE(?, site_web),
+              description = COALESCE(?, description),
+              convensionne = ?,
+              date_debut_convention = COALESCE(?, date_debut_convention),
+              date_fin_convention = COALESCE(?, date_fin_convention),
+              renouvelable = ?,
+              annee_campagne = ?,
+              date_derniere_visite = COALESCE(?, date_derniere_visite),
+              effectif_total = ?,
+              nb_visites_faites = ?,
+              nb_bilans_faits = ?,
+              nb_bilans_manquants = ?
+            WHERE id = ?`,
+            [
+              nom, secteur, adresse, telephone, email, site_web, description,
+              convensionne, date_debut_convention, date_fin_convention, renouvelable,
+              annee_campagne, date_derniere_visite,
+              effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants,
+              existing[0].id
+            ]
+          );
+          updated++;
+        } else {
+          skipped++;
+        }
+      } else {
+        await db.query(
+          `INSERT INTO entreprises (
+            nom, secteur, adresse, telephone, email, site_web, description,
+            convensionne, date_debut_convention, date_fin_convention, renouvelable,
+            annee_campagne, date_derniere_visite,
+            effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [
+            nom, secteur, adresse, telephone, email, site_web, description,
+            convensionne, date_debut_convention, date_fin_convention, renouvelable,
+            annee_campagne, date_derniere_visite,
+            effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants
+          ]
+        );
+        created++;
+      }
+    } catch (errRow) {
+      console.error(`Erreur import ligne ${rowNum} (${nom}):`, errRow);
+      errors.push({ row: rowNum, nom, message: errRow.message || 'Erreur base de données' });
+    }
+  }
+
+  res.json({
+    message: 'Importation terminée avec succès',
+    total: items.length,
+    created,
+    updated,
+    skipped,
+    errors,
+  });
 });
 
 // POST /api/entreprises/:id/avis  (Any authenticated user)

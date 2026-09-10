@@ -26,16 +26,31 @@ describe('Entreprises page — liste', () => {
     await waitFor(() => expect(screen.getByText(/Entreprises Conventionnées/)).toBeInTheDocument());
   });
 
-  it('shows add button for admin', async () => {
+  it('shows add and import buttons for admin', async () => {
     axios.get.mockResolvedValueOnce({ data: MOCK_ENTREPRISES });
     renderWithProviders(<Entreprises toast={mockToast} />, { user: MOCK_ADMIN });
-    await waitFor(() => expect(screen.getByText('+ Ajouter')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(screen.getByText('+ Ajouter')).toBeInTheDocument();
+      expect(screen.getByText('Importer Excel')).toBeInTheDocument();
+    });
   });
 
-  it('hides add button for non-admin', async () => {
+  it('hides add and import buttons for non-admin', async () => {
     axios.get.mockResolvedValueOnce({ data: MOCK_ENTREPRISES });
     renderWithProviders(<Entreprises toast={mockToast} />, { user: MOCK_MEDECIN });
-    await waitFor(() => expect(screen.queryByText('+ Ajouter')).not.toBeInTheDocument());
+    await waitFor(() => {
+      expect(screen.queryByText('+ Ajouter')).not.toBeInTheDocument();
+      expect(screen.queryByText('Importer Excel')).not.toBeInTheDocument();
+    });
+  });
+
+  it('opens excel import modal on import button click', async () => {
+    axios.get.mockResolvedValueOnce({ data: [] });
+    renderWithProviders(<Entreprises toast={mockToast} />, { user: MOCK_ADMIN });
+    await waitFor(() => screen.getByText('Importer Excel'));
+    await userEvent.click(screen.getByText('Importer Excel'));
+    expect(screen.getByText('Importation Excel des Entreprises Conventionnées')).toBeInTheDocument();
+    expect(screen.getByText(/Télécharger le modèle Excel/)).toBeInTheDocument();
   });
 
   it('lists all entreprises', async () => {
@@ -55,7 +70,7 @@ describe('Entreprises page — liste', () => {
       expect(screen.getByText('Total')).toBeInTheDocument();
       // "Conventionnées" appears in both stat card and filter button — check count
       expect(screen.getAllByText('Conventionnées').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('Avis partagés')).toBeInTheDocument();
+      expect(screen.getByText('Effectif Total')).toBeInTheDocument();
     });
   });
 

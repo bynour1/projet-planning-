@@ -1,9 +1,11 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import NavigationSelector from '../components/NavigationSelector';
+import ExcelImportModal from '../components/ExcelImportModal';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -516,16 +518,20 @@ function EntrepriseModal({ item, onSave, onClose }) {
 
 // ── Modal de Calcul Rapide & Bilan Effectif ───────────────────
 function QuickBilanModal({ entreprise, onSave, onClose }) {
+  const currentYear = new Date().getFullYear();
   const [effectif, setEffectif] = useState(entreprise.effectif_total !== undefined ? entreprise.effectif_total : 0);
   const [faites, setFaites] = useState(entreprise.nb_visites_faites !== undefined ? entreprise.nb_visites_faites : 0);
   const [bilansFaits, setBilansFaits] = useState(entreprise.nb_bilans_faits !== undefined ? entreprise.nb_bilans_faits : 0);
   const [bilansManquants, setBilansManquants] = useState(entreprise.nb_bilans_manquants !== undefined ? entreprise.nb_bilans_manquants : 0);
+  const [anneeCampagne, setAnneeCampagne] = useState(entreprise.annee_campagne || currentYear);
   const [saving, setSaving] = useState(false);
+  const [startingNewCampaign, setStartingNewCampaign] = useState(false);
 
   const effNum = parseInt(effectif, 10) || 0;
   const faitesNum = parseInt(faites, 10) || 0;
   const aFaire = Math.max(0, effNum - faitesNum);
   const taux = effNum > 0 ? Math.min(100, Math.round((faitesNum / effNum) * 100)) : 0;
+  const isNouvelleAnneeRequise = parseInt(anneeCampagne, 10) < currentYear;
 
   async function handleSave() {
     setSaving(true);
@@ -535,6 +541,7 @@ function QuickBilanModal({ entreprise, onSave, onClose }) {
         nb_visites_faites: parseInt(faites, 10) || 0,
         nb_bilans_faits: parseInt(bilansFaits, 10) || 0,
         nb_bilans_manquants: parseInt(bilansManquants, 10) || 0,
+        annee_campagne: parseInt(anneeCampagne, 10) || currentYear,
       });
       onSave();
     } catch (e) {
@@ -544,9 +551,26 @@ function QuickBilanModal({ entreprise, onSave, onClose }) {
     }
   }
 
+  async function handleStartNewCampaign() {
+    if (!window.confirm(`Démarrer la nouvelle campagne annuelle ${currentYear} pour "${entreprise.nom}" ?\n\nLes chiffres de l'année ${anneeCampagne} seront archivés et l'effectif examiné sera réinitialisé à 0 pour la nouvelle année.`)) {
+      return;
+    }
+    setStartingNewCampaign(true);
+    try {
+      await axios.post(`/api/entreprises/${entreprise.id}/nouvelle-campagne`, {
+        nouvelle_annee: currentYear,
+      });
+      onSave();
+    } catch (e) {
+      alert(e.response?.data?.message || 'Erreur');
+    } finally {
+      setStartingNewCampaign(false);
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 520, borderRadius: 16 }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 540, borderRadius: 16 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div
@@ -569,13 +593,47 @@ function QuickBilanModal({ entreprise, onSave, onClose }) {
             <div>
               <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0, color: 'var(--text)' }}>{entreprise.nom}</h3>
               <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-                Calculateur instantané des effectifs & visites médicales
+                Suivi des effectifs · Campagne Annuelle {anneeCampagne}
               </div>
             </div>
           </div>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '18px 22px' }}>
+          {/* Alerte si nouvelle année disponible */}
+          {isNouvelleAnneeRequise && (
+            <div
+              style={{
+                padding: '12px 14px',
+                background: '#fef3c7',
+                border: '1.5px solid #f59e0b',
+                borderRadius: 12,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 800, color: '#92400e', fontSize: 13 }}>
+                  🔔 Nouvelle Année {currentYear} atteinte
+                </div>
+                <div style={{ fontSize: 11.5, color: '#78350f', marginTop: 2 }}>
+                  La campagne active est {anneeCampagne}. Vous pouvez archiver et lancer la campagne {currentYear}.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-warning btn-sm"
+                onClick={handleStartNewCampaign}
+                disabled={startingNewCampaign}
+                style={{ fontWeight: 800, whiteSpace: 'nowrap', fontSize: 11 }}
+              >
+                {startingNewCampaign ? 'En cours...' : `🔄 Lancer ${currentYear}`}
+              </button>
+            </div>
+          )}
+
           {/* Jauge visuelle et indicateurs */}
           <div
             style={{
@@ -587,7 +645,9 @@ function QuickBilanModal({ entreprise, onSave, onClose }) {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.95 }}>Taux de réalisation des visites</span>
+              <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.95 }}>
+                Taux de réalisation · Campagne {anneeCampagne}
+              </span>
               <span style={{ fontSize: 14, fontWeight: 900, background: 'rgba(255,255,255,0.25)', padding: '2px 10px', borderRadius: 12 }}>
                 {taux}%
               </span>
@@ -598,15 +658,15 @@ function QuickBilanModal({ entreprise, onSave, onClose }) {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, textAlign: 'center' }}>
               <div style={{ background: 'rgba(255,255,255,0.18)', padding: '8px 4px', borderRadius: 10 }}>
-                <div style={{ fontSize: 10, opacity: 0.85, fontWeight: 600 }}>Effectif total</div>
+                <div style={{ fontSize: 10, opacity: 0.85, fontWeight: 600 }}>👥 Total</div>
                 <div style={{ fontSize: 18, fontWeight: 900, marginTop: 2 }}>{effNum}</div>
               </div>
               <div style={{ background: 'rgba(255,255,255,0.18)', padding: '8px 4px', borderRadius: 10 }}>
-                <div style={{ fontSize: 10, opacity: 0.85, fontWeight: 600 }}>Déjà fait</div>
+                <div style={{ fontSize: 10, opacity: 0.85, fontWeight: 600 }}>🩺 Déjà fait</div>
                 <div style={{ fontSize: 18, fontWeight: 900, marginTop: 2 }}>{faitesNum}</div>
               </div>
               <div style={{ background: 'rgba(255,255,255,0.18)', padding: '8px 4px', borderRadius: 10 }}>
-                <div style={{ fontSize: 10, opacity: 0.85, fontWeight: 600 }}>En attente</div>
+                <div style={{ fontSize: 10, opacity: 0.85, fontWeight: 600 }}>⏳ En attente</div>
                 <div style={{ fontSize: 18, fontWeight: 900, marginTop: 2, color: aFaire > 0 ? '#fef08a' : '#86efac' }}>
                   {aFaire}
                 </div>
@@ -615,6 +675,33 @@ function QuickBilanModal({ entreprise, onSave, onClose }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-group">
+                <label style={{ fontSize: 12, fontWeight: 700 }}>📅 Année de Campagne</label>
+                <input
+                  className="input"
+                  type="number"
+                  min="2020"
+                  max="2040"
+                  value={anneeCampagne}
+                  onChange={(e) => setAnneeCampagne(e.target.value)}
+                  style={{ fontWeight: 800, fontSize: 14 }}
+                />
+              </div>
+              <div className="form-group">
+                <label style={{ fontSize: 12, fontWeight: 700 }}>🔄 Cycle Annuel</label>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={handleStartNewCampaign}
+                  disabled={startingNewCampaign}
+                  style={{ width: '100%', height: 38, fontWeight: 700, fontSize: 11.5 }}
+                >
+                  {startingNewCampaign ? 'Initialisation...' : `🔄 Reset pour ${currentYear}`}
+                </button>
+              </div>
+            </div>
+
             <div className="form-group">
               <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700 }}>
                 <span>👥 Effectif total de salariés</span>
@@ -637,7 +724,7 @@ function QuickBilanModal({ entreprise, onSave, onClose }) {
 
             <div className="form-group">
               <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700 }}>
-                <span>🩺 Effectif ayant fait sa visite</span>
+                <span>🩺 Effectif ayant fait sa visite ({anneeCampagne})</span>
                 <span style={{ color: '#16a34a', fontSize: 11, fontWeight: 600 }}>Incrémentation</span>
               </label>
               <div style={{ display: 'flex', gap: 6 }}>
@@ -780,13 +867,15 @@ function AvisModal({ entreprise, editAvis, onSave, onClose }) {
 }
 
 // ── Entreprise detail panel ───────────────────────────────────
-function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onDelete, toast }) {
+function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifier, onReload, onDelete, toast }) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'administrateur';
+  const currentYear = new Date().getFullYear();
   const [avis, setAvis] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAvis, setShowAvis] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [startingNewCampaign, setStartingNewCampaign] = useState(false);
 
   useEffect(() => {
     loadAvis();
@@ -814,10 +903,30 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onDelete,
     }
   }
 
+  async function handleStartNewCampaign() {
+    if (!window.confirm(`Démarrer la campagne annuelle ${currentYear} pour "${entreprise.nom}" ?\n\nLes données de l'année précédente seront archivées et l'effectif examiné sera réinitialisé à 0 pour la nouvelle année.`)) {
+      return;
+    }
+    setStartingNewCampaign(true);
+    try {
+      await axios.post(`/api/entreprises/${entreprise.id}/nouvelle-campagne`, {
+        nouvelle_annee: currentYear,
+      });
+      toast?.(`Campagne ${currentYear} initialisée avec succès !`, 'success');
+      onReload?.();
+    } catch (e) {
+      toast?.(e.response?.data?.message || 'Erreur', 'error');
+    } finally {
+      setStartingNewCampaign(false);
+    }
+  }
+
   const effectif = parseInt(entreprise.effectif_total, 10) || 0;
   const faites = parseInt(entreprise.nb_visites_faites, 10) || 0;
   const aFaire = Math.max(0, effectif - faites);
   const taux = effectif > 0 ? Math.min(100, Math.round((faites / effectif) * 100)) : 0;
+  const anneeCampagne = entreprise.annee_campagne || currentYear;
+  const isNouvelleAnnee = parseInt(anneeCampagne, 10) < currentYear;
 
   const avgNote = avis.filter((a) => a.note > 0).length
     ? (avis.filter((a) => a.note > 0).reduce((s, a) => s + a.note, 0) / avis.filter((a) => a.note > 0).length).toFixed(1)
@@ -832,10 +941,23 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onDelete,
       <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
               <h2 style={{ fontSize: 22, fontWeight: 900, color: 'var(--text)' }}>{entreprise.nom}</h2>
               <span className={`badge ${entreprise.convensionne ? 'badge-green' : 'badge-red'}`}>
                 {entreprise.convensionne ? '✅ Conventionnée' : '❌ Non conventionnée'}
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  padding: '3px 9px',
+                  borderRadius: 6,
+                  background: isNouvelleAnnee ? '#fee2e2' : '#e0f2fe',
+                  color: isNouvelleAnnee ? '#991b1b' : '#0369a1',
+                  border: isNouvelleAnnee ? '1px solid #f87171' : '1px solid #7dd3fc',
+                }}
+              >
+                📅 Campagne {anneeCampagne}
               </span>
             </div>
             {entreprise.secteur && <div style={{ fontSize: 13, color: 'var(--text-2)' }}>🏷 {entreprise.secteur}</div>}
@@ -847,10 +969,18 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onDelete,
               </div>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={onPlanifier}
+              title="Planifier une visite médicale"
+              style={{ fontWeight: 800, background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none' }}
+            >
+              📅 Planifier une visite
+            </button>
             {isAdmin && (
-              <button className="btn btn-primary btn-sm" onClick={onQuickBilan} title="Calculateur rapide" style={{ fontWeight: 700 }}>
-                ⚡ Calculateur / Bilan
+              <button className="btn btn-outline btn-sm" onClick={onQuickBilan} title="Calculateur rapide" style={{ fontWeight: 700 }}>
+                ⚡ Effectifs & Campagne
               </button>
             )}
             {isAdmin && <button className="btn btn-outline btn-sm" onClick={onEdit}>✏️ Modifier</button>}
@@ -858,6 +988,44 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onDelete,
             <button className="btn btn-ghost btn-sm" onClick={onClose}>✕ Fermer</button>
           </div>
         </div>
+
+        {/* Alerte si nouvelle année atteinte */}
+        {isNouvelleAnnee && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: '12px 16px',
+              background: '#fffbeb',
+              border: '1.5px solid #f59e0b',
+              borderRadius: 12,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 10,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 20 }}>🔔</span>
+              <div>
+                <strong style={{ color: '#92400e', fontSize: 13 }}>Rappel Annuel : Nouvelle Année {currentYear} atteinte</strong>
+                <div style={{ fontSize: 12, color: '#78350f', marginTop: 1 }}>
+                  La dernière campagne enregistrée date de {anneeCampagne}. Initialisez la campagne {currentYear} pour remettre l'effectif en attente.
+                </div>
+              </div>
+            </div>
+            {isAdmin && (
+              <button
+                className="btn btn-warning btn-sm"
+                onClick={handleStartNewCampaign}
+                disabled={startingNewCampaign}
+                style={{ fontWeight: 800, fontSize: 12 }}
+              >
+                {startingNewCampaign ? 'Initialisation...' : `🔄 Démarrer Campagne ${currentYear}`}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Section Convention & Validité */}
         <div
@@ -902,7 +1070,7 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onDelete,
           {entreprise.convensionne && getConventionBadge(entreprise.date_fin_convention)}
         </div>
 
-        {/* Section Chiffres & Bilan Médical */}
+        {/* Section Chiffres & Bilan Médical Annuel */}
         <div
           style={{
             marginTop: 16,
@@ -914,7 +1082,7 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onDelete,
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--text)' }}>
-              📊 Suivi Médical & Taux de Couverture Salariés
+              📊 Suivi Médical Annuel · Campagne {anneeCampagne}
             </span>
             <span
               style={{
@@ -938,11 +1106,11 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onDelete,
               <div style={{ fontSize: 17, fontWeight: 900, marginTop: 2 }}>{effectif}</div>
             </div>
             <div style={{ background: 'var(--surface)', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border)' }}>
-              <div style={{ color: 'var(--text-3)', fontSize: 11, fontWeight: 700 }}>🩺 Déjà Visité</div>
+              <div style={{ color: 'var(--text-3)', fontSize: 11, fontWeight: 700 }}>🩺 Déjà Visité ({anneeCampagne})</div>
               <div style={{ fontSize: 17, fontWeight: 900, color: '#16a34a', marginTop: 2 }}>{faites}</div>
             </div>
             <div style={{ background: 'var(--surface)', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border)' }}>
-              <div style={{ color: 'var(--text-3)', fontSize: 11, fontWeight: 700 }}>⏳ En Attente (À Faire)</div>
+              <div style={{ color: 'var(--text-3)', fontSize: 11, fontWeight: 700 }}>⏳ En Attente (Reste)</div>
               <div style={{ fontSize: 17, fontWeight: 900, color: aFaire > 0 ? '#ea580c' : '#16a34a', marginTop: 2 }}>{aFaire}</div>
             </div>
             <div style={{ background: 'var(--surface)', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border)' }}>
@@ -957,6 +1125,25 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onDelete,
             </div>
           </div>
         </div>
+
+        {/* Historique des campagnes précédentes (si disponible) */}
+        {entreprise.campagnes && entreprise.campagnes.length > 0 && (
+          <div style={{ marginTop: 14, padding: '12px 16px', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)' }}>
+            <div style={{ fontWeight: 800, fontSize: 12.5, marginBottom: 8, color: 'var(--text)' }}>
+              📜 Historique des Campagnes Annuelles Clôturées :
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {entreprise.campagnes.map((c) => (
+                <div key={c.id} style={{ padding: '6px 12px', background: 'var(--surface2)', borderRadius: 8, border: '1px solid var(--border)', fontSize: 11.5 }}>
+                  <strong>Année {c.annee} :</strong> {c.nb_visites_faites}/{c.effectif_total} examinés (
+                  <span style={{ color: Number(c.taux_realisation) >= 100 ? '#16a34a' : '#0284c7', fontWeight: 800 }}>
+                    {c.taux_realisation}%
+                  </span>)
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Contact info */}
         <div style={{ display: 'flex', gap: 16, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1098,13 +1285,17 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onDelete,
 export default function Entreprises({ toast }) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'administrateur';
+  const navigate = useNavigate();
+  const currentYear = new Date().getFullYear();
 
   const [entreprises, setEntreprises] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterConv, setFilterConv] = useState('all');
+  const [filterCampagne, setFilterCampagne] = useState('all');
   const [selected, setSelected] = useState(null);
   const [modal, setModal] = useState(null);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [quickBilan, setQuickBilan] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'table' | 'map'
@@ -1142,6 +1333,23 @@ export default function Entreprises({ toast }) {
       const q = search.toLowerCase();
       const matchSearch = !q || `${e.nom} ${e.secteur || ''} ${e.adresse || ''}`.toLowerCase().includes(q);
       const matchConv = filterConv === 'all' || (filterConv === 'conv' ? e.convensionne : !e.convensionne);
+      
+      const eff = parseInt(e.effectif_total, 10) || 0;
+      const vf = parseInt(e.nb_visites_faites, 10) || 0;
+      const annee = e.annee_campagne || currentYear;
+      const isNouvelleAnnee = parseInt(annee, 10) < currentYear;
+
+      let matchCampagne = true;
+      if (filterCampagne === 'a_planifier') {
+        matchCampagne = eff > 0 && vf === 0;
+      } else if (filterCampagne === 'en_cours') {
+        matchCampagne = vf > 0 && vf < eff;
+      } else if (filterCampagne === 'termine') {
+        matchCampagne = eff > 0 && vf >= eff;
+      } else if (filterCampagne === 'nouvelle_annee') {
+        matchCampagne = isNouvelleAnnee;
+      }
+
       let matchDate = true;
       if (dateFilter) {
         const itemDate = e.created_at ? String(e.created_at).slice(0, 10) : '';
@@ -1151,9 +1359,9 @@ export default function Entreprises({ toast }) {
           matchDate = false;
         }
       }
-      return matchSearch && matchConv && matchDate;
+      return matchSearch && matchConv && matchCampagne && matchDate;
     });
-  }, [entreprises, search, filterConv, dateFilter]);
+  }, [entreprises, search, filterConv, filterCampagne, dateFilter, currentYear]);
 
   // ── Statistiques et Calculs Globaux ──────────────────────────
   const totalEffectif = entreprises.reduce((s, e) => s + (parseInt(e.effectif_total) || 0), 0);
@@ -1165,6 +1373,9 @@ export default function Entreprises({ toast }) {
   const totalBilansFaits = entreprises.reduce((s, e) => s + (parseInt(e.nb_bilans_faits) || 0), 0);
   const totalBilansManquants = entreprises.reduce((s, e) => s + (parseInt(e.nb_bilans_manquants) || 0), 0);
   const globalTaux = totalEffectif > 0 ? Math.min(100, Math.round((totalVisitesFaites / totalEffectif) * 100)) : 0;
+  const nbEntreprisesNouvelleAnnee = entreprises.filter(
+    (e) => (parseInt(e.annee_campagne, 10) || currentYear) < currentYear
+  ).length;
 
   const stats = {
     total: entreprises.length,
@@ -1181,6 +1392,7 @@ export default function Entreprises({ toast }) {
     return {
       nom: e.nom || '—',
       secteur: e.secteur || '—',
+      campagne: e.annee_campagne || currentYear,
       conv: e.convensionne ? 'Oui' : 'Non',
       date_debut_convention: e.date_debut_convention ? formatConventionDate(e.date_debut_convention) : '—',
       date_fin_convention: e.date_fin_convention ? formatConventionDate(e.date_fin_convention) : '—',
@@ -1199,6 +1411,7 @@ export default function Entreprises({ toast }) {
   const exportColumns = [
     { header: 'Entreprise', key: 'nom' },
     { header: 'Secteur', key: 'secteur' },
+    { header: 'Campagne', key: 'campagne' },
     { header: 'Conv.', key: 'conv' },
     { header: 'Début Conv.', key: 'date_debut_convention' },
     { header: 'Fin Conv.', key: 'date_fin_convention' },
@@ -1244,6 +1457,12 @@ export default function Entreprises({ toast }) {
           entreprise={ent}
           toast={toast}
           onClose={() => setSelected(null)}
+          onPlanifier={() =>
+            navigate('/planning', {
+              state: { prefillEntreprise: ent.nom, prefillAdresse: ent.adresse },
+            })
+          }
+          onReload={load}
           onEdit={() => {
             setModal(ent);
             setSelected(null);
@@ -1303,144 +1522,118 @@ export default function Entreprises({ toast }) {
             >
               Santé au Travail & Prévention
             </span>
-            <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600 }}>• Tableau de bord exécutif</span>
+            <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600 }}>• Campagnes Annuelles {currentYear}</span>
           </div>
           <h2 style={{ fontSize: 22, fontWeight: 900, color: 'var(--text)', letterSpacing: -0.5, margin: 0, wordBreak: 'break-word' }}>
-            🏢 Entreprises Conventionnées
+            🏢 Entreprises Conventionnées & Suivi des Effectifs
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4, margin: 0 }}>
-            Effectifs salariés, calcul automatique des visites médicales et suivi analytique des bilans de santé.
+            Calcul automatique des effectifs examinés vs en attente, cycles annuels et planification directe.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Export group */}
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Boutons d'exportation */}
+          <div style={{ display: 'flex', gap: 6, background: 'var(--surface2)', padding: 4, borderRadius: 10, border: '1px solid var(--border)' }}>
             <button
               className="btn btn-outline btn-sm"
               onClick={handleExportExcel}
-              title="Exporter les entreprises et effectifs au format Excel (.xlsx)"
-              style={{ fontWeight: 700, fontSize: 12, padding: '7px 12px', borderRadius: 8 }}
+              title="Exporter vers Excel"
+              style={{ fontWeight: 700, fontSize: 11.5, padding: '5px 9px', color: '#166534' }}
             >
-              📊 Excel
+              📗 Excel
             </button>
             <button
               className="btn btn-outline btn-sm"
               onClick={handleExportWord}
-              title="Exporter le récapitulatif officiel au format Word (.doc)"
-              style={{ fontWeight: 700, fontSize: 12, padding: '7px 12px', borderRadius: 8 }}
+              title="Exporter vers Word"
+              style={{ fontWeight: 700, fontSize: 11.5, padding: '5px 9px', color: '#1e40af' }}
             >
-              📝 Word
+              📘 Word
             </button>
             <button
               className="btn btn-outline btn-sm"
               onClick={handleExportPDF}
-              title="Exporter le rapport complet au format PDF (.pdf)"
-              style={{ fontWeight: 700, fontSize: 12, padding: '7px 12px', borderRadius: 8 }}
+              title="Exporter vers PDF"
+              style={{ fontWeight: 700, fontSize: 11.5, padding: '5px 9px', color: '#991b1b' }}
             >
-              📄 PDF
+              📕 PDF
             </button>
           </div>
 
           {isAdmin && (
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => setModal({})}
-              style={{
-                fontWeight: 800,
-                fontSize: 13,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '8px 16px',
-                borderRadius: 10,
-                boxShadow: '0 4px 14px rgba(14,165,233,.35)',
-              }}
-            >
-              <span>➕</span> + Ajouter
-            </button>
+            <>
+              <button
+                className="btn btn-outline"
+                onClick={() => setShowImportModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontWeight: 700,
+                  padding: '8px 14px',
+                  borderRadius: 10,
+                  color: '#0284c7',
+                  borderColor: '#0284c7',
+                  background: 'rgba(2,132,199,0.06)',
+                }}
+                title="Importer des entreprises depuis Excel (.xlsx / .csv)"
+              >
+                <span>📥</span>
+                <span>Importer Excel</span>
+              </button>
+
+              <button
+                className="btn btn-primary"
+                onClick={() => setModal({})}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, padding: '8px 16px', borderRadius: 10 }}
+              >
+                <span>➕</span>
+                <span>+ Ajouter</span>
+              </button>
+            </>
           )}
         </div>
       </div>
 
-      {/* ── CARTES KPI ANALYTICS GRID ── */}
+      {/* ── 8 KPI STATS CARDS GRID ── */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))',
           gap: 12,
-          marginBottom: 20,
+          marginBottom: 16,
+          width: '100%',
         }}
       >
         {/* Card 1: Total Entreprises */}
-        <div
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 14,
-            padding: '14px 16px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-          }}
-        >
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Total Entreprises
-            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Entreprises</span>
             <span style={{ fontSize: 16 }}>🏢</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
-            <span style={{ fontSize: 24, fontWeight: 900, color: '#0284c7' }}>{stats.total}</span>
-            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Total</span>
+            <span style={{ fontSize: 24, fontWeight: 900, color: 'var(--text)' }}>{stats.total}</span>
+            <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Total</span>
           </div>
         </div>
 
         {/* Card 2: Conventionnées */}
-        <div
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 14,
-            padding: '14px 16px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-          }}
-        >
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Conventionnées
-            </span>
-            <span style={{ fontSize: 16 }}>🤝</span>
+            <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Conventionnées</span>
+            <span style={{ fontSize: 16 }}>📜</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
-            <span style={{ fontSize: 24, fontWeight: 900, color: '#10b981' }}>{stats.conv}</span>
-            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>
-              {stats.total > 0 ? Math.round((stats.conv / stats.total) * 100) : 0}% du parc
-            </span>
+            <span style={{ fontSize: 24, fontWeight: 900, color: '#16a34a' }}>{stats.conv}</span>
+            <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Actives</span>
           </div>
         </div>
 
-        {/* Card 3: Effectif Global */}
-        <div
-          style={{
-            background: 'linear-gradient(135deg, rgba(14,165,233,0.08), rgba(2,132,199,0.03))',
-            border: '1.5px solid rgba(14,165,233,0.35)',
-            borderRadius: 14,
-            padding: '14px 16px',
-            boxShadow: '0 3px 10px rgba(14,165,233,0.06)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-          }}
-        >
+        {/* Card 3: Effectif Total */}
+        <div style={{ background: 'linear-gradient(135deg, rgba(14,165,233,0.08), rgba(2,132,199,0.03))', border: '1.5px solid rgba(14,165,233,0.35)', borderRadius: 14, padding: '14px 16px', boxShadow: '0 3px 10px rgba(14,165,233,0.06)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: '#0284c7', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Effectif Global
-            </span>
+            <span style={{ fontSize: 11, color: '#0284c7', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Effectif Total</span>
             <span style={{ fontSize: 16 }}>👥</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
@@ -1450,22 +1643,9 @@ export default function Entreprises({ toast }) {
         </div>
 
         {/* Card 4: Visites Faites */}
-        <div
-          style={{
-            background: 'linear-gradient(135deg, rgba(22,163,74,0.08), rgba(16,185,129,0.03))',
-            border: '1.5px solid rgba(22,163,74,0.35)',
-            borderRadius: 14,
-            padding: '14px 16px',
-            boxShadow: '0 3px 10px rgba(22,163,74,0.06)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-          }}
-        >
+        <div style={{ background: 'linear-gradient(135deg, rgba(22,163,74,0.08), rgba(16,185,129,0.03))', border: '1.5px solid rgba(22,163,74,0.35)', borderRadius: 14, padding: '14px 16px', boxShadow: '0 3px 10px rgba(22,163,74,0.06)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Visites Faites
-            </span>
+            <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Déjà Vus ({currentYear})</span>
             <span style={{ fontSize: 16 }}>🩺</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
@@ -1477,47 +1657,21 @@ export default function Entreprises({ toast }) {
         </div>
 
         {/* Card 5: Visites à Faire */}
-        <div
-          style={{
-            background: 'linear-gradient(135deg, rgba(234,88,12,0.08), rgba(249,115,22,0.03))',
-            border: '1.5px solid rgba(234,88,12,0.35)',
-            borderRadius: 14,
-            padding: '14px 16px',
-            boxShadow: '0 3px 10px rgba(234,88,12,0.06)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-          }}
-        >
+        <div style={{ background: 'linear-gradient(135deg, rgba(234,88,12,0.08), rgba(249,115,22,0.03))', border: '1.5px solid rgba(234,88,12,0.35)', borderRadius: 14, padding: '14px 16px', boxShadow: '0 3px 10px rgba(234,88,12,0.06)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: '#ea580c', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Visites à Faire
-            </span>
+            <span style={{ fontSize: 11, color: '#ea580c', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>En Attente</span>
             <span style={{ fontSize: 16 }}>⏳</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
             <span style={{ fontSize: 24, fontWeight: 900, color: '#ea580c' }}>{totalVisitesAFaire}</span>
-            <span style={{ fontSize: 11, color: 'var(--text-2)' }}>Restantes</span>
+            <span style={{ fontSize: 11, color: 'var(--text-2)' }}>Restants</span>
           </div>
         </div>
 
         {/* Card 6: Bilans Faits */}
-        <div
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 14,
-            padding: '14px 16px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-          }}
-        >
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Bilans Faits
-            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Bilans Faits</span>
             <span style={{ fontSize: 16 }}>🧪</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
@@ -1527,54 +1681,30 @@ export default function Entreprises({ toast }) {
         </div>
 
         {/* Card 7: Bilans Manquants */}
-        <div
-          style={{
-            background: totalBilansManquants > 0 ? 'linear-gradient(135deg, rgba(220,38,38,0.08), rgba(239,68,68,0.03))' : 'var(--surface)',
-            border: totalBilansManquants > 0 ? '1.5px solid rgba(220,38,38,0.4)' : '1px solid var(--border)',
-            borderRadius: 14,
-            padding: '14px 16px',
-            boxShadow: '0 2px 8px rgba(220,38,38,0.04)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-          }}
-        >
+        <div style={{ background: totalBilansManquants > 0 ? 'linear-gradient(135deg, rgba(220,38,38,0.08), rgba(239,68,68,0.03))' : 'var(--surface)', border: totalBilansManquants > 0 ? '1.5px solid rgba(220,38,38,0.4)' : '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', boxShadow: '0 2px 8px rgba(220,38,38,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: totalBilansManquants > 0 ? '#dc2626' : 'var(--text-3)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Bilans Manquants
-            </span>
+            <span style={{ fontSize: 11, color: totalBilansManquants > 0 ? '#dc2626' : 'var(--text-3)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Bilans Manquants</span>
             <span style={{ fontSize: 16 }}>⚠️</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
             <span style={{ fontSize: 24, fontWeight: 900, color: totalBilansManquants > 0 ? '#dc2626' : '#16a34a' }}>
               {totalBilansManquants}
             </span>
-            <span style={{ fontSize: 11, color: 'var(--text-3)' }}>En attente</span>
+            <span style={{ fontSize: 11, color: 'var(--text-3)' }}>À compléter</span>
           </div>
         </div>
 
-        {/* Card 8: Avis partagés */}
-        <div
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 14,
-            padding: '14px 16px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-          }}
-        >
+        {/* Card 8: Alertes Nouvelle Année */}
+        <div style={{ background: nbEntreprisesNouvelleAnnee > 0 ? '#fffbeb' : 'var(--surface)', border: nbEntreprisesNouvelleAnnee > 0 ? '1.5px solid #f59e0b' : '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Avis partagés
-            </span>
-            <span style={{ fontSize: 16 }}>💬</span>
+            <span style={{ fontSize: 11, color: nbEntreprisesNouvelleAnnee > 0 ? '#b45309' : 'var(--text-3)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>À Réinitialiser</span>
+            <span style={{ fontSize: 16 }}>🔔</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
-            <span style={{ fontSize: 24, fontWeight: 900, color: '#f59e0b' }}>{stats.avis}</span>
-            <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Retours</span>
+            <span style={{ fontSize: 24, fontWeight: 900, color: nbEntreprisesNouvelleAnnee > 0 ? '#b45309' : '#16a34a' }}>
+              {nbEntreprisesNouvelleAnnee}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Campagne passée</span>
           </div>
         </div>
       </div>
@@ -1622,10 +1752,30 @@ export default function Entreprises({ toast }) {
           )}
         </div>
 
+        {/* Filtre Campagne Annuelle */}
+        <div style={{ display: 'flex', gap: 4, background: 'var(--surface2)', borderRadius: 10, padding: 4, border: '1px solid var(--border)', flexWrap: 'wrap' }}>
+          {[
+            ['all', 'Toutes'],
+            ['a_planifier', '⏳ À planifier (0%)'],
+            ['en_cours', '🩺 En cours'],
+            ['termine', '✅ Terminées (100%)'],
+            ['nouvelle_annee', '🔔 Nouvelle Année'],
+          ].map(([v, l]) => (
+            <button
+              key={v}
+              className={`btn btn-sm ${filterCampagne === v ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setFilterCampagne(v)}
+              style={{ padding: '6px 10px', fontSize: 11.5, whiteSpace: 'nowrap', fontWeight: filterCampagne === v ? 800 : 600, borderRadius: 8 }}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+
         {/* Filtre Convention */}
         <div style={{ display: 'flex', gap: 4, background: 'var(--surface2)', borderRadius: 10, padding: 4, border: '1px solid var(--border)', flexWrap: 'wrap' }}>
           {[
-            ['all', `Toutes (${entreprises.length})`],
+            ['all', 'Tous types'],
             ['conv', 'Conventionnées'],
             ['nonconv', 'Non conv.'],
           ].map(([v, l]) => (
@@ -1633,41 +1783,18 @@ export default function Entreprises({ toast }) {
               key={v}
               className={`btn btn-sm ${filterConv === v ? 'btn-primary' : 'btn-ghost'}`}
               onClick={() => setFilterConv(v)}
-              style={{ padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap', fontWeight: filterConv === v ? 800 : 600, borderRadius: 8 }}
+              style={{ padding: '6px 10px', fontSize: 11.5, whiteSpace: 'nowrap', fontWeight: filterConv === v ? 800 : 600, borderRadius: 8 }}
             >
               {l}
             </button>
           ))}
         </div>
 
-        {/* Filtre par Date */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface2)', borderRadius: 10, padding: '4px 8px', border: '1px solid var(--border)' }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)' }}>📅 Date :</span>
-          <input
-            type="date"
-            className="input"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            style={{ fontSize: 12, padding: '3px 8px', height: 30, borderRadius: 6, width: 'auto' }}
-            title="Filtrer par date d'enregistrement ou de convention"
-          />
-          {dateFilter && (
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setDateFilter('')}
-              style={{ fontSize: 11, padding: '2px 6px', color: 'var(--danger)' }}
-              title="Effacer le filtre date"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-
         {/* Sélecteur de Vue */}
         <div style={{ display: 'flex', gap: 4, background: 'var(--surface2)', borderRadius: 10, padding: 4, border: '1px solid var(--border)', flexWrap: 'wrap' }}>
           {[
-            ['list', '📋 Liste'],
-            ['table', '📊 Calculateur & Suivi'],
+            ['list', '📋 Cartes'],
+            ['table', '📊 Tableau & Suivi'],
             ['map', '🗺️ Carte'],
           ].map(([v, l]) => (
             <button
@@ -1692,7 +1819,7 @@ export default function Entreprises({ toast }) {
           <div className="empty-icon" style={{ fontSize: 44 }}>🏢</div>
           <h4 style={{ fontWeight: 800, marginTop: 12, fontSize: 16 }}>Aucune entreprise trouvée</h4>
           <p style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 6 }}>
-            Modifiez votre recherche ou ajoutez une nouvelle entreprise conventionnée.
+            Modifiez votre recherche ou ajoutez une nouvelle entreprise.
           </p>
         </div>
       ) : viewMode === 'map' ? (
@@ -1710,16 +1837,16 @@ export default function Entreprises({ toast }) {
           }}
         >
           <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
-            <table style={{ width: '100%', minWidth: 680, borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+            <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
               <thead>
                 <tr style={{ background: 'var(--surface2)', borderBottom: '2px solid var(--border)', color: 'var(--text)' }}>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>Société / Entreprise</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>Société / Campagne</th>
                   <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center' }}>👥 Effectif Total</th>
                   <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center' }}>🩺 Déjà fait sa visite</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center' }}>⏳ En attente (Reste à faire)</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800, minWidth: 170 }}>Progression Visites</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center' }}>⏳ En attente (Reste)</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 800, minWidth: 160 }}>Progression Visites</th>
                   <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center' }}>🧪 Bilans Faits</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center' }}>⚠️ Bilans Manquants</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center' }}>⚠️ Manquants</th>
                   <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
@@ -1731,6 +1858,8 @@ export default function Entreprises({ toast }) {
                   const tx = eff > 0 ? Math.min(100, Math.round((vf / eff) * 100)) : 0;
                   const bf = parseInt(e.nb_bilans_faits, 10) || 0;
                   const bm = parseInt(e.nb_bilans_manquants, 10) || 0;
+                  const annee = e.annee_campagne || currentYear;
+                  const isNouvelleAnnee = parseInt(annee, 10) < currentYear;
 
                   return (
                     <tr
@@ -1743,7 +1872,21 @@ export default function Entreprises({ toast }) {
                       onMouseLeave={(el) => (el.currentTarget.style.background = 'transparent')}
                     >
                       <td style={{ padding: '14px 18px' }}>
-                        <div style={{ fontWeight: 800, color: 'var(--text)', fontSize: 14 }}>{e.nom}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontWeight: 800, color: 'var(--text)', fontSize: 14 }}>{e.nom}</span>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 800,
+                              padding: '2px 6px',
+                              borderRadius: 4,
+                              background: isNouvelleAnnee ? '#fee2e2' : '#e0f2fe',
+                              color: isNouvelleAnnee ? '#991b1b' : '#0369a1',
+                            }}
+                          >
+                            📅 {annee}
+                          </span>
+                        </div>
                         <div style={{ fontSize: 11, color: 'var(--text-3)', display: 'flex', gap: 6, alignItems: 'center', marginTop: 3, flexWrap: 'wrap' }}>
                           <span>{e.secteur || 'Général'}</span>
                           <span>•</span>
@@ -1759,32 +1902,15 @@ export default function Entreprises({ toast }) {
                           >
                             {e.convensionne ? 'Conventionnée' : 'Non conv.'}
                           </span>
-                          {e.convensionne && (e.date_debut_convention || e.date_fin_convention) && (
-                            <>
-                              <span>•</span>
-                              <span style={{ fontSize: 10.5, color: 'var(--text-2)', fontWeight: 600 }}>
-                                📅 {formatConventionRange(e.date_debut_convention, e.date_fin_convention)}
-                              </span>
-                            </>
-                          )}
-                          {e.convensionne && (
-                            <span style={{ fontSize: 10, fontWeight: 700, color: e.renouvelable ? '#059669' : '#64748b' }}>
-                              {e.renouvelable ? '🔄 Renouvelable' : '🚫 Non renouv.'}
-                            </span>
-                          )}
                         </div>
                       </td>
 
                       <td style={{ padding: '14px 18px', textAlign: 'center', fontWeight: 900, fontSize: 15 }}>
-                        <span style={{ background: 'rgba(14,165,233,0.1)', color: '#0284c7', padding: '4px 10px', borderRadius: 8 }}>
-                          {eff}
-                        </span>
+                        <span style={{ background: 'rgba(14,165,233,0.1)', color: '#0284c7', padding: '4px 10px', borderRadius: 8 }}>{eff}</span>
                       </td>
 
                       <td style={{ padding: '14px 18px', textAlign: 'center', fontWeight: 900, color: '#16a34a', fontSize: 15 }}>
-                        <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: 8 }}>
-                          {vf}
-                        </span>
+                        <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: 8 }}>{vf}</span>
                       </td>
 
                       <td style={{ padding: '14px 18px', textAlign: 'center' }}>
@@ -1804,10 +1930,6 @@ export default function Entreprises({ toast }) {
                       </td>
 
                       <td style={{ padding: '14px 18px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
-                          <span>{tx}% complété</span>
-                          <span style={{ color: 'var(--text-3)' }}>{vf} / {eff}</span>
-                        </div>
                         <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
                           <div
                             style={{
@@ -1820,15 +1942,11 @@ export default function Entreprises({ toast }) {
                         </div>
                       </td>
 
-                      <td style={{ padding: '14px 18px', textAlign: 'center', fontWeight: 800, color: '#0ea5e9', fontSize: 14 }}>
-                        {bf}
-                      </td>
+                      <td style={{ padding: '14px 18px', textAlign: 'center', fontWeight: 800, color: '#0ea5e9', fontSize: 14 }}>{bf}</td>
 
                       <td style={{ padding: '14px 18px', textAlign: 'center' }}>
                         {bm > 0 ? (
-                          <span style={{ padding: '3px 8px', borderRadius: 8, background: '#fee2e2', color: '#991b1b', fontWeight: 800, fontSize: 12 }}>
-                            ⚠️ {bm}
-                          </span>
+                          <span style={{ padding: '3px 8px', borderRadius: 8, background: '#fee2e2', color: '#991b1b', fontWeight: 800, fontSize: 12 }}>⚠️ {bm}</span>
                         ) : (
                           <span style={{ color: '#16a34a', fontSize: 12, fontWeight: 700 }}>✓ 0</span>
                         )}
@@ -1836,12 +1954,31 @@ export default function Entreprises({ toast }) {
 
                       <td style={{ padding: '14px 18px', textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                          <button
+                            className="btn btn-sm"
+                            onClick={() =>
+                              navigate('/planning', {
+                                state: { prefillEntreprise: e.nom, prefillAdresse: e.adresse },
+                              })
+                            }
+                            title="Planifier une visite médicale"
+                            style={{
+                              padding: '4px 10px',
+                              fontSize: 11.5,
+                              fontWeight: 800,
+                              background: '#dcfce7',
+                              color: '#166534',
+                              border: '1px solid #86efac',
+                            }}
+                          >
+                            📅 Planifier
+                          </button>
                           {isAdmin && (
                             <button
                               className="btn btn-outline btn-sm"
                               onClick={() => setQuickBilan(e)}
                               title="Modifier rapidement les effectifs & bilans"
-                              style={{ padding: '4px 10px', fontSize: 11, fontWeight: 700 }}
+                              style={{ padding: '4px 8px', fontSize: 11, fontWeight: 700 }}
                             >
                               ⚡ Calculer
                             </button>
@@ -1849,7 +1986,7 @@ export default function Entreprises({ toast }) {
                           <button
                             className="btn btn-primary btn-sm"
                             onClick={() => setSelected(e.id)}
-                            style={{ padding: '4px 12px', fontSize: 11, fontWeight: 700 }}
+                            style={{ padding: '4px 10px', fontSize: 11, fontWeight: 700 }}
                           >
                             Voir détails →
                           </button>
@@ -1870,6 +2007,8 @@ export default function Entreprises({ toast }) {
             const vf = parseInt(e.nb_visites_faites, 10) || 0;
             const aFaire = Math.max(0, eff - vf);
             const tx = eff > 0 ? Math.min(100, Math.round((vf / eff) * 100)) : 0;
+            const annee = e.annee_campagne || currentYear;
+            const isNouvelleAnnee = parseInt(annee, 10) < currentYear;
 
             return (
               <div
@@ -1878,7 +2017,7 @@ export default function Entreprises({ toast }) {
                 style={{
                   cursor: 'pointer',
                   transition: 'box-shadow .2s ease, transform .15s ease',
-                  borderTop: `4px solid ${e.convensionne ? '#10b981' : '#ef4444'}`,
+                  borderTop: `4px solid ${isNouvelleAnnee ? '#f59e0b' : e.convensionne ? '#10b981' : '#ef4444'}`,
                   borderRadius: 16,
                   padding: '18px 20px',
                   display: 'flex',
@@ -1900,96 +2039,47 @@ export default function Entreprises({ toast }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                     <div>
                       <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text)', marginBottom: 2 }}>{e.nom}</div>
-                      {e.secteur && <div style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>🏷 {e.secteur}</div>}
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                        {e.secteur && <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>🏷 {e.secteur}</span>}
+                        <span
+                          style={{
+                            fontSize: 10.5,
+                            fontWeight: 800,
+                            padding: '1px 6px',
+                            borderRadius: 4,
+                            background: isNouvelleAnnee ? '#fee2e2' : '#e0f2fe',
+                            color: isNouvelleAnnee ? '#991b1b' : '#0369a1',
+                          }}
+                        >
+                          📅 {annee}
+                        </span>
+                      </div>
                     </div>
                     <span className={`badge ${e.convensionne ? 'badge-green' : 'badge-red'}`} style={{ fontSize: 10, flexShrink: 0 }}>
                       {e.convensionne ? '✅ Conv.' : '❌ Non'}
                     </span>
                   </div>
 
-                  {e.convensionne && (
-                    <div
-                      style={{
-                        margin: '2px 0 8px 0',
-                        padding: '6px 10px',
-                        borderRadius: 8,
-                        background: 'rgba(16,185,129,0.08)',
-                        border: '1px solid rgba(16,185,129,0.2)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        fontSize: 11,
-                        color: '#065f46',
-                        flexWrap: 'wrap',
-                        gap: 4,
-                      }}
-                    >
-                      <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span>📅</span>
-                        <span>{formatConventionRange(e.date_debut_convention, e.date_fin_convention)}</span>
-                      </span>
-                      <span
-                        style={{
-                          fontWeight: 700,
-                          fontSize: 10,
-                          background: e.renouvelable ? '#d1fae5' : '#f1f5f9',
-                          color: e.renouvelable ? '#065f46' : '#64748b',
-                          padding: '2px 6px',
-                          borderRadius: 4,
-                        }}
-                      >
-                        {e.renouvelable ? '🔄 Renouvelable' : '🚫 Non renouv.'}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* ── Widget 3 Indicateurs Effectifs & Formule Directe ── */}
-                  <div
-                    style={{
-                      padding: '12px 14px',
-                      background: 'var(--surface2)',
-                      borderRadius: 12,
-                      margin: '12px 0',
-                      border: '1px solid var(--border)',
-                    }}
-                  >
+                  {/* ── Widget Indicateurs ── */}
+                  <div style={{ padding: '12px 14px', background: 'var(--surface2)', borderRadius: 12, margin: '12px 0', border: '1px solid var(--border)' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, textAlign: 'center', marginBottom: 10 }}>
                       <div style={{ background: 'var(--surface)', padding: '6px 4px', borderRadius: 8, border: '1px solid var(--border)' }}>
                         <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700 }}>👥 Effectif</div>
                         <div style={{ fontSize: 15, fontWeight: 900, color: '#0284c7', marginTop: 1 }}>{eff}</div>
                       </div>
                       <div style={{ background: 'var(--surface)', padding: '6px 4px', borderRadius: 8, border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: 10, color: '#16a34a', fontWeight: 700 }}>🩺 Déjà fait</div>
+                        <div style={{ fontSize: 10, color: '#16a34a', fontWeight: 700 }}>🩺 Fait</div>
                         <div style={{ fontSize: 15, fontWeight: 900, color: '#16a34a', marginTop: 1 }}>{vf}</div>
                       </div>
                       <div style={{ background: 'var(--surface)', padding: '6px 4px', borderRadius: 8, border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: 10, color: aFaire > 0 ? '#ea580c' : '#16a34a', fontWeight: 700 }}>⏳ En attente</div>
+                        <div style={{ fontSize: 10, color: aFaire > 0 ? '#ea580c' : '#16a34a', fontWeight: 700 }}>⏳ Reste</div>
                         <div style={{ fontSize: 15, fontWeight: 900, color: aFaire > 0 ? '#ea580c' : '#16a34a', marginTop: 1 }}>{aFaire}</div>
                       </div>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
-                      <span style={{ color: 'var(--text-2)' }}>Taux de réalisation :</span>
-                      <span style={{ color: tx >= 100 ? '#16a34a' : '#0284c7' }}>{tx}%</span>
                     </div>
                     <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
                       <div style={{ width: `${tx}%`, height: '100%', background: tx >= 100 ? '#22c55e' : '#0ea5e9' }} />
                     </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, color: 'var(--text-3)', fontSize: 11 }}>
-                      <span>🧪 Bilans faits: <strong>{e.nb_bilans_faits || 0}</strong></span>
-                      <span style={{ color: (e.nb_bilans_manquants || 0) > 0 ? '#dc2626' : 'inherit', fontWeight: (e.nb_bilans_manquants || 0) > 0 ? 800 : 400 }}>
-                        ⚠️ Manquants: {e.nb_bilans_manquants || 0}
-                      </span>
-                    </div>
                   </div>
-
-                  {e.adresse && (
-                    <div style={{ marginBottom: 6 }}>
-                      <NavigationSelector addr={e.adresse} compact />
-                    </div>
-                  )}
-                  {e.telephone && <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 6 }}>📞 {e.telephone}</div>}
                 </div>
 
                 <div
@@ -2000,18 +2090,40 @@ export default function Entreprises({ toast }) {
                     marginTop: 14,
                     paddingTop: 12,
                     borderTop: '1px solid var(--border)',
+                    flexWrap: 'wrap',
+                    gap: 6,
                   }}
                 >
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: 'var(--text-2)' }}>💬 {e.nb_avis || 0} avis</span>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{ fontSize: 11.5, color: 'var(--text-2)' }}>💬 {e.nb_avis || 0}</span>
                     {e.note_moyenne > 0 && (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 12 }}>
-                        <Stars value={Math.round(e.note_moyenne)} size={12} />
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 11.5 }}>
+                        <Stars value={Math.round(e.note_moyenne)} size={11} />
                         <span style={{ color: 'var(--warn)', fontWeight: 700 }}>{e.note_moyenne}</span>
                       </span>
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <button
+                      className="btn btn-sm"
+                      onClick={(evt) => {
+                        evt.stopPropagation();
+                        navigate('/planning', {
+                          state: { prefillEntreprise: e.nom, prefillAdresse: e.adresse },
+                        });
+                      }}
+                      title="Planifier une visite médicale"
+                      style={{
+                        padding: '3px 8px',
+                        fontSize: 11,
+                        fontWeight: 800,
+                        background: '#dcfce7',
+                        color: '#166534',
+                        border: '1px solid #86efac',
+                      }}
+                    >
+                      📅 Planifier
+                    </button>
                     {isAdmin && (
                       <button
                         className="btn btn-outline btn-sm"
@@ -2022,10 +2134,10 @@ export default function Entreprises({ toast }) {
                         title="Calculateur rapide des effectifs"
                         style={{ padding: '3px 8px', fontSize: 11, fontWeight: 700 }}
                       >
-                        ⚡ Modifier effectifs
+                        ⚡ Effectifs
                       </button>
                     )}
-                    <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 800 }}>Voir détails →</span>
+                    <span style={{ fontSize: 11.5, color: 'var(--primary)', fontWeight: 800 }}>Voir détails →</span>
                   </div>
                 </div>
               </div>
@@ -2056,6 +2168,17 @@ export default function Entreprises({ toast }) {
             toast?.('Bilan et effectifs mis à jour avec succès !', 'success');
           }}
           onClose={() => setQuickBilan(null)}
+        />
+      )}
+
+      {showImportModal && (
+        <ExcelImportModal
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            setShowImportModal(false);
+            load();
+          }}
+          toast={toast}
         />
       )}
 

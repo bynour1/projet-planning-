@@ -456,40 +456,76 @@ export default function Dashboard({ toast }) {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {convEntreprises.map(ent => (
-                  <div
-                    key={ent.id}
-                    onClick={() => navigate('/entreprises')}
-                    style={{
-                      padding: '10px 12px', background: 'var(--surface2)', borderRadius: 10,
-                      border: '1px solid var(--border)', borderLeft: '3px solid #10b981',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
-                      cursor: 'pointer', transition: 'all 0.15s ease'
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.transform = 'translateX(2px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>
-                        {ent.nom}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>
-                        {ent.secteur ? `🏷️ ${ent.secteur}` : 'Secteur général'}
-                        {ent.adresse ? ` · 📍 ${ent.adresse}` : ''}
-                        {ent.telephone ? ` · 📞 ${ent.telephone}` : ''}
-                        {(ent.date_debut_convention || ent.date_fin_convention) && (
-                          <span style={{ display: 'block', marginTop: 2, color: 'var(--text-3)' }}>
-                            📅 Validité : {ent.date_debut_convention ? new Date(ent.date_debut_convention).toLocaleDateString('fr-FR') : '—'} ➔ {ent.date_fin_convention ? new Date(ent.date_fin_convention).toLocaleDateString('fr-FR') : '—'}
+                {convEntreprises.map(ent => {
+                  const eff = parseInt(ent.effectif_total, 10) || 0;
+                  const vf = parseInt(ent.nb_visites_faites, 10) || 0;
+                  const aFaire = Math.max(0, eff - vf);
+                  const annee = ent.annee_campagne || new Date().getFullYear();
+                  const isOldYear = parseInt(annee, 10) < new Date().getFullYear();
+
+                  return (
+                    <div
+                      key={ent.id}
+                      onClick={() => navigate('/entreprises')}
+                      style={{
+                        padding: '12px 14px', background: 'var(--surface2)', borderRadius: 10,
+                        border: '1px solid var(--border)', borderLeft: `3px solid ${isOldYear ? '#f59e0b' : '#10b981'}`,
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
+                        cursor: 'pointer', transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateX(2px)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--text)' }}>
+                            {ent.nom}
+                          </span>
+                          <span style={{
+                            fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 4,
+                            background: isOldYear ? '#fee2e2' : '#e0f2fe',
+                            color: isOldYear ? '#991b1b' : '#0369a1',
+                          }}>
+                            📅 {annee}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 3 }}>
+                          {ent.secteur ? `🏷️ ${ent.secteur}` : 'Secteur général'}
+                          {ent.adresse ? ` · 📍 ${ent.adresse}` : ''}
+                          <span style={{ display: 'block', marginTop: 3, color: 'var(--text-3)' }}>
+                            👥 Effectif : <strong>{vf}/{eff} vus</strong> ({aFaire} en attente)
                             {ent.renouvelable ? ' · 🔄 Renouvelable' : ''}
                           </span>
-                        )}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                        <button
+                          className="btn btn-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate('/planning', {
+                              state: { prefillEntreprise: ent.nom, prefillAdresse: ent.adresse },
+                            });
+                          }}
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 800,
+                            padding: '3px 8px',
+                            background: '#dcfce7',
+                            color: '#166534',
+                            border: '1px solid #86efac',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          📅 Planifier
+                        </button>
+                        <span style={{ fontSize: 10.5, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>
+                          Conventionnée
+                        </span>
                       </div>
                     </div>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '2px 8px', borderRadius: 6, whiteSpace: 'nowrap' }}>
-                      Conventionnée
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
