@@ -119,14 +119,17 @@ describe('Entreprises page — liste', () => {
     expect(screen.getByRole('button', { name: /Enregistrer/ })).toBeDisabled();
   });
 
-  it('creates entreprise successfully', async () => {
+  it('creates entreprise successfully with convention dates and renouvelable', async () => {
     axios.get.mockResolvedValueOnce({ data: [] });
     axios.post.mockResolvedValueOnce({ data: { message:'Créée', id:10 } });
-    axios.get.mockResolvedValueOnce({ data: [{ id:10, nom:'Nouvelle Clinique', secteur:'Médical', convensionne:1, nb_avis:0, note_moyenne:null }] });
+    axios.get.mockResolvedValueOnce({ data: [{ id:10, nom:'Nouvelle Clinique', secteur:'Médical', convensionne:1, date_debut_convention:'2026-01-01', date_fin_convention:'2026-12-31', renouvelable:1, nb_avis:0, note_moyenne:null }] });
     renderWithProviders(<Entreprises toast={mockToast} />, { user: MOCK_ADMIN });
     await waitFor(() => screen.getByText('+ Ajouter'));
     await userEvent.click(screen.getByText('+ Ajouter'));
     await userEvent.type(screen.getByPlaceholderText(/Les Oliviers/), 'Nouvelle Clinique');
+    expect(screen.getByText(/Date début convention/)).toBeInTheDocument();
+    expect(screen.getByText(/Date fin convention/)).toBeInTheDocument();
+    expect(screen.getByText(/Convention Renouvelable/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Enregistrer/ }));
     await waitFor(() => expect(mockToast).toHaveBeenCalledWith('Enregistré', 'success'));
   });
@@ -139,7 +142,10 @@ describe('Entreprises page — détail & avis', () => {
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
     await userEvent.click(screen.getAllByText('Voir détails →')[0]);
-    await waitFor(() => expect(screen.getByText('Avis & Remarques')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(screen.getByText('Avis & Remarques')).toBeInTheDocument();
+      expect(screen.getByText(/Convention de Médecine du Travail/)).toBeInTheDocument();
+    });
   });
 
   it('shows avis in detail panel', async () => {

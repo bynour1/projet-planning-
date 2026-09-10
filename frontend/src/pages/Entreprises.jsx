@@ -106,6 +106,51 @@ function Stars({ value, onChange, size = 18 }) {
   );
 }
 
+// ── Helpers pour dates de convention et renouvellement ───────
+function formatConventionDate(d) {
+  if (!d) return null;
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return String(d).slice(0, 10);
+  return dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function formatConventionRange(debut, fin) {
+  const d1 = formatConventionDate(debut);
+  const d2 = formatConventionDate(fin);
+  if (d1 && d2) return `Du ${d1} au ${d2}`;
+  if (d1) return `À partir du ${d1}`;
+  if (d2) return `Jusqu'au ${d2}`;
+  return 'Convention en cours';
+}
+
+function getConventionBadge(dateFin) {
+  if (!dateFin) return null;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const dFin = new Date(dateFin);
+  if (isNaN(dFin.getTime())) return null;
+  const diffDays = Math.ceil((dFin - now) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) {
+    return (
+      <span style={{ fontSize: 11, fontWeight: 800, color: '#991b1b', background: '#fee2e2', padding: '3px 9px', borderRadius: 6 }}>
+        ⚠️ Expirée ({Math.abs(diffDays)}j)
+      </span>
+    );
+  }
+  if (diffDays <= 30) {
+    return (
+      <span style={{ fontSize: 11, fontWeight: 800, color: '#9a3412', background: '#ffedd5', padding: '3px 9px', borderRadius: 6 }}>
+        ⏳ Expire dans {diffDays}j
+      </span>
+    );
+  }
+  return (
+    <span style={{ fontSize: 11, fontWeight: 800, color: '#166534', background: '#dcfce7', padding: '3px 9px', borderRadius: 6 }}>
+      ✅ Valide ({diffDays}j restants)
+    </span>
+  );
+}
+
 // ── Modal pour création/édition complète d'entreprise ──────────
 function EntrepriseModal({ item, onSave, onClose }) {
   const init = item || {};
@@ -118,6 +163,9 @@ function EntrepriseModal({ item, onSave, onClose }) {
     site_web: init.site_web || '',
     description: init.description || '',
     convensionne: init.convensionne !== undefined ? !!init.convensionne : true,
+    date_debut_convention: init.date_debut_convention ? String(init.date_debut_convention).slice(0, 10) : '',
+    date_fin_convention: init.date_fin_convention ? String(init.date_fin_convention).slice(0, 10) : '',
+    renouvelable: init.renouvelable !== undefined ? !!init.renouvelable : true,
     effectif_total: init.effectif_total !== undefined && init.effectif_total !== null ? init.effectif_total : 0,
     nb_visites_faites: init.nb_visites_faites !== undefined && init.nb_visites_faites !== null ? init.nb_visites_faites : 0,
     nb_bilans_faits: init.nb_bilans_faits !== undefined && init.nb_bilans_faits !== null ? init.nb_bilans_faits : 0,
@@ -136,6 +184,9 @@ function EntrepriseModal({ item, onSave, onClose }) {
     setSaving(true);
     const payload = {
       ...f,
+      date_debut_convention: f.convensionne && f.date_debut_convention ? f.date_debut_convention : null,
+      date_fin_convention: f.convensionne && f.date_fin_convention ? f.date_fin_convention : null,
+      renouvelable: f.convensionne ? (f.renouvelable ? 1 : 0) : 0,
       effectif_total: parseInt(f.effectif_total, 10) || 0,
       nb_visites_faites: parseInt(f.nb_visites_faites, 10) || 0,
       nb_bilans_faits: parseInt(f.nb_bilans_faits, 10) || 0,
@@ -350,26 +401,106 @@ function EntrepriseModal({ item, onSave, onClose }) {
             />
           </div>
 
-          <div className="form-group">
-            <label style={{ fontSize: 12, fontWeight: 600 }}>Statut convention</label>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                type="button"
-                className={`btn btn-sm ${f.convensionne ? 'btn-success' : 'btn-outline'}`}
-                onClick={() => s('convensionne', true)}
-                style={{ flex: 1, justifyContent: 'center', padding: '8px' }}
-              >
-                ✅ Conventionnée
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${!f.convensionne ? 'btn-danger' : 'btn-outline'}`}
-                onClick={() => s('convensionne', false)}
-                style={{ flex: 1, justifyContent: 'center', padding: '8px' }}
-              >
-                ❌ Non conventionnée
-              </button>
+          {/* Section Convention */}
+          <div
+            style={{
+              background: f.convensionne ? 'linear-gradient(135deg, rgba(16,185,129,0.06), rgba(5,150,105,0.08))' : 'var(--surface2)',
+              border: `1.5px solid ${f.convensionne ? 'rgba(16,185,129,0.35)' : 'var(--border)'}`,
+              borderRadius: 14,
+              padding: 16,
+            }}
+          >
+            <div style={{ fontWeight: 800, fontSize: 13, color: f.convensionne ? '#059669' : 'var(--text-2)', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>📜</span> Statut & Détails de la Convention
+              </span>
+              <span style={{ fontSize: 11, background: f.convensionne ? '#059669' : '#64748b', color: '#fff', padding: '2px 8px', borderRadius: 6, fontWeight: 700 }}>
+                {f.convensionne ? 'Partenaire Conventionné' : 'Non Conventionné'}
+              </span>
             </div>
+
+            <div className="form-group" style={{ marginBottom: f.convensionne ? 12 : 0 }}>
+              <label style={{ fontSize: 12, fontWeight: 600 }}>Statut convention</label>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${f.convensionne ? 'btn-success' : 'btn-outline'}`}
+                  onClick={() => s('convensionne', true)}
+                  style={{ flex: 1, justifyContent: 'center', padding: '8px' }}
+                >
+                  ✅ Conventionnée
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${!f.convensionne ? 'btn-danger' : 'btn-outline'}`}
+                  onClick={() => s('convensionne', false)}
+                  style={{ flex: 1, justifyContent: 'center', padding: '8px' }}
+                >
+                  ❌ Non conventionnée
+                </button>
+              </div>
+            </div>
+
+            {f.convensionne && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+                  <div className="form-group">
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                      📅 Date début convention
+                    </label>
+                    <input
+                      type="date"
+                      className="input"
+                      value={f.date_debut_convention}
+                      onChange={(e) => s('date_debut_convention', e.target.value)}
+                      style={{ fontWeight: 600 }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                      🏁 Date fin convention
+                    </label>
+                    <input
+                      type="date"
+                      className="input"
+                      value={f.date_fin_convention}
+                      onChange={(e) => s('date_fin_convention', e.target.value)}
+                      style={{ fontWeight: 600 }}
+                    />
+                  </div>
+                </div>
+
+                {/* Option Renouvelable */}
+                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface)', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                      🔄 Convention Renouvelable
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                      Indique si la convention est renouvelable par tacite reconduction
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${f.renouvelable ? 'btn-primary' : 'btn-ghost'}`}
+                      onClick={() => s('renouvelable', true)}
+                      style={{ padding: '4px 12px', fontSize: 12, fontWeight: 700 }}
+                    >
+                      🔄 Renouvelable
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${!f.renouvelable ? 'btn-secondary' : 'btn-ghost'}`}
+                      onClick={() => s('renouvelable', false)}
+                      style={{ padding: '4px 12px', fontSize: 12, fontWeight: 700 }}
+                    >
+                      🚫 Non
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
         <div className="modal-footer" style={{ borderTop: '1px solid var(--border)', padding: '14px 22px' }}>
@@ -728,6 +859,49 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onDelete,
           </div>
         </div>
 
+        {/* Section Convention & Validité */}
+        <div
+          style={{
+            marginTop: 14,
+            padding: '12px 18px',
+            background: entreprise.convensionne
+              ? 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(5,150,105,0.04))'
+              : 'var(--surface2)',
+            borderRadius: 12,
+            border: `1.5px solid ${entreprise.convensionne ? 'rgba(16,185,129,0.3)' : 'var(--border)'}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 20 }}>📜</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>
+                {entreprise.convensionne ? 'Convention de Médecine du Travail' : 'Entreprise Non Conventionnée'}
+              </div>
+              {entreprise.convensionne ? (
+                <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span>
+                    📅 Période : <strong>{formatConventionRange(entreprise.date_debut_convention, entreprise.date_fin_convention)}</strong>
+                  </span>
+                  <span>•</span>
+                  <span style={{ fontWeight: 700, color: entreprise.renouvelable ? '#059669' : '#64748b' }}>
+                    {entreprise.renouvelable ? '🔄 Renouvelable (Tacite reconduction)' : '🚫 Non renouvelable'}
+                  </span>
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+                  Cette structure ne dispose pas encore de convention d'intervention active.
+                </div>
+              )}
+            </div>
+          </div>
+          {entreprise.convensionne && getConventionBadge(entreprise.date_fin_convention)}
+        </div>
+
         {/* Section Chiffres & Bilan Médical */}
         <div
           style={{
@@ -971,7 +1145,9 @@ export default function Entreprises({ toast }) {
       let matchDate = true;
       if (dateFilter) {
         const itemDate = e.created_at ? String(e.created_at).slice(0, 10) : '';
-        if (itemDate && itemDate !== dateFilter) {
+        const dDebut = e.date_debut_convention ? String(e.date_debut_convention).slice(0, 10) : '';
+        const dFin = e.date_fin_convention ? String(e.date_fin_convention).slice(0, 10) : '';
+        if (itemDate !== dateFilter && dDebut !== dateFilter && dFin !== dateFilter) {
           matchDate = false;
         }
       }
@@ -1006,6 +1182,9 @@ export default function Entreprises({ toast }) {
       nom: e.nom || '—',
       secteur: e.secteur || '—',
       conv: e.convensionne ? 'Oui' : 'Non',
+      date_debut_convention: e.date_debut_convention ? formatConventionDate(e.date_debut_convention) : '—',
+      date_fin_convention: e.date_fin_convention ? formatConventionDate(e.date_fin_convention) : '—',
+      renouvelable: e.convensionne ? (e.renouvelable ? 'Oui (Renouvelable)' : 'Non') : '—',
       effectif_total: eff,
       visites_faites: vf,
       visites_a_faire: vaf,
@@ -1021,6 +1200,9 @@ export default function Entreprises({ toast }) {
     { header: 'Entreprise', key: 'nom' },
     { header: 'Secteur', key: 'secteur' },
     { header: 'Conv.', key: 'conv' },
+    { header: 'Début Conv.', key: 'date_debut_convention' },
+    { header: 'Fin Conv.', key: 'date_fin_convention' },
+    { header: 'Renouvelable', key: 'renouvelable' },
     { header: 'Effectif', key: 'effectif_total' },
     { header: 'Visites Faites', key: 'visites_faites' },
     { header: 'En Attente', key: 'visites_a_faire' },
@@ -1085,26 +1267,27 @@ export default function Entreprises({ toast }) {
   }
 
   return (
-    <div className="page-content" style={{ maxWidth: 1400, margin: '0 auto' }}>
+    <div className="page-content" style={{ maxWidth: 1400, margin: '0 auto', width: '100%' }}>
       {/* ── BANNIÈRE EXECUTIVE HEADER ── */}
       <div
         style={{
           background: 'var(--surface)',
           borderRadius: 16,
-          padding: '22px 26px',
+          padding: '16px 20px',
           border: '1px solid var(--border)',
           borderTop: '4px solid #0284c7',
           boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
-          marginBottom: 20,
+          marginBottom: 16,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: 16,
+          gap: 12,
+          width: '100%',
         }}
       >
-        <div style={{ flex: '1 1 400px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+        <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
             <span
               style={{
                 fontSize: 11,
@@ -1122,7 +1305,7 @@ export default function Entreprises({ toast }) {
             </span>
             <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600 }}>• Tableau de bord exécutif</span>
           </div>
-          <h2 style={{ fontSize: 24, fontWeight: 900, color: 'var(--text)', letterSpacing: -0.5, margin: 0 }}>
+          <h2 style={{ fontSize: 22, fontWeight: 900, color: 'var(--text)', letterSpacing: -0.5, margin: 0, wordBreak: 'break-word' }}>
             🏢 Entreprises Conventionnées
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4, margin: 0 }}>
@@ -1132,7 +1315,7 @@ export default function Entreprises({ toast }) {
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Export group */}
-          <div style={{ display: 'flex', gap: 4 }}>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             <button
               className="btn btn-outline btn-sm"
               onClick={handleExportExcel}
@@ -1161,7 +1344,7 @@ export default function Entreprises({ toast }) {
 
           {isAdmin && (
             <button
-              className="btn btn-primary"
+              className="btn btn-primary btn-sm"
               onClick={() => setModal({})}
               style={{
                 fontWeight: 800,
@@ -1169,7 +1352,7 @@ export default function Entreprises({ toast }) {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                padding: '8px 18px',
+                padding: '8px 16px',
                 borderRadius: 10,
                 boxShadow: '0 4px 14px rgba(14,165,233,.35)',
               }}
@@ -1400,18 +1583,19 @@ export default function Entreprises({ toast }) {
       <div
         style={{
           display: 'flex',
-          gap: 12,
-          marginBottom: 20,
+          gap: 10,
+          marginBottom: 16,
           flexWrap: 'wrap',
           alignItems: 'center',
           background: 'var(--surface)',
-          padding: '12px 16px',
+          padding: '12px 14px',
           borderRadius: 14,
           border: '1px solid var(--border)',
           boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+          width: '100%',
         }}
       >
-        <div style={{ flex: '1 1 260px', position: 'relative' }}>
+        <div style={{ flex: '1 1 200px', minWidth: 0, position: 'relative' }}>
           <input
             className="input"
             style={{ width: '100%', paddingLeft: 38, height: 40, fontSize: 13, borderRadius: 10 }}
@@ -1439,7 +1623,7 @@ export default function Entreprises({ toast }) {
         </div>
 
         {/* Filtre Convention */}
-        <div style={{ display: 'flex', gap: 4, background: 'var(--surface2)', borderRadius: 10, padding: 4, border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', gap: 4, background: 'var(--surface2)', borderRadius: 10, padding: 4, border: '1px solid var(--border)', flexWrap: 'wrap' }}>
           {[
             ['all', `Toutes (${entreprises.length})`],
             ['conv', 'Conventionnées'],
@@ -1449,7 +1633,7 @@ export default function Entreprises({ toast }) {
               key={v}
               className={`btn btn-sm ${filterConv === v ? 'btn-primary' : 'btn-ghost'}`}
               onClick={() => setFilterConv(v)}
-              style={{ padding: '6px 14px', fontSize: 12, whiteSpace: 'nowrap', fontWeight: filterConv === v ? 800 : 600, borderRadius: 8 }}
+              style={{ padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap', fontWeight: filterConv === v ? 800 : 600, borderRadius: 8 }}
             >
               {l}
             </button>
@@ -1480,7 +1664,7 @@ export default function Entreprises({ toast }) {
         </div>
 
         {/* Sélecteur de Vue */}
-        <div style={{ display: 'flex', gap: 4, background: 'var(--surface2)', borderRadius: 10, padding: 4, border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', gap: 4, background: 'var(--surface2)', borderRadius: 10, padding: 4, border: '1px solid var(--border)', flexWrap: 'wrap' }}>
           {[
             ['list', '📋 Liste'],
             ['table', '📊 Calculateur & Suivi'],
@@ -1490,7 +1674,7 @@ export default function Entreprises({ toast }) {
               key={v}
               className={`btn btn-sm ${viewMode === v ? 'btn-primary' : 'btn-ghost'}`}
               onClick={() => setViewMode(v)}
-              style={{ padding: '6px 14px', fontSize: 12, whiteSpace: 'nowrap', fontWeight: viewMode === v ? 800 : 600, borderRadius: 8 }}
+              style={{ padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap', fontWeight: viewMode === v ? 800 : 600, borderRadius: 8 }}
             >
               {l}
             </button>
@@ -1522,10 +1706,11 @@ export default function Entreprises({ toast }) {
             border: '1px solid var(--border)',
             overflow: 'hidden',
             boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+            width: '100%',
           }}
         >
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
+            <table style={{ width: '100%', minWidth: 680, borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
               <thead>
                 <tr style={{ background: 'var(--surface2)', borderBottom: '2px solid var(--border)', color: 'var(--text)' }}>
                   <th style={{ padding: '14px 18px', fontWeight: 800 }}>Société / Entreprise</th>
@@ -1559,7 +1744,7 @@ export default function Entreprises({ toast }) {
                     >
                       <td style={{ padding: '14px 18px' }}>
                         <div style={{ fontWeight: 800, color: 'var(--text)', fontSize: 14 }}>{e.nom}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-3)', display: 'flex', gap: 6, alignItems: 'center', marginTop: 3 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-3)', display: 'flex', gap: 6, alignItems: 'center', marginTop: 3, flexWrap: 'wrap' }}>
                           <span>{e.secteur || 'Général'}</span>
                           <span>•</span>
                           <span
@@ -1574,6 +1759,19 @@ export default function Entreprises({ toast }) {
                           >
                             {e.convensionne ? 'Conventionnée' : 'Non conv.'}
                           </span>
+                          {e.convensionne && (e.date_debut_convention || e.date_fin_convention) && (
+                            <>
+                              <span>•</span>
+                              <span style={{ fontSize: 10.5, color: 'var(--text-2)', fontWeight: 600 }}>
+                                📅 {formatConventionRange(e.date_debut_convention, e.date_fin_convention)}
+                              </span>
+                            </>
+                          )}
+                          {e.convensionne && (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: e.renouvelable ? '#059669' : '#64748b' }}>
+                              {e.renouvelable ? '🔄 Renouvelable' : '🚫 Non renouv.'}
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -1708,6 +1906,42 @@ export default function Entreprises({ toast }) {
                       {e.convensionne ? '✅ Conv.' : '❌ Non'}
                     </span>
                   </div>
+
+                  {e.convensionne && (
+                    <div
+                      style={{
+                        margin: '2px 0 8px 0',
+                        padding: '6px 10px',
+                        borderRadius: 8,
+                        background: 'rgba(16,185,129,0.08)',
+                        border: '1px solid rgba(16,185,129,0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        fontSize: 11,
+                        color: '#065f46',
+                        flexWrap: 'wrap',
+                        gap: 4,
+                      }}
+                    >
+                      <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span>📅</span>
+                        <span>{formatConventionRange(e.date_debut_convention, e.date_fin_convention)}</span>
+                      </span>
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          fontSize: 10,
+                          background: e.renouvelable ? '#d1fae5' : '#f1f5f9',
+                          color: e.renouvelable ? '#065f46' : '#64748b',
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                        }}
+                      >
+                        {e.renouvelable ? '🔄 Renouvelable' : '🚫 Non renouv.'}
+                      </span>
+                    </div>
+                  )}
 
                   {/* ── Widget 3 Indicateurs Effectifs & Formule Directe ── */}
                   <div

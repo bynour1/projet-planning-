@@ -25,17 +25,29 @@ ALTER TABLE messages
 
 -- ─── ENTREPRISES CONVENTIONNÉES ──────────────────────────────
 CREATE TABLE IF NOT EXISTS entreprises (
-  id           INT AUTO_INCREMENT PRIMARY KEY,
-  nom          VARCHAR(255) NOT NULL,
-  secteur      VARCHAR(100) DEFAULT NULL,
-  adresse      VARCHAR(255) DEFAULT NULL,
-  telephone    VARCHAR(50)  DEFAULT NULL,
-  email        VARCHAR(255) DEFAULT NULL,
-  site_web     VARCHAR(255) DEFAULT NULL,
-  description  TEXT         DEFAULT NULL,
-  convensionne TINYINT(1)   DEFAULT 1,
-  created_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+  id                    INT AUTO_INCREMENT PRIMARY KEY,
+  nom                   VARCHAR(255) NOT NULL,
+  secteur               VARCHAR(100) DEFAULT NULL,
+  adresse               VARCHAR(255) DEFAULT NULL,
+  telephone             VARCHAR(50)  DEFAULT NULL,
+  email                 VARCHAR(255) DEFAULT NULL,
+  site_web              VARCHAR(255) DEFAULT NULL,
+  description           TEXT         DEFAULT NULL,
+  convensionne          TINYINT(1)   DEFAULT 1,
+  date_debut_convention DATE         DEFAULT NULL,
+  date_fin_convention   DATE         DEFAULT NULL,
+  renouvelable          TINYINT(1)   DEFAULT 0,
+  effectif_total        INT          DEFAULT 0,
+  nb_visites_faites     INT          DEFAULT 0,
+  nb_bilans_faits       INT          DEFAULT 0,
+  nb_bilans_manquants   INT          DEFAULT 0,
+  created_at            TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
+
+ALTER TABLE entreprises
+  ADD COLUMN IF NOT EXISTS date_debut_convention DATE DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS date_fin_convention DATE DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS renouvelable TINYINT(1) DEFAULT 0;
 
 -- ─── AVIS SUR LES ENTREPRISES ────────────────────────────────
 CREATE TABLE IF NOT EXISTS entreprise_avis (

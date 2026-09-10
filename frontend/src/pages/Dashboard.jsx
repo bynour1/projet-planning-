@@ -477,6 +477,12 @@ export default function Dashboard({ toast }) {
                         {ent.secteur ? `🏷️ ${ent.secteur}` : 'Secteur général'}
                         {ent.adresse ? ` · 📍 ${ent.adresse}` : ''}
                         {ent.telephone ? ` · 📞 ${ent.telephone}` : ''}
+                        {(ent.date_debut_convention || ent.date_fin_convention) && (
+                          <span style={{ display: 'block', marginTop: 2, color: 'var(--text-3)' }}>
+                            📅 Validité : {ent.date_debut_convention ? new Date(ent.date_debut_convention).toLocaleDateString('fr-FR') : '—'} ➔ {ent.date_fin_convention ? new Date(ent.date_fin_convention).toLocaleDateString('fr-FR') : '—'}
+                            {ent.renouvelable ? ' · 🔄 Renouvelable' : ''}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <span style={{ fontSize: 10.5, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '2px 8px', borderRadius: 6, whiteSpace: 'nowrap' }}>

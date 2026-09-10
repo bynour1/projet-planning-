@@ -71,11 +71,18 @@ describe('POST /api/entreprises (Admin)', () => {
     expect(res.status).toBe(201);
     expect(res.body.id).toBe(5);
   });
-  it('creates non-conventionnée entreprise', async () => {
-    db.query.mockResolvedValueOnce([{ insertId:6 }]);
+  it('creates entreprise with convention dates and renouvelable', async () => {
+    db.query.mockResolvedValueOnce([{ insertId:7 }]);
     const res = await request(app).post('/api/entreprises').set('Authorization', ADM)
-      .send({ nom:'Lab Y', convensionne:false });
+      .send({
+        nom: 'Société Tech',
+        convensionne: true,
+        date_debut_convention: '2026-01-01',
+        date_fin_convention: '2026-12-31',
+        renouvelable: true,
+      });
     expect(res.status).toBe(201);
+    expect(res.body.id).toBe(7);
   });
 });
 
@@ -86,10 +93,17 @@ describe('PUT /api/entreprises/:id (Admin)', () => {
   it('400 if nom missing', async () => {
     expect((await request(app).put('/api/entreprises/1').set('Authorization', ADM).send({ secteur:'X' })).status).toBe(400);
   });
-  it('updates entreprise', async () => {
+  it('updates entreprise with convention dates and renouvelable', async () => {
     db.query.mockResolvedValueOnce([{}]);
     const res = await request(app).put('/api/entreprises/1').set('Authorization', ADM)
-      .send({ nom:'Clinique Modifiée', secteur:'Médical' });
+      .send({
+        nom: 'Clinique Modifiée',
+        secteur: 'Médical',
+        convensionne: true,
+        date_debut_convention: '2026-02-01',
+        date_fin_convention: '2027-02-01',
+        renouvelable: false,
+      });
     expect(res.status).toBe(200);
   });
 });
