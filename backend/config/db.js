@@ -3,12 +3,14 @@ require('dotenv').config();
 
 let poolConfig = {
   waitForConnections:    true,
-  connectionLimit:       10,
+  connectionLimit:       15,
+  maxIdle:               10,
+  idleTimeout:           60000,
   queueLimit:            0,
   timezone:              '+00:00',
   enableKeepAlive:       true,
-  keepAliveInitialDelay: 10000,
-  connectTimeout:        20000,
+  keepAliveInitialDelay: 5000,
+  connectTimeout:        10000,
 };
 
 if (process.env.DATABASE_URL) {
@@ -32,7 +34,7 @@ setInterval(async () => {
   } catch (err) {
     console.error('DB Keepalive Ping Error:', err.message);
   }
-}, 60000);
+}, 25000);
 
 module.exports = pool;
 

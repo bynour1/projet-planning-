@@ -9,6 +9,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 // GET /api/entreprises
 router.get('/', authenticate, async (req, res) => {
   try {
+    const isAdmin = req.user?.role === 'administrateur';
     const [rows] = await db.query(`
       SELECT e.*,
         COUNT(DISTINCT r.id)          AS nb_avis,
@@ -18,7 +19,17 @@ router.get('/', authenticate, async (req, res) => {
       GROUP BY e.id
       ORDER BY e.nom ASC
     `);
-    res.json(rows);
+
+    // Mask code if not administrator
+    const result = rows.map(r => {
+      if (!isAdmin) {
+        const { code, ...rest } = r;
+        return rest;
+      }
+      return r;
+    });
+
+    res.json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Erreur serveur' });
@@ -28,6 +39,7 @@ router.get('/', authenticate, async (req, res) => {
 // GET /api/entreprises/:id
 router.get('/:id', authenticate, async (req, res) => {
   try {
+    const isAdmin = req.user?.role === 'administrateur';
     const [rows] = await db.query('SELECT * FROM entreprises WHERE id=?', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ message: 'Entreprise introuvable' });
 
@@ -51,7 +63,12 @@ router.get('/:id', authenticate, async (req, res) => {
       campagnes = [];
     }
 
-    res.json({ ...rows[0], avis, campagnes });
+    const entData = { ...rows[0] };
+    if (!isAdmin) {
+      delete entData.code;
+    }
+
+    res.json({ ...entData, avis, campagnes });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });
   }
@@ -60,7 +77,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // POST /api/entreprises  (Admin only)
 router.post('/', authenticate, authorize('administrateur'), async (req, res) => {
   const {
-    nom, secteur, adresse, telephone, email, site_web, description, convensionne,
+    code, nom, secteur, adresse, telephone, email, site_web, description, convensionne,
     date_debut_convention, date_fin_convention, renouvelable,
     annee_campagne, date_derniere_visite,
     effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants,
@@ -69,12 +86,13 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
   try {
     const [result] = await db.query(
       `INSERT INTO entreprises (
-        nom, secteur, adresse, telephone, email, site_web, description, convensionne,
+        code, nom, secteur, adresse, telephone, email, site_web, description, convensionne,
         date_debut_convention, date_fin_convention, renouvelable,
         annee_campagne, date_derniere_visite,
         effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
+        code?.trim() || null,
         nom.trim(), secteur||null, adresse||null, telephone||null, email||null, site_web||null, description||null,
         convensionne ? 1 : 0,
         date_debut_convention || null,
@@ -98,7 +116,7 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
 // PUT /api/entreprises/:id  (Admin only)
 router.put('/:id', authenticate, authorize('administrateur'), async (req, res) => {
   const {
-    nom, secteur, adresse, telephone, email, site_web, description, convensionne,
+    code, nom, secteur, adresse, telephone, email, site_web, description, convensionne,
     date_debut_convention, date_fin_convention, renouvelable,
     annee_campagne, date_derniere_visite,
     effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants,
@@ -107,12 +125,13 @@ router.put('/:id', authenticate, authorize('administrateur'), async (req, res) =
   try {
     await db.query(
       `UPDATE entreprises SET
-        nom=?, secteur=?, adresse=?, telephone=?, email=?, site_web=?, description=?, convensionne=?,
+        code=?, nom=?, secteur=?, adresse=?, telephone=?, email=?, site_web=?, description=?, convensionne=?,
         date_debut_convention=?, date_fin_convention=?, renouvelable=?,
         annee_campagne=?, date_derniere_visite=?,
         effectif_total=?, nb_visites_faites=?, nb_bilans_faits=?, nb_bilans_manquants=?
       WHERE id=?`,
       [
+        code !== undefined ? (code?.trim() || null) : null,
         nom.trim(), secteur||null, adresse||null, telephone||null, email||null, site_web||null, description||null,
         convensionne ? 1 : 0,
         date_debut_convention || null,
@@ -134,29 +153,54 @@ router.put('/:id', authenticate, authorize('administrateur'), async (req, res) =
   }
 });
 
-// PATCH /api/entreprises/:id/bilan  (Admin only - mise à jour rapide des chiffres)
-router.patch('/:id/bilan', authenticate, authorize('administrateur'), async (req, res) => {
+// PATCH /api/entreprises/:id/bilan  (Admin, Médecin, Technicien - mise à jour rapide des effectifs vus et bilans)
+router.patch('/:id/bilan', authenticate, authorize('administrateur', 'medecin', 'technicien'), async (req, res) => {
   const {
     effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants,
     annee_campagne, date_derniere_visite
   } = req.body;
+  const isAdmin = req.user.role === 'administrateur';
+
   try {
-    await db.query(
-      `UPDATE entreprises SET
-        effectif_total=?, nb_visites_faites=?, nb_bilans_faits=?, nb_bilans_manquants=?,
-        annee_campagne=COALESCE(?, annee_campagne), date_derniere_visite=COALESCE(?, date_derniere_visite)
-      WHERE id=?`,
-      [
-        parseInt(effectif_total) || 0,
-        parseInt(nb_visites_faites) || 0,
-        parseInt(nb_bilans_faits) || 0,
-        parseInt(nb_bilans_manquants) || 0,
-        annee_campagne ? parseInt(annee_campagne) : null,
-        date_derniere_visite || null,
-        req.params.id,
-      ]
-    );
-    res.json({ message: 'Bilan et effectif mis à jour' });
+    if (isAdmin && effectif_total !== undefined) {
+      await db.query(
+        `UPDATE entreprises SET
+          effectif_total=?, nb_visites_faites=?, nb_bilans_faits=?, nb_bilans_manquants=?,
+          annee_campagne=COALESCE(?, annee_campagne), date_derniere_visite=COALESCE(?, date_derniere_visite)
+        WHERE id=?`,
+        [
+          parseInt(effectif_total) || 0,
+          parseInt(nb_visites_faites) || 0,
+          parseInt(nb_bilans_faits) || 0,
+          parseInt(nb_bilans_manquants) || 0,
+          annee_campagne ? parseInt(annee_campagne) : null,
+          date_derniere_visite || null,
+          req.params.id,
+        ]
+      );
+    } else {
+      // Médecins et Techniciens : Saisie et mise à jour de l'effectif examiné / bilans
+      await db.query(
+        `UPDATE entreprises SET
+          nb_visites_faites=?, nb_bilans_faits=?, nb_bilans_manquants=?,
+          date_derniere_visite=COALESCE(?, date_derniere_visite)
+        WHERE id=?`,
+        [
+          parseInt(nb_visites_faites) || 0,
+          parseInt(nb_bilans_faits) || 0,
+          parseInt(nb_bilans_manquants) || 0,
+          date_derniere_visite || null,
+          req.params.id,
+        ]
+      );
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('entreprises_refresh');
+    }
+
+    res.json({ message: 'Bilan et effectif mis à jour avec succès' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Erreur serveur' });
@@ -249,132 +293,186 @@ router.post('/import', authenticate, authorize('administrateur'), async (req, re
     return res.status(400).json({ message: 'Aucune donnée à importer (liste vide ou invalide)' });
   }
 
-  let created = 0;
-  let updated = 0;
-  let skipped = 0;
-  const errors = [];
   const currentYear = new Date().getFullYear();
 
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    const rowNum = i + 1;
-
-    const nom = typeof item.nom === 'string' ? item.nom.trim() : (item.nom ? String(item.nom).trim() : '');
-    if (!nom) {
-      errors.push({ row: rowNum, message: 'Nom d\'entreprise manquant' });
-      continue;
+  try {
+    // 1. Récupérer toutes les entreprises existantes en 1 seule requête ultra-rapide
+    const [existingRows] = await db.query('SELECT id, code, LOWER(TRIM(nom)) AS nom_lower FROM entreprises');
+    
+    const byCodeMap = new Map();
+    const byNomMap = new Map();
+    for (const row of existingRows) {
+      if (row.code) byCodeMap.set(String(row.code).trim(), row.id);
+      if (row.nom_lower) byNomMap.set(row.nom_lower, row.id);
     }
 
-    // Normalisation des champs
-    const secteur = item.secteur ? String(item.secteur).trim() : null;
-    const adresse = item.adresse ? String(item.adresse).trim() : null;
-    const telephone = item.telephone ? String(item.telephone).trim() : null;
-    const email = item.email ? String(item.email).trim() : null;
-    const site_web = item.site_web ? String(item.site_web).trim() : null;
-    const description = item.description ? String(item.description).trim() : null;
+    const toInsert = [];
+    const toUpdate = [];
+    let skipped = 0;
 
-    // Conventionné (Oui/Non/1/0/true/false)
-    let convensionne = 1; // Par défaut conventionné lors d'un import de conventionnés
-    if (item.convensionne !== undefined && item.convensionne !== null) {
-      const cStr = String(item.convensionne).trim().toLowerCase();
-      if (cStr === '0' || cStr === 'false' || cStr === 'non' || cStr === 'non conventionnée' || cStr === 'no') {
-        convensionne = 0;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const rowNum = i + 1;
+
+      let nom = typeof item.nom === 'string' ? item.nom.trim() : (item.nom ? String(item.nom).trim() : '');
+      const code = item.code ? String(item.code).trim().slice(0, 100) : null;
+
+      if (!nom) {
+        if (code) {
+          nom = `Entreprise ${code}`;
+        } else if (item.telephone || item.adresse) {
+          nom = `Entreprise ${String(item.telephone || item.adresse).trim().slice(0, 50)}`;
+        } else {
+          nom = `Entreprise #${rowNum}`;
+        }
       }
-    }
+      nom = nom.slice(0, 255);
 
-    // Dates convention
-    const date_debut_convention = item.date_debut_convention ? String(item.date_debut_convention).slice(0, 10) : null;
-    const date_fin_convention = item.date_fin_convention ? String(item.date_fin_convention).slice(0, 10) : null;
-    const date_derniere_visite = item.date_derniere_visite ? String(item.date_derniere_visite).slice(0, 10) : null;
+      // Normalisation sécurisée des champs
+      const secteur = item.secteur ? String(item.secteur).trim().slice(0, 255) : null;
+      const adresse = item.adresse ? String(item.adresse).trim().slice(0, 1000) : null;
+      const telephone = item.telephone ? String(item.telephone).trim().slice(0, 255) : null;
+      const email = item.email ? String(item.email).trim().slice(0, 255) : null;
+      const site_web = item.site_web ? String(item.site_web).trim().slice(0, 255) : null;
+      const description = item.description ? String(item.description).trim().slice(0, 2000) : null;
 
-    // Renouvelable
-    let renouvelable = 1;
-    if (item.renouvelable !== undefined && item.renouvelable !== null) {
-      const rStr = String(item.renouvelable).trim().toLowerCase();
-      if (rStr === '0' || rStr === 'false' || rStr === 'non' || rStr === 'no') {
-        renouvelable = 0;
+      // Conventionné (Oui/Non/1/0/true/false)
+      let convensionne = 1;
+      if (item.convensionne !== undefined && item.convensionne !== null) {
+        const cStr = String(item.convensionne).trim().toLowerCase();
+        if (cStr === '0' || cStr === 'false' || cStr === 'non' || cStr === 'non conventionnée' || cStr === 'no') {
+          convensionne = 0;
+        }
       }
-    }
 
-    // Année et effectifs
-    const annee_campagne = parseInt(item.annee_campagne, 10) || currentYear;
-    const effectif_total = Math.max(0, parseInt(item.effectif_total, 10) || 0);
-    const nb_visites_faites = Math.max(0, parseInt(item.nb_visites_faites, 10) || 0);
-    const nb_bilans_faits = Math.max(0, parseInt(item.nb_bilans_faits, 10) || 0);
-    const nb_bilans_manquants = Math.max(0, parseInt(item.nb_bilans_manquants, 10) || 0);
+      // Dates convention
+      const date_debut_convention = item.date_debut_convention ? String(item.date_debut_convention).slice(0, 10) : null;
+      const date_fin_convention = item.date_fin_convention ? String(item.date_fin_convention).slice(0, 10) : null;
+      const date_derniere_visite = item.date_derniere_visite ? String(item.date_derniere_visite).slice(0, 10) : null;
 
-    try {
-      // Vérifier si l'entreprise existe déjà par son nom (insensible à la casse)
-      const [existing] = await db.query(
-        'SELECT id FROM entreprises WHERE LOWER(TRIM(nom)) = LOWER(TRIM(?)) LIMIT 1',
-        [nom]
-      );
+      // Renouvelable
+      let renouvelable = 1;
+      if (item.renouvelable !== undefined && item.renouvelable !== null) {
+        const rStr = String(item.renouvelable).trim().toLowerCase();
+        if (rStr === '0' || rStr === 'false' || rStr === 'non' || rStr === 'no') {
+          renouvelable = 0;
+        }
+      }
 
-      if (existing && existing.length > 0) {
+      // Année et effectifs
+      const annee_campagne = parseInt(item.annee_campagne, 10) || currentYear;
+      const effectif_total = Math.max(0, parseInt(item.effectif_total, 10) || 0);
+      const nb_visites_faites = Math.max(0, parseInt(item.nb_visites_faites, 10) || 0);
+      const nb_bilans_faits = Math.max(0, parseInt(item.nb_bilans_faits, 10) || 0);
+      const nb_bilans_manquants = Math.max(0, parseInt(item.nb_bilans_manquants, 10) || 0);
+
+      // Vérification en mémoire O(1)
+      let existingId = null;
+      if (code && byCodeMap.has(code)) {
+        existingId = byCodeMap.get(code);
+      } else if (nom && byNomMap.has(nom.toLowerCase())) {
+        existingId = byNomMap.get(nom.toLowerCase());
+      }
+
+      if (existingId) {
         if (updateExisting) {
-          await db.query(
-            `UPDATE entreprises SET
-              nom = ?,
-              secteur = COALESCE(?, secteur),
-              adresse = COALESCE(?, adresse),
-              telephone = COALESCE(?, telephone),
-              email = COALESCE(?, email),
-              site_web = COALESCE(?, site_web),
-              description = COALESCE(?, description),
-              convensionne = ?,
-              date_debut_convention = COALESCE(?, date_debut_convention),
-              date_fin_convention = COALESCE(?, date_fin_convention),
-              renouvelable = ?,
-              annee_campagne = ?,
-              date_derniere_visite = COALESCE(?, date_derniere_visite),
-              effectif_total = ?,
-              nb_visites_faites = ?,
-              nb_bilans_faits = ?,
-              nb_bilans_manquants = ?
-            WHERE id = ?`,
-            [
-              nom, secteur, adresse, telephone, email, site_web, description,
-              convensionne, date_debut_convention, date_fin_convention, renouvelable,
-              annee_campagne, date_derniere_visite,
-              effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants,
-              existing[0].id
-            ]
-          );
-          updated++;
+          toUpdate.push({
+            id: existingId,
+            code, nom, secteur, adresse, telephone, email, site_web, description,
+            convensionne, date_debut_convention, date_fin_convention, renouvelable,
+            annee_campagne, date_derniere_visite,
+            effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants
+          });
         } else {
           skipped++;
         }
       } else {
+        toInsert.push([
+          code, nom, secteur, adresse, telephone, email, site_web, description,
+          convensionne, date_debut_convention, date_fin_convention, renouvelable,
+          annee_campagne, date_derniere_visite,
+          effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants
+        ]);
+        if (code) byCodeMap.set(code, true);
+        if (nom) byNomMap.set(nom.toLowerCase(), true);
+      }
+    }
+
+    let created = 0;
+    let updated = 0;
+
+    // 2. Insérer en bulk par lots de 100
+    if (toInsert.length > 0) {
+      const CHUNK_SIZE = 100;
+      for (let c = 0; c < toInsert.length; c += CHUNK_SIZE) {
+        const chunk = toInsert.slice(c, c + CHUNK_SIZE);
         await db.query(
           `INSERT INTO entreprises (
-            nom, secteur, adresse, telephone, email, site_web, description,
+            code, nom, secteur, adresse, telephone, email, site_web, description,
             convensionne, date_debut_convention, date_fin_convention, renouvelable,
             annee_campagne, date_derniere_visite,
             effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants
-          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [
-            nom, secteur, adresse, telephone, email, site_web, description,
-            convensionne, date_debut_convention, date_fin_convention, renouvelable,
-            annee_campagne, date_derniere_visite,
-            effectif_total, nb_visites_faites, nb_bilans_faits, nb_bilans_manquants
-          ]
+          ) VALUES ?`,
+          [chunk]
         );
-        created++;
+        created += chunk.length;
       }
-    } catch (errRow) {
-      console.error(`Erreur import ligne ${rowNum} (${nom}):`, errRow);
-      errors.push({ row: rowNum, nom, message: errRow.message || 'Erreur base de données' });
     }
-  }
 
-  res.json({
-    message: 'Importation terminée avec succès',
-    total: items.length,
-    created,
-    updated,
-    skipped,
-    errors,
-  });
+    // 3. Mettre à jour les existantes en parallèle (par paquets de 10)
+    if (toUpdate.length > 0) {
+      const BATCH_PARALLEL = 10;
+      for (let c = 0; c < toUpdate.length; c += BATCH_PARALLEL) {
+        const batch = toUpdate.slice(c, c + BATCH_PARALLEL);
+        await Promise.all(
+          batch.map(u =>
+            db.query(
+              `UPDATE entreprises SET
+                code = COALESCE(?, code),
+                nom = ?,
+                secteur = COALESCE(?, secteur),
+                adresse = COALESCE(?, adresse),
+                telephone = COALESCE(?, telephone),
+                email = COALESCE(?, email),
+                site_web = COALESCE(?, site_web),
+                description = COALESCE(?, description),
+                convensionne = ?,
+                date_debut_convention = COALESCE(?, date_debut_convention),
+                date_fin_convention = COALESCE(?, date_fin_convention),
+                renouvelable = ?,
+                annee_campagne = ?,
+                date_derniere_visite = COALESCE(?, date_derniere_visite),
+                effectif_total = ?,
+                nb_visites_faites = ?,
+                nb_bilans_faits = ?,
+                nb_bilans_manquants = ?
+              WHERE id = ?`,
+              [
+                u.code, u.nom, u.secteur, u.adresse, u.telephone, u.email, u.site_web, u.description,
+                u.convensionne, u.date_debut_convention, u.date_fin_convention, u.renouvelable,
+                u.annee_campagne, u.date_derniere_visite,
+                u.effectif_total, u.nb_visites_faites, u.nb_bilans_faits, u.nb_bilans_manquants,
+                u.id
+              ]
+            )
+          )
+        );
+        updated += batch.length;
+      }
+    }
+
+    res.json({
+      message: 'Importation terminée avec succès',
+      total: items.length,
+      created,
+      updated,
+      skipped,
+      errors: [],
+    });
+  } catch (err) {
+    console.error('Erreur import en masse:', err);
+    res.status(500).json({ message: 'Erreur lors de l\'importation: ' + (err.message || 'Erreur serveur') });
+  }
 });
 
 // POST /api/entreprises/:id/avis  (Any authenticated user)

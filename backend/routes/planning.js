@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const db     = require('../config/db');
 const { authenticate, authorize } = require('../middleware/auth');
-const { notifyAllUsers, planningEmailHtml, planningSmsText } = require('../config/mailer');
+const { notifyAllUsers, notifyAssignedIntervenants, planningEmailHtml, planningSmsText } = require('../config/mailer');
 
 // Helper: format date YYYY-MM-DD → DD/MM/YYYY
 function fmt(dateVal) {
@@ -99,7 +99,7 @@ router.get('/mine', authenticate, async (req, res) => {
 
 // POST /api/planning  (Admin only) + email notification
 router.post('/', authenticate, authorize('administrateur'), async (req, res) => {
-  const { titre, date, heure_debut, heure_fin, adresse, medecin_id, technicien_id, programme } = req.body;
+  const { titre, date, heure_debut, heure_fin, adresse, medecin_id, technicien_id, programme, is_clino } = req.body;
   if (!date) return res.status(400).json({ message: 'Date requise' });
 
   try {
@@ -109,16 +109,32 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     const medecin_nom = medecinRows[0]?.n || null;
     const technicien_nom = technicienRows[0]?.n || null;
 
+    const clinoFlag = (is_clino === true || is_clino === 1 || is_clino === '1') ? 1 : 0;
+    let clino_id = null;
+
     const [result] = await db.query(
-      'INSERT INTO planning_events (titre,date,heure_debut,heure_fin,adresse,medecin_id,technicien_id,commentaire) VALUES (?,?,?,?,?,?,?,?)',
-      [titre||null, date, heure_debut||null, heure_fin||null, adresse||null, medecin_id||null, technicien_id||null, programme||null]
+      'INSERT INTO planning_events (titre,date,heure_debut,heure_fin,adresse,medecin_id,technicien_id,commentaire,is_clino,clino_id) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      [titre||null, date, heure_debut||null, heure_fin||null, adresse||null, medecin_id||null, technicien_id||null, programme||null, clinoFlag, null]
     );
+    const planningId = result.insertId;
+
+    if (clinoFlag) {
+      const clinoHeure = (heure_debut && heure_debut.trim()) ? heure_debut : '08:30:00';
+      const clinoAdresse = (adresse && adresse.trim()) ? adresse : (titre || 'Visite sur site');
+      const clinoComment = titre ? `[Planning] ${titre}` : 'Visite Clino';
+      const [cRes] = await db.query(
+        'INSERT INTO clino_mobile (date,heure,adresse,medecin_id,technicien_id,medecin_nom,technicien_nom,commentaire,planning_id) VALUES (?,?,?,?,?,?,?,?,?)',
+        [date, clinoHeure, clinoAdresse, medecin_id||null, technicien_id||null, medecin_nom, technicien_nom, clinoComment, planningId]
+      );
+      clino_id = cRes.insertId;
+      await db.query('UPDATE planning_events SET clino_id = ? WHERE id = ?', [clino_id, planningId]);
+    }
 
     // Emit socket
     const io = req.app.get('io');
     if (io) {
       io.emit('planning_new', {
-        id: result.insertId,
+        id: planningId,
         titre: titre || 'Nouvelle intervention',
         date: fmtRaw(date),
         heure_debut,
@@ -126,21 +142,25 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
         adresse,
         medecin_nom,
         technicien_nom,
+        is_clino: clinoFlag,
+        clino_id,
         createdBy: `${req.user.prenom} ${req.user.nom}`,
         creatorId: req.user.id,
       });
       io.emit('planning_refresh');
+      if (clinoFlag) io.emit('clino_refresh');
     }
 
-    // Email + SMS notification (async, don't await)
-    notifyAllUsers({
-      subject:   `📋 Nouvelle intervention — ${date}`,
+    // Email + SMS notification aux intervenants assignés (Médecin + Technicien)
+    notifyAssignedIntervenants({
+      medecin_id,
+      technicien_id,
+      subject:   `📋 Nouvelle intervention — ${date}${clinoFlag ? ' (🚗 Clino Mobile)' : ''}`,
       html:      planningEmailHtml ? planningEmailHtml({ titre, date: fmt(date), heure_debut, heure_fin, adresse, medecin_nom, technicien_nom, createdBy: `${req.user.prenom} ${req.user.nom}` }) : '',
       smsText:   (typeof planningSmsText === 'function') ? planningSmsText({ titre, date: fmt(date), heure_debut, heure_fin, adresse }) : null,
-      excludeId: req.user.id,
     });
 
-    res.status(201).json({ message: 'Intervention créée', id: result.insertId });
+    res.status(201).json({ message: 'Intervention créée', id: planningId, clino_id });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Erreur serveur' });
@@ -149,16 +169,57 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
 
 // PUT /api/planning/:id  (Admin only)
 router.put('/:id', authenticate, authorize('administrateur'), async (req, res) => {
-  const { titre, date, heure_debut, heure_fin, adresse, medecin_id, technicien_id, programme } = req.body;
+  const { titre, date, heure_debut, heure_fin, adresse, medecin_id, technicien_id, programme, is_clino } = req.body;
   try {
+    const planningId = req.params.id;
+    const [existing] = await db.query('SELECT * FROM planning_events WHERE id = ?', [planningId]);
+    if (!existing.length) return res.status(404).json({ message: 'Intervention introuvable' });
+
+    const [medecinRows] = await db.query("SELECT CONCAT(prenom,' ',nom) n FROM users WHERE id=?", [medecin_id || null]);
+    const [technicienRows] = await db.query("SELECT CONCAT(prenom,' ',nom) n FROM users WHERE id=?", [technicien_id || null]);
+    const medecin_nom = medecinRows[0]?.n || null;
+    const technicien_nom = technicienRows[0]?.n || null;
+
+    const clinoFlag = is_clino !== undefined ? ((is_clino === true || is_clino === 1 || is_clino === '1') ? 1 : 0) : existing[0].is_clino;
+    let clino_id = existing[0].clino_id;
+
+    if (clinoFlag) {
+      const clinoHeure = (heure_debut && heure_debut.trim()) ? heure_debut : '08:30:00';
+      const clinoAdresse = (adresse && adresse.trim()) ? adresse : (titre || 'Visite sur site');
+      const clinoComment = titre ? `[Planning] ${titre}` : 'Visite Clino';
+
+      if (clino_id) {
+        await db.query(
+          'UPDATE clino_mobile SET date=?,heure=?,adresse=?,medecin_id=?,technicien_id=?,medecin_nom=?,technicien_nom=?,commentaire=?,planning_id=? WHERE id=?',
+          [date, clinoHeure, clinoAdresse, medecin_id||null, technicien_id||null, medecin_nom, technicien_nom, clinoComment, planningId, clino_id]
+        );
+      } else {
+        const [cRes] = await db.query(
+          'INSERT INTO clino_mobile (date,heure,adresse,medecin_id,technicien_id,medecin_nom,technicien_nom,commentaire,planning_id) VALUES (?,?,?,?,?,?,?,?,?)',
+          [date, clinoHeure, clinoAdresse, medecin_id||null, technicien_id||null, medecin_nom, technicien_nom, clinoComment, planningId]
+        );
+        clino_id = cRes.insertId;
+      }
+    } else {
+      if (clino_id) {
+        await db.query('DELETE FROM clino_mobile WHERE id = ?', [clino_id]);
+        clino_id = null;
+      }
+    }
+
     await db.query(
-      'UPDATE planning_events SET titre=?,date=?,heure_debut=?,heure_fin=?,adresse=?,medecin_id=?,technicien_id=?,commentaire=? WHERE id=?',
-      [titre||null, date, heure_debut||null, heure_fin||null, adresse||null, medecin_id||null, technicien_id||null, programme||null, req.params.id]
+      'UPDATE planning_events SET titre=?,date=?,heure_debut=?,heure_fin=?,adresse=?,medecin_id=?,technicien_id=?,commentaire=?,is_clino=?,clino_id=? WHERE id=?',
+      [titre||null, date, heure_debut||null, heure_fin||null, adresse||null, medecin_id||null, technicien_id||null, programme||null, clinoFlag, clino_id, planningId]
     );
+
     const io = req.app.get('io');
-    if (io) io.emit('planning_refresh');
+    if (io) {
+      io.emit('planning_refresh');
+      io.emit('clino_refresh');
+    }
     res.json({ message: 'Intervention mise à jour' });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -198,10 +259,13 @@ router.get('/feed.ics', async (req, res) => {
     let clinoQuery = `
       SELECT cm.*,
         CONCAT(u.prenom, ' ', u.nom) AS medecin_nom,
-        CONCAT(t.prenom, ' ', t.nom) AS technicien_nom
+        CONCAT(t.prenom, ' ', t.nom) AS technicien_nom,
+        pe.titre AS planning_titre,
+        pe.titre AS entreprise_nom
       FROM clino_mobile cm
       LEFT JOIN users u ON u.id = cm.medecin_id
       LEFT JOIN users t ON t.id = cm.technicien_id
+      LEFT JOIN planning_events pe ON pe.id = cm.planning_id
       WHERE cm.date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
     `;
     const clinoParams = [];
@@ -288,9 +352,19 @@ router.get('/feed.ics', async (req, res) => {
 // DELETE /api/planning/:id  (Admin only)
 router.delete('/:id', authenticate, authorize('administrateur'), async (req, res) => {
   try {
-    await db.query('DELETE FROM planning_events WHERE id = ?', [req.params.id]);
+    const planningId = req.params.id;
+    const [existing] = await db.query('SELECT clino_id FROM planning_events WHERE id = ?', [planningId]);
+    if (existing.length && existing[0].clino_id) {
+      await db.query('DELETE FROM clino_mobile WHERE id = ?', [existing[0].clino_id]);
+    }
+    // Also delete any clino_mobile pointing to this planning_id
+    await db.query('DELETE FROM clino_mobile WHERE planning_id = ?', [planningId]);
+    await db.query('DELETE FROM planning_events WHERE id = ?', [planningId]);
     const io = req.app.get('io');
-    if (io) io.emit('planning_refresh');
+    if (io) {
+      io.emit('planning_refresh');
+      io.emit('clino_refresh');
+    }
     res.json({ message: 'Événement supprimé' });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });

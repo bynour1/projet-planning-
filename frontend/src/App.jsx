@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider }        from './context/SocketContext';
@@ -13,16 +13,18 @@ import Sidebar        from './components/Sidebar';
 import Login          from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword  from './pages/ResetPassword';
-import Dashboard      from './pages/Dashboard';
-import Planning       from './pages/Planning';
-import Calendar       from './pages/Calendar';
-import Clino          from './pages/Clino';
-import Chat           from './pages/Chat';
-import Users          from './pages/Users';
-import Settings       from './pages/Settings';
-import ForcePassword  from './pages/ForcePassword';
-import Schedule       from './pages/Schedule';
-import Entreprises    from './pages/Entreprises';
+
+// Lazy-loaded pages for lightning-fast initial load
+const Dashboard     = lazy(() => import('./pages/Dashboard'));
+const Planning      = lazy(() => import('./pages/Planning'));
+const Calendar      = lazy(() => import('./pages/Calendar'));
+const Clino         = lazy(() => import('./pages/Clino'));
+const Chat          = lazy(() => import('./pages/Chat'));
+const Users         = lazy(() => import('./pages/Users'));
+const Settings      = lazy(() => import('./pages/Settings'));
+const ForcePassword = lazy(() => import('./pages/ForcePassword'));
+const Schedule      = lazy(() => import('./pages/Schedule'));
+const Entreprises   = lazy(() => import('./pages/Entreprises'));
 
 function AppShell() {
   const { user, loading } = useAuth();
@@ -88,30 +90,32 @@ function AppShell() {
 
         <Sidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
         <div className="main-area">
-          <Routes>
-            {isChauffeur ? (
-              <>
-                <Route path="/planning" element={<Planning toast={addToast}/>}/>
-                <Route path="/clino"    element={<Clino    toast={addToast}/>}/>
-                <Route path="/settings" element={<Settings toast={addToast}/>}/>
-                <Route path="*"         element={<Navigate to="/planning" replace/>}/>
-              </>
-            ) : (
-              <>
-                <Route path="/"             element={<Navigate to="/dashboard" replace/>}/>
-                <Route path="/dashboard"    element={<Dashboard    toast={addToast}/>}/>
-                <Route path="/planning"     element={<Planning     toast={addToast}/>}/>
-                <Route path="/calendar"     element={<Calendar     toast={addToast}/>}/>
-                <Route path="/schedule"     element={<Schedule     toast={addToast}/>}/>
-                <Route path="/clino"        element={<Clino        toast={addToast}/>}/>
-                <Route path="/chat"         element={<Chat         toast={addToast}/>}/>
-                <Route path="/entreprises"  element={<Entreprises  toast={addToast}/>}/>
-                <Route path="/users"        element={<Users        toast={addToast}/>}/>
-                <Route path="/settings"     element={<Settings     toast={addToast}/>}/>
-                <Route path="*"             element={<Navigate to="/dashboard" replace/>}/>
-              </>
-            )}
-          </Routes>
+          <Suspense fallback={<div className="loading-center" style={{ height: '60vh' }}><div className="spinner" style={{ width: 32, height: 32 }} /></div>}>
+            <Routes>
+              {isChauffeur ? (
+                <>
+                  <Route path="/planning" element={<Planning toast={addToast}/>}/>
+                  <Route path="/clino"    element={<Clino    toast={addToast}/>}/>
+                  <Route path="/settings" element={<Settings toast={addToast}/>}/>
+                  <Route path="*"         element={<Navigate to="/planning" replace/>}/>
+                </>
+              ) : (
+                <>
+                  <Route path="/"             element={<Navigate to="/dashboard" replace/>}/>
+                  <Route path="/dashboard"    element={<Dashboard    toast={addToast}/>}/>
+                  <Route path="/planning"     element={<Planning     toast={addToast}/>}/>
+                  <Route path="/calendar"     element={<Calendar     toast={addToast}/>}/>
+                  <Route path="/schedule"     element={<Schedule     toast={addToast}/>}/>
+                  <Route path="/clino"        element={<Clino        toast={addToast}/>}/>
+                  <Route path="/chat"         element={<Chat         toast={addToast}/>}/>
+                  <Route path="/entreprises"  element={<Entreprises  toast={addToast}/>}/>
+                  <Route path="/users"        element={<Users        toast={addToast}/>}/>
+                  <Route path="/settings"     element={<Settings     toast={addToast}/>}/>
+                  <Route path="*"             element={<Navigate to="/dashboard" replace/>}/>
+                </>
+              )}
+            </Routes>
+          </Suspense>
         </div>
       </div>
     </SocketProvider>

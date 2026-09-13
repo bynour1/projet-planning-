@@ -52,6 +52,22 @@ export default defineConfig({
       }
     })
   ],
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      'axios',
+      'date-fns',
+      'date-fns/locale',
+      'socket.io-client',
+      'xlsx',
+      '@fullcalendar/react',
+      '@fullcalendar/daygrid',
+      '@fullcalendar/timegrid',
+      '@fullcalendar/interaction',
+    ],
+  },
   test: {
     environment: 'jsdom',
     globals: true,

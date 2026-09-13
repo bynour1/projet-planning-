@@ -29,11 +29,11 @@ function getTransporter() {
     });
   }
 
-  return nodemailer.createTransport({
-    service: process.env.EMAIL_SERVICE,
-    auth: { user, pass },
-    tls: { rejectUnauthorized: false },
-  });
+// Helper: Obtenir l'adresse expéditeur officielle (Compte Administration GMT Ariana)
+function getFromAddress(prefix = 'Administration') {
+  if (process.env.EMAIL_FROM) return process.env.EMAIL_FROM;
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@gmt-ariana.tn';
+  return `"GMT Ariana — ${prefix}" <${adminEmail}>`;
 }
 
 // ─── Twilio SMS client ─────────────────────────────────────────
@@ -92,6 +92,29 @@ async function sendWhatsApp(to, message) {
   }
 }
 
+// Helper: Vérifier si l'adresse email est valide et délivrable (pas un domaine factice/test)
+function isDeliverableEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  const trimmed = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return false;
+  const domain = trimmed.split('@')[1];
+  const blockedDomains = [
+    'planning.com',
+    'example.com',
+    'example.org',
+    'example.net',
+    'test.com',
+    'test.fr',
+    'local.dev',
+    'localhost',
+    'domain.com',
+    'fake.com',
+    'nomail.com',
+  ];
+  if (blockedDomains.includes(domain)) return false;
+  return true;
+}
+
 // Send to all active users (except optionally sender) — Email + SMS
 async function notifyAllUsers({ subject, html, smsText = null, excludeId = null }) {
   try {
@@ -105,10 +128,11 @@ async function notifyAllUsers({ subject, html, smsText = null, excludeId = null 
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
       const transporter = getTransporter();
       for (const u of users) {
-        if (!u.email || !u.email.includes('@')) continue;
+        if (!isDeliverableEmail(u.email)) continue;
         try {
           await transporter.sendMail({
-            from:    `"GMT Ariana 🏥" <${process.env.EMAIL_USER}>`,
+            from:    getFromAddress('Santé au Travail'),
+            replyTo: process.env.ADMIN_EMAIL || 'admin@gmt-ariana.tn',
             to:      u.email,
             subject,
             html,
@@ -131,14 +155,58 @@ async function notifyAllUsers({ subject, html, smsText = null, excludeId = null 
   }
 }
 
+// Notifier uniquement les intervenants assignés (Médecin + Technicien)
+async function notifyAssignedIntervenants({ medecin_id, technicien_id, subject, html, smsText = null }) {
+  try {
+    const userIds = [medecin_id, technicien_id].filter(Boolean);
+    if (!userIds.length) return;
+
+    const [users] = await db.query(
+      'SELECT id, email, telephone, prenom, nom FROM users WHERE id IN (?) AND is_active = 1',
+      [userIds]
+    );
+    if (!users.length) return;
+
+    // ── Email ──
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+      const transporter = getTransporter();
+      for (const u of users) {
+        if (!isDeliverableEmail(u.email)) continue;
+        try {
+          await transporter.sendMail({
+            from:    getFromAddress('Planning Médical'),
+            replyTo: process.env.ADMIN_EMAIL || 'admin@gmt-ariana.tn',
+            to:      u.email,
+            subject,
+            html,
+          });
+          console.log(`[Planning Notify] ✅ Email envoyé à ${u.email}`);
+        } catch (err) {
+          console.warn(`[Planning Notify] ⚠️ Envoi impossible à ${u.email} :`, err.message);
+        }
+      }
+    }
+
+    // ── SMS ──
+    if (smsText && getTwilioClient()) {
+      for (const u of users) {
+        if (u.telephone) await sendSMS(u.telephone, smsText);
+      }
+    }
+  } catch (err) {
+    console.warn('[notifyAssignedIntervenants] Erreur :', err.message);
+  }
+}
+
 // Send OTP — Email + SMS
 async function sendOTP(email, code, nom, prenom, telephone = null) {
   // Email
-  if (process.env.EMAIL_USER) {
+  if (process.env.EMAIL_USER && isDeliverableEmail(email)) {
     try {
       const transporter = getTransporter();
       await transporter.sendMail({
-        from:    `"GMT Ariana" <${process.env.EMAIL_USER}>`,
+        from:    getFromAddress('Sécurité'),
+        replyTo: process.env.ADMIN_EMAIL || 'admin@gmt-ariana.tn',
         to:      email,
         subject: 'Confirmation de votre compte — GMT Ariana',
         text:    `Bonjour ${prenom} ${nom},\n\nVotre compte GMT Ariana a été créé.\nCode de confirmation : ${code}\nCe code expire dans 15 minutes.\n\nGMT Ariana — Groupement de Médecine du Travail`,
@@ -177,11 +245,12 @@ async function sendPasswordReset(email, nom, prenom, token, telephone = null) {
   const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
 
   // Email
-  if (process.env.EMAIL_USER) {
+  if (process.env.EMAIL_USER && isDeliverableEmail(email)) {
     try {
       const transporter = getTransporter();
       const info = await transporter.sendMail({
-        from:    `"GMT Ariana" <${process.env.EMAIL_USER}>`,
+        from:    getFromAddress('Sécurité Compte'),
+        replyTo: process.env.ADMIN_EMAIL || 'admin@gmt-ariana.tn',
         to:      email,
         subject: 'Réinitialisation de mot de passe — GMT Ariana',
         text:    `Bonjour ${prenom} ${nom},\n\nVous avez demandé une réinitialisation de votre mot de passe pour accéder à votre espace GMT Ariana.\nLien de réinitialisation : ${resetUrl}\nCe lien expire dans 1 heure.\n\nSi vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email.\n\nGMT Ariana`,
@@ -280,11 +349,9 @@ function eventEmailHtml({ titre, type, date_debut, date_fin, lieu, createdBy }) 
 
 // Welcome Email with temporary password and OTP
 async function sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telephone = null }) {
-  const loginUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login`;
-
   let emailSent = false;
 
-  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS && isDeliverableEmail(email)) {
     console.log(`[Email Welcome] Tentative d'envoi à ${email}...`);
     const appUrl = process.env.FRONTEND_URL && !process.env.FRONTEND_URL.includes('localhost')
       ? process.env.FRONTEND_URL
@@ -292,8 +359,8 @@ async function sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telepho
 
     const transporter = getTransporter();
     const info = await transporter.sendMail({
-      from: `"GMT Ariana" <${process.env.EMAIL_USER}>`,
-      replyTo: process.env.EMAIL_USER,
+      from: getFromAddress('Administration'),
+      replyTo: process.env.ADMIN_EMAIL || 'admin@gmt-ariana.tn',
       to: email,
       subject: 'Vos identifiants de connexion — GMT Ariana',
       text: `Bonjour ${prenom} ${nom},\n\nUn compte a été créé pour vous sur la plateforme GMT Ariana.\n\nVos identifiants de connexion :\nIdentifiant (Email) : ${email}\nMot de passe initial : ${tempPassword}\nCode de confirmation : ${otp} (valable 15 minutes)\n${appUrl ? '\nLien d\'accès : ' + appUrl : ''}\n\nLors de votre première connexion, il vous sera demandé de modifier votre mot de passe.\n\nGMT Ariana`,
@@ -331,6 +398,8 @@ async function sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telepho
     });
     console.log(`[Email Welcome] ✅ Envoyé avec succès à ${email} (ID: ${info.messageId})`);
     emailSent = true;
+  } else if (!isDeliverableEmail(email)) {
+    console.warn(`[Email Welcome] ⚠️ Email ignoré (adresse test ou domaine factice non délivrable) : ${email}`);
   } else {
     console.warn('[Email Welcome] ⚠️ EMAIL_USER ou EMAIL_PASS non configuré !');
   }
@@ -347,7 +416,9 @@ async function sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telepho
 
 module.exports = {
   getTransporter,
+  getFromAddress,
   notifyAllUsers,
+  notifyAssignedIntervenants,
   sendOTP,
   sendPasswordReset,
   sendWelcomeEmail,
@@ -356,4 +427,5 @@ module.exports = {
   planningEmailHtml,
   planningSmsText,
   eventEmailHtml,
+  isDeliverableEmail,
 };

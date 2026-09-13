@@ -133,6 +133,171 @@ export function exportToPDF(data, columns, title = 'Planning GMT Ariana') {
   doc.save(`${title.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
+export function exportMatrixToPDF({
+  days,
+  doctorsList,
+  staffList,
+  staffRole = 'medecin',
+  hasUnassigned,
+  getDoctorEvents,
+  getStaffEvents,
+  title = 'Planning GMT Ariana',
+  subtitle = '',
+}) {
+  const activeStaff = staffList || doctorsList || [];
+  const eventGetter = getStaffEvents || getDoctorEvents || (() => ({ pEvents: [], clEvents: [] }));
+  const isTechnician = staffRole === 'technicien';
+
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  // Top header bar (Navy)
+  doc.setFillColor(15, 23, 42); // slate-900
+  doc.rect(0, 0, pageWidth, 20, 'F');
+
+  // Accent line under header (Cyan/Emerald)
+  doc.setFillColor(isTechnician ? 13 : 2, isTechnician ? 148 : 132, isTechnician ? 136 : 199);
+  doc.rect(0, 20, pageWidth, 1.2, 'F');
+
+  // Brand Header
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text("GROUPEMENT DE MEDECINE DU TRAVAIL DE L'ARIANA", 14, 8);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(186, 230, 253);
+  doc.text(
+    subtitle || (isTechnician ? 'Planning Technique Opérationnel - Techniciens & Jours de travail' : 'Planning Médical Opérationnel - Médecins & Jours de travail'),
+    14,
+    15
+  );
+
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(226, 232, 240);
+  doc.text(`Date d'édition : ${dateStr} à ${timeStr}`, pageWidth - 14, 8, { align: 'right' });
+  doc.text(`${title}`, pageWidth - 14, 15, { align: 'right' });
+
+  // Columns: Jours / Dates + Staff names
+  const allStaffColumns = activeStaff.map(d => {
+    if (isTechnician) {
+      const name = d.nom ? (d.prenom ? `${d.prenom} ${d.nom}` : d.nom) : 'Technicien';
+      return name.toUpperCase();
+    }
+    const name = d.nom ? (d.prenom ? `Dr. ${d.prenom} ${d.nom}` : (d.nom.startsWith('Dr.') ? d.nom : `Dr. ${d.nom}`)) : 'Dr.';
+    return name.toUpperCase();
+  });
+  if (hasUnassigned) {
+    allStaffColumns.push(isTechnician ? 'SANS TECHNICIEN' : 'AUTRE / NON ASSIGNÉ');
+  }
+
+  const head = [['JOUR / DATE', ...allStaffColumns]];
+
+  // Rows: each day in days
+  const body = days.map(day => {
+    const dayKey = typeof day === 'string' ? day : (day.toISOString ? day.toISOString().slice(0, 10) : String(day));
+    let dayFormatted = dayKey;
+    try {
+      const parsed = new Date(dayKey + 'T00:00:00');
+      const dayName = parsed.toLocaleDateString('fr-FR', { weekday: 'long' });
+      const capDayName = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+      dayFormatted = `${capDayName}\n${parsed.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}`;
+    } catch {
+      dayFormatted = dayKey;
+    }
+
+    const rowCells = [dayFormatted];
+
+    activeStaff.forEach(staff => {
+      const { pEvents = [], clEvents = [] } = eventGetter(staff, dayKey);
+      const cellLines = [];
+      pEvents.forEach(p => {
+        const time = p.heure_debut ? `${p.heure_debut}${p.heure_fin ? '-' + p.heure_fin : ''}` : '';
+        const clinoTag = (p.is_clino || p.clino_id) ? '[🚗 Clino] ' : '';
+        const titlePart = p.titre || 'Visite';
+        const locPart = p.adresse ? ` (${p.adresse})` : '';
+        const counterpartPart = isTechnician
+          ? (p.medecin_nom ? ` [👨‍⚕️ ${p.medecin_nom}]` : '')
+          : (p.technicien_nom ? ` [🔧 ${p.technicien_nom}]` : '');
+        cellLines.push(`• ${time ? time + ' ' : ''}${clinoTag}${titlePart}${locPart}${counterpartPart}`);
+      });
+      clEvents.forEach(c => {
+        const time = c.heure ? String(c.heure).slice(0, 5) : '';
+        const addr = c.adresse || 'Tournée Clino';
+        const counterpart = isTechnician
+          ? ((c.medecin_full || c.medecin_nom) ? ` [👨‍⚕️ ${c.medecin_full || c.medecin_nom}]` : '')
+          : ((c.technicien_full || c.technicien_nom) ? ` [🔧 ${c.technicien_full || c.technicien_nom}]` : '');
+        cellLines.push(`• [🚗 Clino] ${time ? time + ' ' : ''}${addr}${counterpart}`);
+      });
+      rowCells.push(cellLines.join('\n') || '-');
+    });
+
+    if (hasUnassigned) {
+      const { pEvents = [], clEvents = [] } = eventGetter(null, dayKey);
+      const cellLines = [];
+      pEvents.forEach(p => cellLines.push(`• ${p.heure_debut ? p.heure_debut + ' ' : ''}${p.titre || 'Visite'}`));
+      clEvents.forEach(c => cellLines.push(`• [🚗 Clino] ${c.adresse || 'Tournée'}`));
+      rowCells.push(cellLines.join('\n') || '-');
+    }
+
+    return rowCells;
+  });
+
+  autoTable(doc, {
+    head,
+    body,
+    startY: 25,
+    margin: { left: 8, right: 8, top: 22, bottom: 12 },
+    theme: 'grid',
+    styles: {
+      font: 'helvetica',
+      fontSize: 6.8,
+      cellPadding: 2,
+      textColor: [30, 41, 59],
+      lineColor: [203, 213, 225],
+      lineWidth: 0.1,
+      valign: 'top',
+      overflow: 'linebreak',
+    },
+    headStyles: {
+      fillColor: isTechnician ? [19, 78, 74] : [15, 23, 42],
+      textColor: [255, 255, 255],
+      fontSize: 7.2,
+      fontStyle: 'bold',
+      halign: 'center',
+    },
+    columnStyles: {
+      0: { cellWidth: 26, fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] },
+    },
+    didDrawPage: (hookData) => {
+      const footerY = pageHeight - 6;
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.2);
+      doc.line(8, footerY - 2, pageWidth - 8, footerY - 2);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text("Groupement de Medecine du Travail de l'Ariana - Usage Interne Confidentiel", 8, footerY + 1.5);
+      doc.text(`Page ${hookData.pageNumber}`, pageWidth - 8, footerY + 1.5, { align: 'right' });
+    }
+  });
+
+  doc.save(`${title.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
 export function exportToExcel(data, columns, filename) {
   const ws = XLSX.utils.json_to_sheet(data.map(row => {
     const obj = {};

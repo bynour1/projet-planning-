@@ -108,11 +108,14 @@ describe('PUT /api/entreprises/:id (Admin)', () => {
   });
 });
 
-describe('PATCH /api/entreprises/:id/bilan (Admin)', () => {
-  it('403 for medecin', async () => {
-    expect((await request(app).patch('/api/entreprises/1/bilan').set('Authorization', MED).send({ effectif_total: 50 })).status).toBe(403);
+describe('PATCH /api/entreprises/:id/bilan', () => {
+  it('allows medecin to update effectif vu and bilan', async () => {
+    db.query.mockResolvedValueOnce([{}]);
+    const res = await request(app).patch('/api/entreprises/1/bilan').set('Authorization', MED).send({ nb_visites_faites: 25, nb_bilans_faits: 20 });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toContain('Bilan et effectif mis à jour');
   });
-  it('updates bilan and effectif', async () => {
+  it('updates bilan and effectif for admin', async () => {
     db.query.mockResolvedValueOnce([{}]);
     const res = await request(app).patch('/api/entreprises/1/bilan').set('Authorization', ADM)
       .send({ effectif_total: 60, nb_visites_faites: 30, nb_bilans_faits: 25, nb_bilans_manquants: 5, annee_campagne: 2026 });
@@ -159,11 +162,11 @@ describe('POST /api/entreprises/import (Admin)', () => {
   });
 
   it('imports new entreprises and updates existing ones', async () => {
-    // Row 1: not found -> INSERT
-    db.query.mockResolvedValueOnce([[]]);
+    // 1. Initial SELECT of existing rows returns Clinique Les Oliviers (id: 1)
+    db.query.mockResolvedValueOnce([[{ id: 1, code: null, nom_lower: 'clinique les oliviers' }]]);
+    // 2. Bulk INSERT of new rows
     db.query.mockResolvedValueOnce([{ insertId: 101 }]);
-    // Row 2: found -> UPDATE
-    db.query.mockResolvedValueOnce([[{ id: 1 }]]);
+    // 3. Parallel UPDATE of existing rows
     db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
 
     const items = [

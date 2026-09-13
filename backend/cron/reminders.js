@@ -1,13 +1,5 @@
-const cron      = require('node-cron');
-const nodemailer = require('nodemailer');
-const { sendSMS } = require('../config/mailer');
-
-function getTransporter() {
-  return nodemailer.createTransport({
-    service: process.env.EMAIL_SERVICE || 'gmail',
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-  });
-}
+const cron = require('node-cron');
+const { getTransporter, getFromAddress, sendSMS, isDeliverableEmail } = require('../config/mailer');
 
 module.exports = function startReminders(db) {
   cron.schedule('0 8 * * *', async () => {
@@ -51,11 +43,12 @@ module.exports = function startReminders(db) {
           </div>`;
 
         // -- Medecin --
-        if (row.medecin_email && process.env.EMAIL_USER) {
+        if (row.medecin_email && process.env.EMAIL_USER && isDeliverableEmail(row.medecin_email)) {
           try {
             await getTransporter().sendMail({
-              from: `"GMT Ariana" <${process.env.EMAIL_USER}>`,
-              to:   row.medecin_email,
+              from:    getFromAddress('Rappels'),
+              replyTo: process.env.ADMIN_EMAIL || 'admin@gmt-ariana.tn',
+              to:      row.medecin_email,
               subject, html,
             });
           } catch (err) { console.warn('[Reminders] Email medecin:', err.message); }
@@ -63,11 +56,12 @@ module.exports = function startReminders(db) {
         if (row.medecin_tel) await sendSMS(row.medecin_tel, smsText);
 
         // -- Technicien --
-        if (row.tech_email && row.tech_email !== row.medecin_email && process.env.EMAIL_USER) {
+        if (row.tech_email && row.tech_email !== row.medecin_email && process.env.EMAIL_USER && isDeliverableEmail(row.tech_email)) {
           try {
             await getTransporter().sendMail({
-              from: `"GMT Ariana" <${process.env.EMAIL_USER}>`,
-              to:   row.tech_email,
+              from:    getFromAddress('Rappels'),
+              replyTo: process.env.ADMIN_EMAIL || 'admin@gmt-ariana.tn',
+              to:      row.tech_email,
               subject, html,
             });
           } catch (err) { console.warn('[Reminders] Email technicien:', err.message); }

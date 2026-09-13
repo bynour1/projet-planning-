@@ -14,6 +14,29 @@ import axios from 'axios';
  *  - searchLocation : bool  — si true, cherche les lieux via Nominatim (OpenStreetMap)
  *                             sinon, cherche dans les entreprises de la BDD
  */
+// Shared in-memory cache to avoid duplicate API requests across autocomplete instances
+let cachedEntreprises = null;
+let cachedEntreprisesPromise = null;
+
+function getCachedEntreprises() {
+  if (cachedEntreprises) return Promise.resolve(cachedEntreprises);
+  if (cachedEntreprisesPromise) return cachedEntreprisesPromise;
+  try {
+    cachedEntreprisesPromise = axios.get('/api/entreprises')
+      .then(r => {
+        cachedEntreprises = r?.data || [];
+        return cachedEntreprises;
+      })
+      .catch(() => {
+        cachedEntreprisesPromise = null;
+        return [];
+      });
+    return cachedEntreprisesPromise;
+  } catch {
+    return Promise.resolve([]);
+  }
+}
+
 export default function AddressAutocomplete({
   value,
   onChange,
@@ -37,15 +60,12 @@ export default function AddressAutocomplete({
   const wrapperRef  = useRef(null);
   const debounceRef = useRef(null);
 
-  /* ── Charger entreprises BDD (mode par défaut) ── */
+  /* ── Charger entreprises BDD (mode par défaut avec cache) ── */
   useEffect(() => {
     if (searchLocation) return;
-    try {
-      const p = axios.get('/api/entreprises');
-      if (p && typeof p.then === 'function') {
-        p.then(r => setAllEntreprises(r?.data || [])).catch(() => setAllEntreprises([]));
-      }
-    } catch {}
+    getCachedEntreprises().then(data => {
+      setAllEntreprises(data || []);
+    });
   }, [searchLocation]);
 
   /* ── Sync value → query ── */

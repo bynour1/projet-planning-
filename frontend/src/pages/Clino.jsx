@@ -8,6 +8,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import NavigationSelector from '../components/NavigationSelector';
 import SignaturePadModal from '../components/SignaturePadModal';
+import ExportDropdown from '../components/ExportDropdown';
 
 function fmtDisplayWithDay(dateStr) {
   if (!dateStr) return '-';
@@ -29,13 +30,35 @@ function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
   const [f, setF] = useState({
     date: init.date ? String(init.date).slice(0, 10) : format(new Date(), 'yyyy-MM-dd'),
     heure: init.heure?.slice(0, 5) || '',
+    titre: init.entreprise_nom || init.planning_titre || init.titre || '',
     adresse: init.adresse || '',
     medecin_id: init.medecin_id || '',
     technicien_id: init.technicien_id || '',
     commentaire: init.commentaire || '',
   });
+  const [allEnts, setAllEnts] = useState([]);
+  const [selectedEntId, setSelectedEntId] = useState('');
   const [saving, setSaving] = useState(false);
   const s = (k, v) => setF(p => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    axios.get('/api/entreprises')
+      ?.then?.(r => setAllEnts(r?.data || []))
+      ?.catch?.(() => {});
+  }, []);
+
+  function handleSelectEntreprise(entId) {
+    setSelectedEntId(entId);
+    if (!entId) return;
+    const ent = allEnts.find(e => String(e.id) === String(entId));
+    if (ent) {
+      setF(prev => ({
+        ...prev,
+        titre: ent.nom || prev.titre,
+        adresse: ent.adresse || prev.adresse,
+      }));
+    }
+  }
 
   async function save() {
     if (!f.date || !f.heure || !f.adresse) return;
@@ -53,29 +76,88 @@ function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{init.id ? '✏️ Modifier le programme Clino' : '➕ Nouveau programme Clino Mobile'}</h3>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
+              {init.id ? '✏️ Modifier le programme Clino' : '➕ Nouveau programme Clino Mobile'}
+            </h3>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-3)' }}>
+              Mission de l'unité médicale mobile sur site d'entreprise
+            </p>
+          </div>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
-        <div className="modal-body">
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Sélection rapide depuis les Entreprises conventionnées */}
+          <div style={{
+            background: 'var(--surface2)',
+            padding: '10px 14px',
+            borderRadius: 10,
+            border: '1px solid var(--border)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <label style={{ fontWeight: 700, fontSize: 12.5, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                <span>🏢</span>
+                <span>Entreprise conventionnée (Remplissage rapide)</span>
+              </label>
+              {allEnts.length > 0 && (
+                <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600 }}>
+                  {allEnts.length} entreprise(s)
+                </span>
+              )}
+            </div>
+            <select
+              className="input"
+              style={{ fontSize: 12.5, height: 36, fontWeight: 600 }}
+              value={selectedEntId}
+              onChange={e => handleSelectEntreprise(e.target.value)}
+            >
+              <option value="">— Choisir une entreprise pour pré-remplir le nom et l'adresse —</option>
+              {allEnts.map(ent => (
+                <option key={ent.id} value={ent.id}>
+                  {ent.code ? `[${ent.code}] ` : ''}{ent.nom}{ent.secteur ? ` • ${ent.secteur}` : ''}{ent.adresse ? ` (${ent.adresse})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label style={{ fontWeight: 600 }}>Nom de l'Entreprise / Titre de la Mission *</label>
+            <input
+              className="input"
+              list="clino-entreprises-list"
+              placeholder="Ex: Société Biorad, Carrefour, Tournée Clino Mobile..."
+              value={f.titre}
+              onChange={e => s('titre', e.target.value)}
+              style={{ fontWeight: 600 }}
+            />
+            <datalist id="clino-entreprises-list">
+              {allEnts.map(ent => (
+                <option key={ent.id} value={ent.nom}>
+                  {ent.code ? `[${ent.code}] ` : ''}{ent.secteur || ent.adresse || ''}
+                </option>
+              ))}
+            </datalist>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">
-              <label>Date *</label>
-              <input className="input" type="date" value={f.date} onChange={e => s('date', e.target.value)} required />
+              <label style={{ fontWeight: 600 }}>Date de déplacement *</label>
+              <input className="input" type="date" value={f.date} onChange={e => s('date', e.target.value)} required style={{ fontWeight: 600 }} />
             </div>
             <div className="form-group">
-              <label>Heure *</label>
+              <label style={{ fontWeight: 600 }}>Heure de passage *</label>
               <input className="input" type="time" value={f.heure} onChange={e => s('heure', e.target.value)} required />
             </div>
           </div>
           <div className="form-group">
-            <label>Adresse / Destination *</label>
-            <AddressAutocomplete value={f.adresse} onChange={v => s('adresse', v)} placeholder="Adresse du déplacement..." required />
+            <label style={{ fontWeight: 600 }}>Adresse / Destination de l'Unité Mobile *</label>
+            <AddressAutocomplete value={f.adresse} onChange={v => s('adresse', v)} placeholder="Adresse du site d'intervention..." required />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">
-              <label>Médecin (optionnel)</label>
+              <label style={{ fontWeight: 600 }}>Médecin (optionnel)</label>
               <select className="input" value={f.medecin_id} onChange={e => s('medecin_id', e.target.value)}>
                 <option value="">— Aucun médecin —</option>
                 {medecins?.map(m => (
@@ -84,7 +166,7 @@ function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
               </select>
             </div>
             <div className="form-group">
-              <label>Technicien (optionnel)</label>
+              <label style={{ fontWeight: 600 }}>Technicien (optionnel)</label>
               <select className="input" value={f.technicien_id} onChange={e => s('technicien_id', e.target.value)}>
                 <option value="">— Aucun technicien —</option>
                 {techniciens?.map(t => (
@@ -94,14 +176,14 @@ function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
             </div>
           </div>
           <div className="form-group">
-            <label>Commentaire / Notes</label>
-            <textarea className="input" placeholder="Notes, matériel ou détails du programme..." value={f.commentaire} onChange={e => s('commentaire', e.target.value)} rows={3} />
+            <label style={{ fontWeight: 600 }}>Commentaire / Notes de mission</label>
+            <textarea className="input" placeholder="Matériel embarqué, consignes d'accès ou détails du programme..." value={f.commentaire} onChange={e => s('commentaire', e.target.value)} rows={2} />
           </div>
         </div>
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onClose}>Annuler</button>
           <button className="btn btn-primary" onClick={save} disabled={saving || !f.date || !f.heure || !f.adresse}>
-            {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : '💾 Enregistrer'}
+            {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : '💾 Enregistrer la tournée'}
           </button>
         </div>
       </div>
@@ -110,19 +192,26 @@ function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
 }
 
 /* ── Daily Program Panel ─────────────────────────────────────── */
-function DailyProgram({ selectedDate, clinoItems, planningItems, isAdmin, onAddClino }) {
+function DailyProgram({ selectedDate, clinoItems, planningItems, isAdmin, onAddClino, setSigModal }) {
   const dayClino = clinoItems.filter(c => String(c.date || '').slice(0, 10) === selectedDate)
     .sort((a, b) => (a.heure || '').localeCompare(b.heure || ''));
-  const dayPlanning = planningItems.filter(p => String(p.date || '').slice(0, 10) === selectedDate)
-    .sort((a, b) => (a.heure_debut || '').localeCompare(b.heure_debut || ''));
+  const linkedClinoIds = new Set(clinoItems.map(c => String(c.id)));
+  const linkedPlanningIds = new Set(clinoItems.filter(c => c.planning_id).map(c => String(c.planning_id)));
+
+  const dayPlanning = planningItems.filter(p => {
+    if (String(p.date || '').slice(0, 10) !== selectedDate) return false;
+    if (p.clino_id && linkedClinoIds.has(String(p.clino_id))) return false;
+    if (linkedPlanningIds.has(String(p.id))) return false;
+    return true;
+  }).sort((a, b) => (a.heure_debut || '').localeCompare(b.heure_debut || ''));
 
   const total = dayClino.length + dayPlanning.length;
 
   // Build merged timeline
   const timeline = [
-    ...dayPlanning.map(p => ({ time: p.heure_debut || '00:00', type: 'planning', data: p })),
-    ...dayClino.map(c => ({ time: c.heure || '00:00', type: 'clino', data: c })),
-  ].sort((a, b) => a.time.localeCompare(b.time));
+    ...dayPlanning.map(p => ({ time: p.heure_debut ? String(p.heure_debut).slice(0, 5) : '', type: 'planning', data: p })),
+    ...dayClino.map(c => ({ time: c.heure ? String(c.heure).slice(0, 5) : '', type: 'clino', data: c })),
+  ].sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
   return (
     <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
@@ -148,6 +237,7 @@ function DailyProgram({ selectedDate, clinoItems, planningItems, isAdmin, onAddC
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingLeft: 2 }}>
               {timeline.map((item, i) => {
                 const isC = item.type === 'clino';
+                const displayName = item.data.entreprise_nom || item.data.planning_titre || item.data.titre || (isC ? 'Mission Clino Mobile' : 'Programme Médical');
                 return (
                   <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                     {/* Time bubble */}
@@ -159,7 +249,7 @@ function DailyProgram({ selectedDate, clinoItems, planningItems, isAdmin, onAddC
                       border: `2px solid ${isC ? '#0ea5e9' : '#22c55e'}`,
                       zIndex: 1,
                     }}>
-                      {item.time.slice(0, 5)}
+                      {item.time || '—'}
                     </div>
                     {/* Card */}
                     <div style={{
@@ -180,9 +270,9 @@ function DailyProgram({ selectedDate, clinoItems, planningItems, isAdmin, onAddC
                             className="btn btn-ghost btn-sm"
                             style={{ padding: '2px 6px', fontSize: 11, color: isC ? '#0284c7' : '#059669', fontWeight: 600 }}
                             title="Valider & Signer sur site"
-                            onClick={() => setSigModal({
+                            onClick={() => setSigModal?.({
                               id: item.data.id,
-                              titre: isC ? 'Visite Clino Mobile' : item.data.titre,
+                              titre: displayName,
                               adresse: item.data.adresse,
                               medecin_nom: item.data.medecin_full || item.data.medecin_nom,
                               technicien_nom: item.data.technicien_full || item.data.technicien_nom,
@@ -195,7 +285,14 @@ function DailyProgram({ selectedDate, clinoItems, planningItems, isAdmin, onAddC
                       </div>
                       {isC ? (
                         <>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{item.data.adresse}</div>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>
+                            {displayName}
+                          </div>
+                          {item.data.adresse && (
+                            <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>
+                              📍 {item.data.adresse}
+                            </div>
+                          )}
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
                             {item.data.medecin_full && (
                               <span style={{ fontSize: 11, color: 'var(--text-2)', background: 'rgba(2, 132, 199, 0.1)', padding: '2px 6px', borderRadius: 4 }}>
@@ -217,13 +314,13 @@ function DailyProgram({ selectedDate, clinoItems, planningItems, isAdmin, onAddC
                         </>
                       ) : (
                         <>
-                          {item.data.titre && <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{item.data.titre}</div>}
+                          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>{displayName}</div>
+                          {item.data.adresse && <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>📍 {item.data.adresse}</div>}
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
                             {item.data.medecin_nom && <span style={{ fontSize: 11, color: 'var(--text-2)' }}>👨‍⚕️ {item.data.medecin_nom}</span>}
                             {item.data.technicien_nom && <span style={{ fontSize: 11, color: 'var(--text-2)' }}>🔧 {item.data.technicien_nom}</span>}
                           </div>
-                          {item.data.adresse && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>📍 {item.data.adresse}</div>}
-                          {item.data.heure_fin && <div style={{ fontSize: 11, color: 'var(--text-3)' }}>→ {item.data.heure_fin}</div>}
+                          {item.data.heure_fin && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>→ {item.data.heure_fin}</div>}
                         </>
                       )}
                     </div>
@@ -310,6 +407,9 @@ export default function Clino({ toast }) {
     if (filters.search) {
       const q = filters.search.toLowerCase();
       const match = (it.adresse || '').toLowerCase().includes(q) ||
+                    (it.titre || '').toLowerCase().includes(q) ||
+                    (it.entreprise_nom || '').toLowerCase().includes(q) ||
+                    (it.planning_titre || '').toLowerCase().includes(q) ||
                     (it.medecin_full || it.medecin_nom || '').toLowerCase().includes(q) ||
                     (it.technicien_full || it.technicien_nom || '').toLowerCase().includes(q) ||
                     (it.commentaire || '').toLowerCase().includes(q);
@@ -334,7 +434,7 @@ export default function Clino({ toast }) {
     heure_debut: it.heure ? String(it.heure).slice(0, 5) : '',
     heure_fin: '',
     heure_display: it.heure ? String(it.heure).slice(0, 5) : '-',
-    titre: 'Programme Clino Mobile',
+    titre: it.entreprise_nom || it.planning_titre || it.titre || 'Programme Clino Mobile',
     medecin_nom: it.medecin_full || it.medecin_nom || '-',
     technicien_nom: it.technicien_full || it.technicien_nom || '-',
     adresse: it.adresse || '-',
@@ -386,74 +486,52 @@ export default function Clino({ toast }) {
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Export buttons */}
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button
-              className="btn btn-outline btn-sm"
-              onClick={() => {
-                import('../utils/exportUtils').then(({ exportToPDF }) => {
-                  exportToPDF(exportClinoItems, [
-                    { header: 'Date', key: 'date_display' },
-                    { header: 'Horaire', key: 'heure_display' },
-                    { header: 'Titre / Sujet', key: 'titre' },
-                    { header: 'Médecin', key: 'medecin_nom' },
-                    { header: 'Technicien', key: 'technicien_nom' },
-                    { header: 'Adresse / Destination', key: 'adresse' },
-                  ], 'Tournees Clino Mobile GMT Ariana');
-                });
-              }}
-              title="Exporter Clino Mobile en PDF"
-            >
-              📄 PDF
-            </button>
-            <button
-              className="btn btn-outline btn-sm"
-              onClick={() => {
-                import('../utils/exportUtils').then(({ exportToExcel }) => {
-                  exportToExcel(exportClinoItems, [
-                    { header: 'Date', key: 'date_display' },
-                    { header: 'Heure', key: 'heure_debut' },
-                    { header: 'Programme', key: 'titre' },
-                    { header: 'Médecin', key: 'medecin_nom' },
-                    { header: 'Technicien', key: 'technicien_nom' },
-                    { header: 'Adresse / Destination', key: 'adresse' },
-                    { header: 'Commentaires / Notes', key: 'commentaire' },
-                  ], 'Tournees_Clino_Mobile_GMT_Ariana');
-                });
-              }}
-              title="Exporter Clino Mobile en Excel"
-            >
-              📊 Excel
-            </button>
-            <button
-              className="btn btn-outline btn-sm"
-              onClick={() => {
-                import('../utils/exportUtils').then(({ exportToWord }) => {
-                  exportToWord(exportClinoItems, [
-                    { header: 'Date', key: 'date_display' },
-                    { header: 'Heure', key: 'heure_debut' },
-                    { header: 'Programme', key: 'titre' },
-                    { header: 'Médecin', key: 'medecin_nom' },
-                    { header: 'Technicien', key: 'technicien_nom' },
-                    { header: 'Adresse / Destination', key: 'adresse' },
-                    { header: 'Commentaires / Notes', key: 'commentaire' },
-                  ], 'Tournees Clino Mobile GMT Ariana');
-                });
-              }}
-              title="Exporter Clino Mobile en Word (.doc)"
-            >
-              📝 Word
-            </button>
-            <button
-              className="btn btn-outline btn-sm"
-              onClick={() => {
-                import('../utils/exportUtils').then(({ exportToICS }) => exportToICS(exportClinoItems));
-              }}
-              title="Exporter Clino Mobile au format Calendrier .ics"
-            >
-              📅 .ics
-            </button>
-          </div>
+          {/* Export dropdown */}
+          <ExportDropdown
+            label="Exporter / Imprimer"
+            onPrint={() => window.print()}
+            onPDF={() => {
+              import('../utils/exportUtils').then(({ exportToPDF }) => {
+                exportToPDF(exportClinoItems, [
+                  { header: 'Date', key: 'date_display' },
+                  { header: 'Horaire', key: 'heure_display' },
+                  { header: 'Titre / Entreprise', key: 'titre' },
+                  { header: 'Médecin', key: 'medecin_nom' },
+                  { header: 'Technicien', key: 'technicien_nom' },
+                  { header: 'Adresse / Destination', key: 'adresse' },
+                ], 'Tournees Clino Mobile GMT Ariana');
+              });
+            }}
+            onExcel={() => {
+              import('../utils/exportUtils').then(({ exportToExcel }) => {
+                exportToExcel(exportClinoItems, [
+                  { header: 'Date', key: 'date_display' },
+                  { header: 'Heure', key: 'heure_debut' },
+                  { header: 'Entreprise / Programme', key: 'titre' },
+                  { header: 'Médecin', key: 'medecin_nom' },
+                  { header: 'Technicien', key: 'technicien_nom' },
+                  { header: 'Adresse / Destination', key: 'adresse' },
+                  { header: 'Commentaires / Notes', key: 'commentaire' },
+                ], 'Tournees_Clino_Mobile_GMT_Ariana');
+              });
+            }}
+            onWord={() => {
+              import('../utils/exportUtils').then(({ exportToWord }) => {
+                exportToWord(exportClinoItems, [
+                  { header: 'Date', key: 'date_display' },
+                  { header: 'Heure', key: 'heure_debut' },
+                  { header: 'Entreprise / Programme', key: 'titre' },
+                  { header: 'Médecin', key: 'medecin_nom' },
+                  { header: 'Technicien', key: 'technicien_nom' },
+                  { header: 'Adresse / Destination', key: 'adresse' },
+                  { header: 'Commentaires / Notes', key: 'commentaire' },
+                ], 'Tournees Clino Mobile GMT Ariana');
+              });
+            }}
+            onICS={() => {
+              import('../utils/exportUtils').then(({ exportToICS }) => exportToICS(exportClinoItems));
+            }}
+          />
 
           {/* Tab switcher */}
           <div style={{ display: 'flex', gap: 2, background: 'var(--bg)', borderRadius: 8, padding: 3, border: '1px solid var(--border)' }}>
@@ -509,8 +587,8 @@ export default function Clino({ toast }) {
         <input
           className="input"
           type="text"
-          placeholder="🔍 Rechercher par mot-clé, médecin ou adresse..."
-          style={{ width: 260, fontSize: 12, padding: '5px 10px', height: 32, borderRadius: 8 }}
+          placeholder="🔍 Rechercher par entreprise, mot-clé, médecin ou adresse..."
+          style={{ width: 280, fontSize: 12, padding: '5px 10px', height: 32, borderRadius: 8 }}
           value={filters.search}
           onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
         />
@@ -541,70 +619,78 @@ export default function Clino({ toast }) {
               : filtered.length === 0 ? <div className="empty-state"><div className="empty-icon">🚗</div><p>Aucun programme trouvé</p></div>
               : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {filtered.map(it => (
-                    <div key={it.id} className="card" style={{ padding: '12px 14px', borderLeft: '4px solid #059669', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span className="badge badge-green">🚗 {it.heure?.slice(0, 5) || '—'}</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)' }}>
-                            {it.date ? format(parseISO(String(it.date).slice(0, 10)), 'dd/MM/yyyy') : '—'}
-                          </span>
+                  {filtered.map(it => {
+                    const displayName = it.entreprise_nom || it.planning_titre || it.titre || 'Mission Clino Mobile';
+                    return (
+                      <div key={it.id} className="card" style={{ padding: '12px 14px', borderLeft: '4px solid #059669', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span className="badge badge-green">🚗 {it.heure?.slice(0, 5) || '—'}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)' }}>
+                              {it.date ? format(parseISO(String(it.date).slice(0, 10)), 'dd/MM/yyyy') : '—'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            {it.adresse && (
+                              <NavigationSelector addr={it.adresse} compact />
+                            )}
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              style={{ padding: '3px 8px', fontSize: 11, color: '#059669', fontWeight: 600 }}
+                              title="Valider & Signer sur site"
+                              onClick={() => setSigModal({
+                                id: it.id,
+                                titre: displayName,
+                                adresse: it.adresse,
+                                medecin_nom: it.medecin_full || it.medecin_nom,
+                                technicien_nom: it.technicien_full || it.technicien_nom,
+                                date: it.date
+                              })}
+                            >
+                              ✍️ Signer
+                            </button>
+                            {isAdmin && (
+                              <>
+                                <button className="btn btn-outline btn-sm" style={{ padding: '3px 7px' }} onClick={() => setModal(it)}>✏️</button>
+                                <button className="btn btn-danger btn-sm" style={{ padding: '3px 7px' }} onClick={() => setConfirm(it.id)}>🗑</button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          {it.adresse && (
-                            <NavigationSelector addr={it.adresse} compact />
-                          )}
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            style={{ padding: '3px 8px', fontSize: 11, color: '#059669', fontWeight: 600 }}
-                            title="Valider & Signer sur site"
-                            onClick={() => setSigModal({
-                              id: it.id,
-                              titre: 'Visite Clino Mobile',
-                              adresse: it.adresse,
-                              medecin_nom: it.medecin_full || it.medecin_nom,
-                              technicien_nom: it.technicien_full || it.technicien_nom,
-                              date: it.date
-                            })}
-                          >
-                            ✍️ Signer
-                          </button>
-                          {isAdmin && (
-                            <>
-                              <button className="btn btn-outline btn-sm" style={{ padding: '3px 7px' }} onClick={() => setModal(it)}>✏️</button>
-                              <button className="btn btn-danger btn-sm" style={{ padding: '3px 7px' }} onClick={() => setConfirm(it.id)}>🗑</button>
-                            </>
-                          )}
+                        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>
+                          {displayName}
                         </div>
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
-                        {it.adresse}
-                      </div>
-                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                        {(it.medecin_full || it.medecin_nom) && (
+                        {it.adresse && (
                           <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                            👨‍⚕️ {it.medecin_full || it.medecin_nom}
+                            📍 {it.adresse}
                           </div>
                         )}
-                        {(it.technicien_full || it.technicien_nom) && (
-                          <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                            🔧 {it.technicien_full || it.technicien_nom}
-                          </div>
-                        )}
-                        {!it.medecin_full && !it.medecin_nom && !it.technicien_full && !it.technicien_nom && (
-                          <div style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>
-                            Sans intervenant assigné
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                          {(it.medecin_full || it.medecin_nom) && (
+                            <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                              👨‍⚕️ {it.medecin_full || it.medecin_nom}
+                            </div>
+                          )}
+                          {(it.technicien_full || it.technicien_nom) && (
+                            <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                              🔧 {it.technicien_full || it.technicien_nom}
+                            </div>
+                          )}
+                          {!it.medecin_full && !it.medecin_nom && !it.technicien_full && !it.technicien_nom && (
+                            <div style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>
+                              Sans intervenant assigné
+                            </div>
+                          )}
+                        </div>
+                        {it.commentaire && (
+                          <div style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic', background: 'var(--surface2)', padding: '4px 8px', borderRadius: 6 }}>
+                            {it.commentaire}
                           </div>
                         )}
                       </div>
-                      {it.commentaire && (
-                        <div style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic', background: 'var(--surface2)', padding: '4px 8px', borderRadius: 6 }}>
-                          {it.commentaire}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </>
@@ -642,6 +728,7 @@ export default function Clino({ toast }) {
                 planningItems={planning}
                 isAdmin={isAdmin}
                 onAddClino={() => setModal({ date: selectedDate })}
+                setSigModal={setSigModal}
               />
             </div>
           )}

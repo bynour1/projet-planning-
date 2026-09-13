@@ -1,10 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import {
   format, startOfWeek, addDays, addWeeks, subWeeks,
   startOfMonth, endOfMonth, eachDayOfInterval, endOfWeek,
   isSameMonth, isToday as isTodayFn, addMonths, subMonths, parseISO,
+  getISOWeek, differenceInCalendarWeeks,
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth }   from '../context/AuthContext';
@@ -12,15 +13,17 @@ import { useSocket } from '../context/SocketContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import NavigationSelector from '../components/NavigationSelector';
-import SignaturePadModal from '../components/SignaturePadModal';
+import ExportDropdown from '../components/ExportDropdown';
 
-const DAYS_FR = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+const DAYS_FULL_FR = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+const DAYS_SHORT_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 // ── Helper : Sélecteur Navigation GPS ───────────────────────────
 function MapLink({ addr, style = {} }) {
   if (!addr) return null;
   return <NavigationSelector addr={addr} style={style} />;
 }
+
 const TYPE_COLORS = {
   ponctuel:  { bg:'#dbeafe', border:'#3b82f6', text:'#1d4ed8' },
   reunion:   { bg:'#dcfce7', border:'#22c55e', text:'#15803d' },
@@ -29,7 +32,6 @@ const TYPE_COLORS = {
   autre:     { bg:'#f3e8ff', border:'#a855f7', text:'#7e22ce' },
 };
 
-// Clino Mobile event color (distinct from planning/calendar)
 const CLINO_COLOR = { bg:'#d1fae5', border:'#059669', text:'#065f46' };
 
 /* ── helpers ──────────────────────────────────────────────── */
@@ -67,63 +69,394 @@ function fmtDisplayWithDay(dateStr) {
   }
 }
 
-/* ── Planning modal ─────────────────────────────────────────── */
-function PlanningModal({ event, medecins, techniciens, onSave, onClose }) {
-  const init = event || {};
-  const [f, setF] = useState({
-    titre: init.titre||'', date: toRaw(init.date)||'',
-    heure_debut: init.heure_debut||'', heure_fin: init.heure_fin||'',
-    adresse: init.adresse||'', medecin_id: init.medecin_id||'', technicien_id: init.technicien_id||'',
-  });
-  const [saving, setSaving] = useState(false);
-  const s = (k,v) => setF(p=>({...p,[k]:v}));
-  async function save() {
-    if (!f.date) return;
-    setSaving(true);
-    try {
-      if (init.id) await axios.put(`/api/planning/${init.id}`, f);
-      else         await axios.post('/api/planning', f);
-      onSave();
-    } catch(e){ alert(e.response?.data?.message||'Erreur'); }
-    finally { setSaving(false); }
-  }
+/* ── Detail Modal for Interventions ─────────────────────────── */
+function DetailModal({ item, isAdmin, onEdit, onDelete, onClose }) {
+  if (!item) return null;
+  const isClino = item._t === 'cl' || item._t === 'clino' || Boolean(item.is_clino || item.clino_id);
+  const isProg = item._t === 'p' || (!isClino && item.date && !item.heure);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e=>e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{init.id ? '✏️ Modifier le programme' : '➕ Nouveau programme'}</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{
+              background: isClino ? '#059669' : isProg ? '#0284c7' : '#6366f1',
+              color: '#fff',
+              fontSize: 11,
+              fontWeight: 800,
+              padding: '3px 8px',
+              borderRadius: 6,
+              textTransform: 'uppercase',
+            }}>
+              {isClino ? '🚗 Clino Mobile' : isProg ? '📋 Programme Médical' : '📅 Événement'}
+            </span>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>Détails de l'intervention</h3>
+          </div>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
-        <div className="modal-body">
-          <div className="form-group"><label>Titre du programme</label>
-            <input className="input" placeholder="Titre (ex: Visite médicale, Consultation...)" value={f.titre} onChange={e=>s('titre',e.target.value)}/></div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-            <div className="form-group"><label>Date *</label>
-              <input className="input" type="date" value={f.date} onChange={e=>s('date',e.target.value)} required/></div>
-            <div className="form-group"><label>Adresse / Lieu</label>
-              <AddressAutocomplete value={f.adresse} onChange={v=>s('adresse',v)} placeholder="Adresse du programme" /></div>
-            <div className="form-group"><label>Heure début</label>
-              <input className="input" type="time" value={f.heure_debut} onChange={e=>s('heure_debut',e.target.value)}/></div>
-            <div className="form-group"><label>Heure fin</label>
-              <input className="input" type="time" value={f.heure_fin} onChange={e=>s('heure_fin',e.target.value)}/></div>
+
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Title & Date Banner */}
+          <div style={{ background: 'var(--surface2)', padding: '12px 14px', borderRadius: 10, border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+              <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--text)' }}>
+                {item.titre || (isClino ? 'Tournée Clino Mobile' : 'Intervention Médicale')}
+              </div>
+              {(item.is_clino || item.clino_id) && (
+                <span style={{
+                  background: '#059669',
+                  color: '#fff',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}>
+                  🚗 Clino Lié
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>
+              📅 {fmtDisplayWithDay(item.date || item.date_debut?.slice(0, 10))}
+              {item.heure_debut && ` • ⏰ ${item.heure_debut}${item.heure_fin ? ' → ' + item.heure_fin : ''}`}
+              {item.heure && ` • ⏰ ${String(item.heure).slice(0, 5)}`}
+            </div>
           </div>
-          <div className="form-group"><label>Médecin (optionnel)</label>
-            <select className="input" value={f.medecin_id} onChange={e=>s('medecin_id',e.target.value)}>
-              <option value="">— Aucun médecin (Optionnel) —</option>
-              {medecins?.map(m=><option key={m.id} value={m.id}>👨‍⚕️ Dr. {m.prenom} {m.nom}</option>)}
-            </select></div>
-          <div className="form-group"><label>Technicien (optionnel)</label>
-            <select className="input" value={f.technicien_id} onChange={e=>s('technicien_id',e.target.value)}>
-              <option value="">— Aucun technicien (Optionnel) —</option>
-              {techniciens?.map(t=><option key={t.id} value={t.id}>🔧 {t.prenom} {t.nom}</option>)}
-            </select></div>
-          {!init.id && <div style={{padding:'8px 12px',background:'#e0f2fe',borderRadius:8,fontSize:12,color:'#0284c7'}}>
-            📧 Notification email envoyée à tous les utilisateurs.</div>}
+
+          {/* Medical Team */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ background: '#f0f9ff', padding: '10px 12px', borderRadius: 8, border: '1px solid #bae6fd' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#0369a1', textTransform: 'uppercase', marginBottom: 2 }}>
+                👨‍⚕️ Médecin
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                {item.medecin_nom || item.medecin_full ? `Dr. ${item.medecin_nom || item.medecin_full}` : 'Non assigné'}
+              </div>
+            </div>
+
+            <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#475569', textTransform: 'uppercase', marginBottom: 2 }}>
+                🔧 Technicien
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                {item.technicien_nom || item.technicien_full || 'Non assigné'}
+              </div>
+            </div>
+          </div>
+
+          {/* Location & Navigation */}
+          {(item.adresse || item.lieu) && (
+            <div style={{ background: 'var(--surface)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: 4 }}>
+                📍 Lieu / Adresse de rendez-vous
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
+                {item.adresse || item.lieu}
+              </div>
+              <MapLink addr={item.adresse || item.lieu} />
+            </div>
+          )}
+
+          {/* Notes / Commentaire */}
+          {item.commentaire && (
+            <div style={{ background: 'var(--surface2)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: 2 }}>
+                💬 Instructions & Commentaires
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-2)', fontStyle: 'italic' }}>
+                {item.commentaire}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            {isAdmin && (
+              <button
+                className="btn btn-danger btn-sm"
+                onClick={() => { onDelete(item); onClose(); }}
+                style={{ fontWeight: 700 }}
+              >
+                🗑️ Supprimer
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {isAdmin && (
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => { onEdit(item); onClose(); }}
+                style={{ fontWeight: 700 }}
+              >
+                ✏️ Modifier
+              </button>
+            )}
+            <button className="btn btn-primary btn-sm" onClick={onClose}>
+              Fermer
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Planning modal (Formulaire de programmation) ───────────── */
+function PlanningModal({ event, medecins, techniciens, entreprises = [], defaultDate, defaultMedecinId, defaultTechnicienId, onSave, onClose, toast }) {
+  const init = event || {};
+  const [is_clino, setIsClino] = useState(Boolean(init.is_clino || init.clino_id || init._t === 'clino' || init._t === 'cl'));
+  const [f, setF] = useState({
+    titre: init.titre || '',
+    date: toRaw(init.date) || defaultDate || format(new Date(), 'yyyy-MM-dd'),
+    heure_debut: init.heure_debut || '',
+    heure_fin: init.heure_fin || '',
+    adresse: init.adresse || '',
+    medecin_id: init.medecin_id || defaultMedecinId || '',
+    technicien_id: init.technicien_id || defaultTechnicienId || '',
+  });
+  const [allEnts, setAllEnts] = useState(entreprises || []);
+  const [selectedEntId, setSelectedEntId] = useState('');
+
+  useEffect(() => {
+    if (entreprises && entreprises.length > 0) {
+      setAllEnts(entreprises);
+    } else {
+      axios.get('/api/entreprises').then(r => setAllEnts(r.data || [])).catch(() => {});
+    }
+  }, [entreprises]);
+
+  const [saving, setSaving] = useState(false);
+  const s = (k, v) => setF(p => ({ ...p, [k]: v }));
+
+  const handleSelectEntreprise = (entId) => {
+    setSelectedEntId(entId);
+    if (!entId) return;
+    const found = allEnts.find(e => String(e.id) === String(entId));
+    if (found) {
+      s('titre', found.nom);
+      if (found.adresse) s('adresse', found.adresse);
+    }
+  };
+
+  async function save() {
+    if (!f.date || !f.titre) return;
+    setSaving(true);
+    try {
+      const payload = { ...f, is_clino: is_clino ? 1 : 0 };
+      if (init.id) await axios.put(`/api/planning/${init.id}`, payload);
+      else         await axios.post('/api/planning', payload);
+      onSave();
+    } catch(e) {
+      const msg = e.response?.data?.message || 'Erreur lors de l\'enregistrement';
+      toast ? toast(msg, 'error') : alert(msg);
+    }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
+              {init.id ? '✏️ Modifier le programme' : '➕ Nouveau programme / visite'}
+            </h3>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-3)' }}>
+              Planification d'intervention médicale ou visite d'entreprise
+            </p>
+          </div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Bouton de liaison Clino Mobile */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px 14px',
+            borderRadius: 10,
+            border: is_clino ? '2px solid #059669' : '1px solid var(--border)',
+            background: is_clino ? '#ecfdf5' : 'var(--surface2)',
+            transition: 'all 0.2s ease',
+            gap: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                background: is_clino ? '#059669' : 'var(--border)',
+                color: is_clino ? '#fff' : 'var(--text-3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 18,
+                flexShrink: 0,
+              }}>
+                🚗
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 13, color: is_clino ? '#065f46' : 'var(--text)' }}>
+                  Lier au Clino Mobile (Unité Mobile)
+                </div>
+                <div style={{ fontSize: 11, color: is_clino ? '#047857' : 'var(--text-3)', marginTop: 2 }}>
+                  {is_clino
+                    ? '✓ Visible dans le planning du médecin ET sur le planning Clino Mobile'
+                    : 'Activer pour associer ce programme à l\'unité mobile Clino'}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`btn btn-sm ${is_clino ? 'btn-primary' : 'btn-outline'}`}
+              style={{
+                fontWeight: 800,
+                padding: '6px 14px',
+                borderRadius: 8,
+                background: is_clino ? '#059669' : 'transparent',
+                borderColor: is_clino ? '#059669' : 'var(--border)',
+                color: is_clino ? '#fff' : 'var(--text-2)',
+                flexShrink: 0,
+              }}
+              onClick={() => setIsClino(!is_clino)}
+            >
+              {is_clino ? '✓ Clino Actif' : '+ Bouton Clino'}
+            </button>
+          </div>
+
+          {/* Sélection / liaison rapide depuis la liste des Entreprises */}
+          <div style={{
+            background: 'var(--surface2)',
+            padding: '10px 14px',
+            borderRadius: 10,
+            border: '1px solid var(--border)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <label style={{ fontWeight: 700, fontSize: 12.5, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                <span>🏢</span>
+                <span>Lier / Remplir depuis une Entreprise conventionnée</span>
+              </label>
+              {allEnts.length > 0 && (
+                <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600 }}>
+                  {allEnts.length} entreprise(s)
+                </span>
+              )}
+            </div>
+            <select
+              className="input"
+              style={{ fontSize: 12.5, height: 36, fontWeight: 600 }}
+              value={selectedEntId}
+              onChange={e => handleSelectEntreprise(e.target.value)}
+            >
+              <option value="">— Sélectionner une entreprise pour pré-remplir le titre et l'adresse —</option>
+              {allEnts.map(ent => (
+                <option key={ent.id} value={ent.id}>
+                  {ent.code ? `[${ent.code}] ` : ''}{ent.nom}{ent.secteur ? ` • ${ent.secteur}` : ''}{ent.adresse ? ` (${ent.adresse})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label style={{ fontWeight: 600 }}>Titre du programme / Entreprise *</label>
+            <input
+              className="input"
+              list="modal-entreprises-list"
+              placeholder="Ex: Société XYZ, Visite médicale périodique, Dépistage..."
+              value={f.titre}
+              onChange={e => s('titre', e.target.value)}
+              required
+            />
+            <datalist id="modal-entreprises-list">
+              {allEnts.map(ent => (
+                <option key={ent.id} value={ent.nom}>
+                  {ent.code ? `[${ent.code}] ` : ''}{ent.secteur || ent.adresse || ''}
+                </option>
+              ))}
+            </datalist>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label style={{ fontWeight: 600 }}>Date de l'intervention *</label>
+              <input
+                className="input"
+                type="date"
+                value={f.date}
+                onChange={e => s('date', e.target.value)}
+                required
+                style={{ fontWeight: 600 }}
+              />
+            </div>
+            <div className="form-group">
+              <label style={{ fontWeight: 600 }}>Adresse / Lieu</label>
+              <AddressAutocomplete
+                value={f.adresse}
+                onChange={v => s('adresse', v)}
+                placeholder="Lieu de l'intervention"
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label style={{ fontWeight: 600 }}>Heure début (optionnel)</label>
+              <input
+                className="input"
+                type="time"
+                value={f.heure_debut}
+                onChange={e => s('heure_debut', e.target.value)}
+                placeholder="--:--"
+              />
+            </div>
+            <div className="form-group">
+              <label style={{ fontWeight: 600 }}>Heure fin (optionnel)</label>
+              <input
+                className="input"
+                type="time"
+                value={f.heure_fin}
+                onChange={e => s('heure_fin', e.target.value)}
+                placeholder="--:--"
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label style={{ fontWeight: 600 }}>Médecin assigné</label>
+              <select className="input" value={f.medecin_id} onChange={e => s('medecin_id', e.target.value)}>
+                <option value="">— Aucun médecin —</option>
+                {medecins?.map(m => (
+                  <option key={m.id} value={m.id}>👨‍⚕️ Dr. {m.prenom} {m.nom}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label style={{ fontWeight: 600 }}>Technicien assigné</label>
+              <select className="input" value={f.technicien_id} onChange={e => s('technicien_id', e.target.value)}>
+                <option value="">— Aucun technicien —</option>
+                {techniciens?.map(t => (
+                  <option key={t.id} value={t.id}>🔧 {t.prenom} {t.nom}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {!init.id && (
+            <div style={{ padding: '8px 12px', background: '#e0f2fe', borderRadius: 8, fontSize: 12, color: '#0284c7', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>📧</span>
+              <span>Une notification email sera automatiquement envoyée aux intervenants.</span>
+            </div>
+          )}
         </div>
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onClose}>Annuler</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving||!f.date}>
-            {saving?<span className="spinner" style={{width:16,height:16}}/>:'💾 Enregistrer'}
+          <button className="btn btn-primary" onClick={save} disabled={saving || !f.date || !f.titre}>
+            {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : '💾 Enregistrer'}
           </button>
         </div>
       </div>
@@ -132,63 +465,103 @@ function PlanningModal({ event, medecins, techniciens, onSave, onClose }) {
 }
 
 /* ── Event (calendar) modal ─────────────────────────────────── */
-function EventModal({ event, onSave, onClose }) {
+function EventModal({ event, defaultDate, onSave, onClose, toast }) {
   const init = event || {};
+  const defaultDt = defaultDate ? `${defaultDate}T08:30` : '';
   const [f, setF] = useState({
-    titre: init.titre||'', type: init.type||'ponctuel',
-    date_debut: init.date_debut?.slice(0,16)||'', date_fin: init.date_fin?.slice(0,16)||'',
-    lieu: init.lieu||'', recurrence: init.recurrence||'none',
+    titre: init.titre || '',
+    type: init.type || 'ponctuel',
+    date_debut: init.date_debut?.slice(0, 16) || defaultDt,
+    date_fin: init.date_fin?.slice(0, 16) || '',
+    lieu: init.lieu || '',
+    recurrence: init.recurrence || 'none',
   });
   const [saving, setSaving] = useState(false);
-  const s = (k,v) => setF(p=>({...p,[k]:v}));
+  const s = (k, v) => setF(p => ({ ...p, [k]: v }));
+
   async function save() {
-    if (!f.titre||!f.date_debut) return;
+    if (!f.titre || !f.date_debut) return;
     setSaving(true);
     try {
       if (init.id) await axios.put(`/api/events/${init.id}`, f);
       else         await axios.post('/api/events', f);
       onSave();
-    } catch(e){ alert(e.response?.data?.message||'Erreur'); }
+    } catch(e) {
+      const msg = e.response?.data?.message || 'Erreur lors de l\'enregistrement';
+      toast ? toast(msg, 'error') : alert(msg);
+    }
     finally { setSaving(false); }
   }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e=>e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{init.id?'✏️ Modifier l\'événement':'➕ Nouvel événement'}</h3>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
+            {init.id ? '✏️ Modifier l\'événement' : '➕ Nouvel événement calendrier'}
+          </h3>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
-        <div className="modal-body">
-          <div className="form-group"><label>Titre *</label>
-            <input className="input" placeholder="Titre de l'événement" value={f.titre} onChange={e=>s('titre',e.target.value)} required/></div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-            <div className="form-group"><label>Type</label>
-              <select className="input" value={f.type} onChange={e=>s('type',e.target.value)}>
-                <option value="ponctuel">Ponctuel</option>
-                <option value="reunion">Réunion</option>
-                <option value="formation">Formation</option>
-                <option value="conges">Congés</option>
-                <option value="autre">Autre</option>
-              </select></div>
-            <div className="form-group"><label>Récurrence</label>
-              <select className="input" value={f.recurrence} onChange={e=>s('recurrence',e.target.value)}>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="form-group">
+            <label style={{ fontWeight: 600 }}>Titre de l'événement *</label>
+            <input
+              className="input"
+              placeholder="Ex: Réunion de service, Formation secourisme..."
+              value={f.titre}
+              onChange={e => s('titre', e.target.value)}
+              required
+            />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label style={{ fontWeight: 600 }}>Type</label>
+              <select className="input" value={f.type} onChange={e => s('type', e.target.value)}>
+                <option value="ponctuel">📌 Ponctuel</option>
+                <option value="reunion">👥 Réunion</option>
+                <option value="formation">🎓 Formation</option>
+                <option value="conges">🏖️ Congés</option>
+                <option value="autre">📝 Autre</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label style={{ fontWeight: 600 }}>Récurrence</label>
+              <select className="input" value={f.recurrence} onChange={e => s('recurrence', e.target.value)}>
                 <option value="none">Aucune</option>
                 <option value="daily">Quotidienne</option>
                 <option value="weekly">Hebdomadaire</option>
                 <option value="monthly">Mensuelle</option>
-              </select></div>
-            <div className="form-group"><label>Date début *</label>
-              <input className="input" type="datetime-local" value={f.date_debut} onChange={e=>s('date_debut',e.target.value)} required/></div>
-            <div className="form-group"><label>Date fin</label>
-              <input className="input" type="datetime-local" value={f.date_fin} onChange={e=>s('date_fin',e.target.value)}/></div>
+              </select>
+            </div>
+            <div className="form-group">
+              <label style={{ fontWeight: 600 }}>Date début *</label>
+              <input
+                className="input"
+                type="datetime-local"
+                value={f.date_debut}
+                onChange={e => s('date_debut', e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label style={{ fontWeight: 600 }}>Date fin</label>
+              <input
+                className="input"
+                type="datetime-local"
+                value={f.date_fin}
+                onChange={e => s('date_fin', e.target.value)}
+              />
+            </div>
           </div>
-          <div className="form-group"><label>Lieu / Adresse</label>
-            <AddressAutocomplete value={f.lieu} onChange={v=>s('lieu',v)} placeholder="Lieu de l'événement" /></div>
+          <div className="form-group">
+            <label style={{ fontWeight: 600 }}>Lieu / Adresse</label>
+            <AddressAutocomplete value={f.lieu} onChange={v => s('lieu', v)} placeholder="Lieu de l'événement" />
+          </div>
         </div>
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onClose}>Annuler</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving||!f.titre||!f.date_debut}>
-            {saving?<span className="spinner" style={{width:16,height:16}}/>:'💾 Enregistrer'}
+          <button className="btn btn-primary" onClick={save} disabled={saving || !f.titre || !f.date_debut}>
+            {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : '💾 Enregistrer'}
           </button>
         </div>
       </div>
@@ -198,386 +571,1215 @@ function EventModal({ event, onSave, onClose }) {
 
 /* ── Today banner ────────────────────────────────────────────── */
 function TodayBanner({ pe, ce, cl = [] }) {
-  const today = format(new Date(),'yyyy-MM-dd');
-  const tp = pe.filter(e=>e.date===today).sort((a,b)=>(a.heure_debut||'').localeCompare(b.heure_debut||''));
-  const tc = ce.filter(e=>e.date_debut?.slice(0,10)===today);
-  const tcl = cl.filter(e=>e.date===today);
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const tp = pe.filter(e => e.date === today).sort((a, b) => (a.heure_debut || '').localeCompare(b.heure_debut || ''));
+  const tc = ce.filter(e => e.date_debut?.slice(0, 10) === today);
+  const tcl = cl.filter(e => e.date === today);
   if (!tp.length && !tc.length && !tcl.length) return null;
   return (
-    <div style={{padding:'9px 20px',background:'linear-gradient(90deg,#0ea5e9,#10b981)',color:'#fff',display:'flex',alignItems:'center',gap:10,flexShrink:0,flexWrap:'wrap'}}>
-      <span style={{fontWeight:700,fontSize:13}}>📅 Aujourd'hui</span>
-      {tp.map(e=>(
-        <span key={'tp'+e.id} style={{background:'rgba(255,255,255,.2)',padding:'2px 10px',borderRadius:20,fontSize:12}}>
-          📋 {e.heure_debut?e.heure_debut+' ':''}{e.titre||'Programme'}{e.medecin_nom?' · '+e.medecin_nom:''}{e.technicien_nom?' · 🔧 '+e.technicien_nom:''}
+    <div style={{
+      padding: '10px 20px',
+      background: 'linear-gradient(90deg, #0284c7, #0d9488)',
+      color: '#fff',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      flexShrink: 0,
+      flexWrap: 'wrap',
+      boxShadow: '0 2px 8px rgba(2,132,199,0.15)'
+    }}>
+      <span style={{ fontWeight: 800, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 4 }}>
+        ⚡ Aujourd'hui :
+      </span>
+      {tp.map(e => (
+        <span key={'tp' + e.id} style={{ background: 'rgba(255,255,255,0.22)', backdropFilter: 'blur(4px)', padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
+          📋 {e.heure_debut ? e.heure_debut + ' ' : ''}{e.titre || 'Programme'}{e.medecin_nom ? ' · 👨‍⚕️ ' + e.medecin_nom : ''}{e.technicien_nom ? ' · 🔧 ' + e.technicien_nom : ''}
         </span>
       ))}
-      {tc.map(e=>(
-        <span key={'tc'+e.id} style={{background:'rgba(255,255,255,.2)',padding:'2px 10px',borderRadius:20,fontSize:12}}>
-          📅 {e.titre}{e.lieu?' · '+e.lieu:''}
+      {tc.map(e => (
+        <span key={'tc' + e.id} style={{ background: 'rgba(255,255,255,0.2)', padding: '3px 10px', borderRadius: 20, fontSize: 12 }}>
+          📅 {e.titre}{e.lieu ? ' · ' + e.lieu : ''}
         </span>
       ))}
-      {tcl.map(e=>(
-        <span key={'tcl'+e.id} style={{background:'rgba(255,255,255,.25)',padding:'2px 10px',borderRadius:20,fontSize:12,border:'1px solid rgba(255,255,255,.4)'}}>
-          🚗 Clino {e.heure?String(e.heure).slice(0,5)+' ':''}{e.medecin_nom?' · '+e.medecin_nom:''}{e.technicien_nom?' · 🔧 '+e.technicien_nom:''}{e.adresse?' · '+e.adresse:''}
+      {tcl.map(e => (
+        <span key={'tcl' + e.id} style={{ background: 'rgba(255,255,255,0.25)', padding: '3px 10px', borderRadius: 20, fontSize: 12, border: '1px solid rgba(255,255,255,0.4)', fontWeight: 600 }}>
+          🚗 {e.entreprise_nom || e.planning_titre || e.titre || 'Clino Mobile'}{e.heure ? ' · ⏰ ' + String(e.heure).slice(0, 5) : ''}{e.medecin_nom ? ' · 👨‍⚕️ ' + e.medecin_nom : ''}{e.technicien_nom ? ' · 🔧 ' + e.technicien_nom : ''}
         </span>
       ))}
     </div>
   );
 }
 
-/* ── WEEK view ───────────────────────────────────────────────── */
-function WeekView({weekStart,pe,ce,cl = [],isAdmin,medecins,techniciens,onRefresh,toast,onSign}){
-  const weekEnd=addDays(weekStart,6);
-  const [modal,setModal]=useState(null);
-  const [confirm,setConfirm]=useState(null);
-  const days=Array.from({length:7},(_,i)=>{
-    const d=addDays(weekStart,i); const key=format(d,'yyyy-MM-dd');
-    return {
-      d,
-      label:DAYS_FR[i],
-      key,
-      pEvts:pe.filter(e=>e.date===key),
-      cEvts:ce.filter(e=>e.date_debut?.slice(0,10)===key),
-      clEvts:cl.filter(e=>e.date===key),
-    };
-  });
-  async function del(item){
-    try{
+/* ── 1. MATRIX VIEW (MÉDECINS OU TECHNICIENS EN HAUT, JOURS EN LIGNES) ── */
+function DoctorMatrixView({
+  days,
+  periodLabel,
+  periodSubtitle,
+  pe,
+  ce,
+  cl = [],
+  medecins = [],
+  techniciens = [],
+  isAdmin,
+  onRefresh,
+  toast,
+  onSelectDetail,
+  defaultRole = 'medecin',
+}) {
+  const [modal, setModal] = useState(null);
+  const [confirm, setConfirm] = useState(null);
+  const [staffRole, setStaffRole] = useState(defaultRole === 'technicien' ? 'technicien' : 'medecin');
+
+  useEffect(() => {
+    if (defaultRole === 'technicien' || defaultRole === 'medecin') {
+      setStaffRole(defaultRole);
+    }
+  }, [defaultRole]);
+
+  // 1. Extract distinct doctors
+  const doctorsList = useMemo(() => {
+    const list = [...medecins];
+    const seenIds = new Set(list.map(m => String(m.id)));
+    const seenNames = new Set(list.map(m => `${m.prenom || ''} ${m.nom || ''}`.toLowerCase().trim()));
+
+    [...pe, ...cl].forEach(item => {
+      if (item.medecin_id && !seenIds.has(String(item.medecin_id))) {
+        seenIds.add(String(item.medecin_id));
+        list.push({
+          id: item.medecin_id,
+          nom: item.medecin_nom || item.medecin_full || 'Médecin',
+          prenom: '',
+        });
+      } else if (item.medecin_nom && item.medecin_nom !== '—' && item.medecin_nom !== '-') {
+        const norm = item.medecin_nom.toLowerCase().trim();
+        if (!seenNames.has(norm)) {
+          seenNames.add(norm);
+          list.push({
+            id: 'nom_' + norm,
+            nom: item.medecin_nom,
+            prenom: '',
+            isVirtual: true,
+          });
+        }
+      }
+    });
+
+    return list;
+  }, [medecins, pe, cl]);
+
+  // 2. Extract distinct technicians
+  const techniciansList = useMemo(() => {
+    const list = [...techniciens];
+    const seenIds = new Set(list.map(t => String(t.id)));
+    const seenNames = new Set(list.map(t => `${t.prenom || ''} ${t.nom || ''}`.toLowerCase().trim()));
+
+    [...pe, ...cl].forEach(item => {
+      if (item.technicien_id && !seenIds.has(String(item.technicien_id))) {
+        seenIds.add(String(item.technicien_id));
+        list.push({
+          id: item.technicien_id,
+          nom: item.technicien_nom || item.technicien_full || 'Technicien',
+          prenom: '',
+        });
+      } else if (item.technicien_nom && item.technicien_nom !== '—' && item.technicien_nom !== '-') {
+        const norm = item.technicien_nom.toLowerCase().trim();
+        if (!seenNames.has(norm)) {
+          seenNames.add(norm);
+          list.push({
+            id: 'nom_' + norm,
+            nom: item.technicien_nom,
+            prenom: '',
+            isVirtual: true,
+          });
+        }
+      }
+    });
+
+    return list;
+  }, [techniciens, pe, cl]);
+
+  const isTechnician = staffRole === 'technicien';
+  const activeStaffList = isTechnician ? techniciansList : doctorsList;
+
+  const hasUnassignedEvents = useMemo(() => {
+    if (isTechnician) {
+      return [...pe, ...cl].some(e => !e.technicien_id && (!e.technicien_nom || e.technicien_nom === '—' || e.technicien_nom === '-'));
+    }
+    return [...pe, ...cl].some(e => !e.medecin_id && (!e.medecin_nom || e.medecin_nom === '—' || e.medecin_nom === '-'));
+  }, [pe, cl, isTechnician]);
+
+  function getStaffEvents(staffMember, dayKey) {
+    if (isTechnician) {
+      const tecId = staffMember ? String(staffMember.id) : null;
+      const tecName = staffMember ? `${staffMember.prenom || ''} ${staffMember.nom || ''}`.toLowerCase().trim() : null;
+
+      const pEvents = pe.filter(e => {
+        if (e.date !== dayKey) return false;
+        if (tecId && e.technicien_id && String(e.technicien_id) === tecId) return true;
+        if (tecName && e.technicien_nom && e.technicien_nom.toLowerCase().includes(tecName)) return true;
+        if (!staffMember && !e.technicien_id && (!e.technicien_nom || e.technicien_nom === '—' || e.technicien_nom === '-')) return true;
+        return false;
+      });
+
+      const clEvents = cl.filter(e => {
+        if (e.date !== dayKey) return false;
+        if (tecId && e.technicien_id && String(e.technicien_id) === tecId) return true;
+        if (tecName && (e.technicien_nom || e.technicien_full) && (e.technicien_nom || e.technicien_full).toLowerCase().includes(tecName)) return true;
+        if (!staffMember && !e.technicien_id && !e.technicien_nom && !e.technicien_full) return true;
+        return false;
+      });
+
+      return { pEvents, clEvents };
+    } else {
+      const docId = staffMember ? String(staffMember.id) : null;
+      const docName = staffMember ? `${staffMember.prenom || ''} ${staffMember.nom || ''}`.toLowerCase().trim() : null;
+
+      const pEvents = pe.filter(e => {
+        if (e.date !== dayKey) return false;
+        if (docId && e.medecin_id && String(e.medecin_id) === docId) return true;
+        if (docName && e.medecin_nom && e.medecin_nom.toLowerCase().includes(docName)) return true;
+        if (!staffMember && !e.medecin_id && (!e.medecin_nom || e.medecin_nom === '—' || e.medecin_nom === '-')) return true;
+        return false;
+      });
+
+      const clEvents = cl.filter(e => {
+        if (e.date !== dayKey) return false;
+        if (docId && e.medecin_id && String(e.medecin_id) === docId) return true;
+        if (docName && (e.medecin_nom || e.medecin_full) && (e.medecin_nom || e.medecin_full).toLowerCase().includes(docName)) return true;
+        if (!staffMember && !e.medecin_id && !e.medecin_nom && !e.medecin_full) return true;
+        return false;
+      });
+
+      return { pEvents, clEvents };
+    }
+  }
+
+  const staffStats = useMemo(() => {
+    const stats = {};
+    activeStaffList.forEach(staff => {
+      let count = 0;
+      days.forEach(d => {
+        const key = typeof d === 'string' ? d : format(d, 'yyyy-MM-dd');
+        const { pEvents, clEvents } = getStaffEvents(staff, key);
+        count += pEvents.length + clEvents.length;
+      });
+      stats[staff.id] = count;
+    });
+    return stats;
+  }, [activeStaffList, days, pe, cl, isTechnician]);
+
+  async function del(item) {
+    try {
       const type = item._t || item.t;
-      if(type === 'p') await axios.delete(`/api/planning/${item.id}`);
-      else if(type === 'cl' || type === 'clino') await axios.delete(`/api/clino/${item.id}`);
+      if (type === 'p') await axios.delete(`/api/planning/${item.id}`);
+      else if (type === 'cl' || type === 'clino') await axios.delete(`/api/clino/${item.id}`);
       else await axios.delete(`/api/events/${item.id}`);
-      onRefresh(); toast('Supprimé avec succès','success');
-    }catch(err){
+      onRefresh();
+      toast('Supprimé avec succès', 'success');
+    } catch (err) {
       console.error(err);
-      toast('Erreur lors de la suppression','error');
-    }finally{
+      toast('Erreur lors de la suppression', 'error');
+    } finally {
       setConfirm(null);
     }
   }
-  return (<>
-    <div style={{flex:1,overflowX:'auto',overflowY:'auto'}}>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(150px,1fr))',minWidth:1050,height:'100%'}}>
-        {days.map(({d,label,key,pEvts,cEvts,clEvts})=>(
-          <div key={key} style={{borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column'}}>
-            <div style={{padding:'10px 12px',borderBottom:'1px solid var(--border)',background:isTodayFn(d)?'#fff7ed':'var(--surface)',position:'sticky',top:0,zIndex:1}}>
-              <div style={{fontSize:11,fontWeight:700,color:'var(--text-3)',textTransform:'uppercase'}}>{label}</div>
-              <div style={{fontSize:20,fontWeight:800,color:isTodayFn(d)?'var(--warn)':'var(--text)'}}>{format(d,'d')}</div>
-              {(pEvts.length+cEvts.length+clEvts.length)>0&&<div style={{fontSize:10,color:'var(--text-3)'}}>{pEvts.length+cEvts.length+clEvts.length} item(s)</div>}
-            </div>
-            <div style={{flex:1,padding:6,display:'flex',flexDirection:'column',gap:4,overflowY:'auto'}}>
-              {pEvts.map(ev=>(
-                <div key={'p'+ev.id} onClick={()=>isAdmin&&setModal({t:'p',data:ev})}
-                  style={{background:'#e0f2fe',borderRadius:8,padding:'7px 9px',borderLeft:'3px solid #0ea5e9',cursor:isAdmin?'pointer':'default'}}>
-                  <div style={{fontSize:11,fontWeight:700,color:'#0284c7'}}>📋 {ev.heure_debut?ev.heure_debut+' ':''}{ev.titre||'Programme'}</div>
-                  {ev.medecin_nom&&<div style={{fontSize:10,color:'var(--text-2)'}}>👨‍⚕️ {ev.medecin_nom}</div>}
-                  {ev.technicien_nom&&<div style={{fontSize:10,color:'var(--text-2)'}}>🔧 {ev.technicien_nom}</div>}
-                  {ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:10}}/>}
-                  <div style={{display:'flex',gap:4,marginTop:3,alignItems:'center'}}>
-                    <button className="btn btn-ghost" style={{padding:'1px 5px',fontSize:10,color:'#0284c7',fontWeight:600}}
-                      title="Valider & Signer sur site" onClick={e=>{e.stopPropagation();onSign?.(ev);}}>✍️ Signer</button>
-                    {isAdmin&&<button className="btn btn-ghost" style={{padding:'1px 4px',fontSize:10,color:'var(--danger)',marginLeft:'auto'}}
-                      onClick={e=>{e.stopPropagation();setConfirm({_t:'p',t:'p',id:ev.id,titre:ev.titre});}}>✕</button>}
-                  </div>
-                </div>
-              ))}
-              {clEvts.map(ev=>(
-                <div key={'cl'+ev.id}
-                  style={{background:CLINO_COLOR.bg,borderRadius:8,padding:'7px 9px',borderLeft:`3px solid ${CLINO_COLOR.border}`}}>
-                  <div style={{fontSize:11,fontWeight:700,color:CLINO_COLOR.text}}>🚗 Clino Mobile {ev.heure?String(ev.heure).slice(0,5):''}</div>
-                  {ev.medecin_nom&&<div style={{fontSize:10,color:'var(--text-2)'}}>👨‍⚕️ {ev.medecin_nom}</div>}
-                  {ev.technicien_nom&&<div style={{fontSize:10,color:'var(--text-2)'}}>🔧 {ev.technicien_nom}</div>}
-                  {ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:10}}/>}
-                  {ev.commentaire&&<div style={{fontSize:9,color:'var(--text-3)',fontStyle:'italic',marginTop:2}}>{ev.commentaire}</div>}
-                  <div style={{display:'flex',gap:4,marginTop:3,alignItems:'center'}}>
-                    <button className="btn btn-ghost" style={{padding:'1px 5px',fontSize:10,color:'#059669',fontWeight:600}}
-                      title="Valider & Signer sur site" onClick={e=>{e.stopPropagation();onSign?.(ev);}}>✍️ Signer</button>
-                    {isAdmin&&<button className="btn btn-ghost" style={{padding:'1px 4px',fontSize:10,color:'var(--danger)',marginLeft:'auto'}}
-                      onClick={e=>{e.stopPropagation();setConfirm({_t:'cl',t:'cl',id:ev.id,titre:'Clino Mobile '+(ev.medecin_nom||'')});}}>✕</button>}
-                  </div>
-                </div>
-              ))}
-              {cEvts.map(ev=>{const c=TYPE_COLORS[ev.type]||TYPE_COLORS.autre; return(
-                <div key={'c'+ev.id} onClick={()=>isAdmin&&setModal({t:'e',data:ev})}
-                  style={{background:c.bg,borderRadius:8,padding:'7px 9px',borderLeft:`3px solid ${c.border}`,cursor:isAdmin?'pointer':'default'}}>
-                  <div style={{fontSize:11,fontWeight:700,color:c.text}}>📅 {ev.titre}</div>
-                  {ev.lieu&&<MapLink addr={ev.lieu} style={{fontSize:10}}/>}
-                  {isAdmin&&<button className="btn btn-ghost" style={{padding:'1px 4px',fontSize:10,color:'var(--danger)',marginTop:2}}
-                    onClick={e=>{e.stopPropagation();setConfirm({_t:'e',t:'e',id:ev.id,titre:ev.titre});}}>✕</button>}
-                </div>
-              );})}
-              {isAdmin&&(
-                <div style={{display:'flex',gap:3}}>
-                  <button className="btn btn-ghost" style={{fontSize:10,opacity:.5,padding:'2px 5px'}}
-                    onClick={()=>setModal({t:'p',data:{date:key}})}>+ Prog.</button>
-                  <button className="btn btn-ghost" style={{fontSize:10,opacity:.5,padding:'2px 5px'}}
-                    onClick={()=>setModal({t:'e',data:{date_debut:key+'T08:00'}})}>+ Évén.</button>
-                </div>
-              )}
+
+  const handleExportPDF = () => {
+    import('../utils/exportUtils').then(({ exportMatrixToPDF }) => {
+      exportMatrixToPDF({
+        days,
+        staffList: activeStaffList,
+        staffRole,
+        hasUnassigned: hasUnassignedEvents,
+        getStaffEvents,
+        title: `Planning ${isTechnician ? 'Technique' : 'Médical'} : ${periodLabel}`,
+        subtitle: `GROUPEMENT DE MÉDECINE DU TRAVAIL DE L'ARIANA — Matrice ${isTechnician ? 'Techniciens' : 'Médecins'} & Jours`,
+      });
+    });
+  };
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)', padding: '10px 14px' }}>
+      {/* Hidden Print Header only displayed on paper / PDF print */}
+      <div className="print-only" style={{ display: 'none', marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `2px solid ${isTechnician ? '#0d9488' : '#0284c7'}`, paddingBottom: 6 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: '#0f172a' }}>GROUPEMENT DE MÉDECINE DU TRAVAIL DE L'ARIANA</h2>
+            <div style={{ fontSize: 12, fontWeight: 800, color: isTechnician ? '#0d9488' : '#0284c7', marginTop: 2 }}>
+              Planning {isTechnician ? 'Technique (Techniciens & Clino Mobile)' : 'Médical (Médecins)'} : {periodLabel} {periodSubtitle ? `(${periodSubtitle})` : ''}
             </div>
           </div>
-        ))}
+          <div style={{ textAlign: 'right', fontSize: 9, color: '#64748b' }}>
+            Document Officiel · Édition du {format(new Date(), 'dd/MM/yyyy HH:mm')}
+          </div>
+        </div>
       </div>
+
+      {/* Top Controls Bar within Matrix (Switch Médecins / Techniciens & Print) */}
+      <div className="no-print" style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+        gap: 10,
+        flexWrap: 'wrap',
+      }}>
+        {/* Role Toggle */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          background: 'var(--surface)',
+          padding: '3px 4px',
+          borderRadius: 10,
+          border: '1px solid var(--border)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        }}>
+          <button
+            type="button"
+            className={`btn btn-sm ${!isTechnician ? 'btn-primary' : 'btn-ghost'}`}
+            style={{
+              fontSize: 12,
+              fontWeight: 800,
+              padding: '5px 14px',
+              borderRadius: 8,
+              background: !isTechnician ? 'linear-gradient(135deg, #0284c7, #0369a1)' : 'transparent',
+            }}
+            onClick={() => setStaffRole('medecin')}
+          >
+            👨‍⚕️ Vue Médecins ({doctorsList.length})
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm ${isTechnician ? 'btn-primary' : 'btn-ghost'}`}
+            style={{
+              fontSize: 12,
+              fontWeight: 800,
+              padding: '5px 14px',
+              borderRadius: 8,
+              background: isTechnician ? 'linear-gradient(135deg, #0d9488, #059669)' : 'transparent',
+            }}
+            onClick={() => setStaffRole('technicien')}
+          >
+            🔧 Vue Techniciens ({techniciansList.length})
+          </button>
+        </div>
+
+        {/* Quick Print & Export Bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            style={{ fontWeight: 800, fontSize: 12, borderRadius: 8, padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={handleExportPDF}
+            title="Télécharger la matrice en format PDF A4 Paysage"
+          >
+            📄 PDF Grille {isTechnician ? 'Techniciens' : 'Médecins'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            style={{
+              fontWeight: 800,
+              fontSize: 12,
+              borderRadius: 8,
+              padding: '5px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: isTechnician ? 'linear-gradient(135deg, #0d9488, #059669)' : 'linear-gradient(135deg, #0284c7, #0369a1)',
+            }}
+            onClick={() => window.print()}
+            title="Imprimer directement le planning en format A4 Paysage"
+          >
+            🖨️ Imprimer la grille
+          </button>
+        </div>
+      </div>
+
+      <div style={{
+        flex: 1,
+        overflow: 'auto',
+        borderRadius: 14,
+        border: '1px solid var(--border)',
+        background: 'var(--surface)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+      }}>
+        <table className="print-matrix-table" style={{
+          width: '100%',
+          borderCollapse: 'separate',
+          borderSpacing: 0,
+          textAlign: 'left',
+          minWidth: Math.max(800, 240 + (activeStaffList.length + (hasUnassignedEvents ? 1 : 0)) * 260),
+        }}>
+          {/* ── TOP HEADER : NOMS DES MÉDECINS OU TECHNICIENS ── */}
+          <thead>
+            <tr>
+              <th style={{
+                position: 'sticky',
+                top: 0,
+                left: 0,
+                zIndex: 30,
+                background: 'var(--surface2)',
+                borderRight: '2px solid var(--border)',
+                borderBottom: '2px solid var(--border)',
+                padding: '12px 14px',
+                width: 220,
+                minWidth: 220,
+                boxShadow: '2px 2px 6px rgba(0,0,0,0.04)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <span style={{
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      color: isTechnician ? '#0d9488' : 'var(--primary-dk)',
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.6,
+                    }}>
+                      🗓️ {periodSubtitle || 'Jours'}
+                    </span>
+                    <div style={{ fontSize: 13.5, fontWeight: 900, color: 'var(--text)', textTransform: 'capitalize', marginTop: 1 }}>
+                      {periodLabel}
+                    </div>
+                  </div>
+                </div>
+              </th>
+
+              {activeStaffList.map((staff) => {
+                const count = staffStats[staff.id] || 0;
+                const initials = staff.prenom ? `${staff.prenom.charAt(0)}${staff.nom.charAt(0)}` : (staff.nom?.charAt(0) || (isTechnician ? 'T' : 'D'));
+                const displayName = isTechnician
+                  ? (staff.prenom ? `${staff.prenom} ${staff.nom}` : staff.nom)
+                  : (staff.nom?.startsWith('Dr.') ? staff.nom : `Dr. ${staff.prenom ? `${staff.prenom} ` : ''}${staff.nom}`);
+
+                return (
+                  <th
+                    key={staff.id}
+                    style={{
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 20,
+                      background: 'var(--surface2)',
+                      borderRight: '1px solid var(--border)',
+                      borderBottom: '2px solid var(--border)',
+                      padding: '12px 16px',
+                      minWidth: 240,
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: '50%',
+                        background: isTechnician
+                          ? 'linear-gradient(135deg, #0d9488, #059669)'
+                          : 'linear-gradient(135deg, #0284c7, #0369a1)',
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 900,
+                        fontSize: 13,
+                        boxShadow: isTechnician ? '0 2px 6px rgba(13,148,136,0.3)' : '0 2px 6px rgba(2,132,199,0.3)',
+                        flexShrink: 0,
+                      }}>
+                        {initials}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontSize: 13,
+                          fontWeight: 900,
+                          color: 'var(--text)',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}>
+                          {displayName}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          <span style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: count > 0 ? (isTechnician ? '#0f766e' : '#0369a1') : 'var(--text-3)',
+                            background: count > 0 ? (isTechnician ? '#ccfbf1' : '#e0f2fe') : 'var(--bg)',
+                            padding: '1px 7px',
+                            borderRadius: 10,
+                          }}>
+                            {count} {isTechnician ? `mission${count > 1 ? 's' : ''}` : `visite${count > 1 ? 's' : ''}`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </th>
+                );
+              })}
+
+              {hasUnassignedEvents && (
+                <th style={{
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 20,
+                  background: 'var(--surface2)',
+                  borderRight: '1px solid var(--border)',
+                  borderBottom: '2px solid var(--border)',
+                  padding: '12px 16px',
+                  minWidth: 220,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: '50%',
+                      background: '#e2e8f0',
+                      color: '#475569',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 800,
+                      fontSize: 14,
+                    }}>
+                      {isTechnician ? '🔧' : '🏥'}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>
+                        {isTechnician ? 'Sans technicien' : 'Non assigné / Autre'}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-3)' }}>
+                        {isTechnician ? 'Visites sans technicien' : 'Visites sans médecin'}
+                      </div>
+                    </div>
+                  </div>
+                </th>
+              )}
+            </tr>
+          </thead>
+
+          {/* ── ROWS : LES JOURS ── */}
+          <tbody>
+            {days.map(dayObj => {
+              const day = typeof dayObj === 'string' ? parseISO(dayObj) : dayObj;
+              const dayKey = format(day, 'yyyy-MM-dd');
+              const isToday = isTodayFn(day);
+              const dayOfWeek = day.getDay();
+              const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+              const dayName = format(day, 'EEEE', { locale: fr });
+              const capDayName = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+
+              return (
+                <tr
+                  key={dayKey}
+                  style={{
+                    background: isToday
+                      ? 'rgba(2,132,199,0.03)'
+                      : isWeekend
+                        ? 'var(--surface2)'
+                        : 'var(--surface)',
+                    transition: 'background .15s ease',
+                  }}
+                >
+                  {/* Left Sticky Day Column */}
+                  <td style={{
+                    position: 'sticky',
+                    left: 0,
+                    zIndex: 10,
+                    background: isToday
+                      ? '#f0f9ff'
+                      : isWeekend
+                        ? 'var(--surface2)'
+                        : 'var(--surface)',
+                    borderRight: '2px solid var(--border)',
+                    borderBottom: '1px solid var(--border)',
+                    padding: '10px 14px',
+                    verticalAlign: 'top',
+                    boxShadow: '2px 0 6px rgba(0,0,0,0.03)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                        <span style={{
+                          fontSize: 22,
+                          fontWeight: 900,
+                          color: isToday ? (isTechnician ? '#0d9488' : '#0284c7') : isWeekend ? 'var(--text-3)' : 'var(--text)',
+                          lineHeight: 1,
+                        }}>
+                          {format(day, 'dd')}
+                        </span>
+                        <div>
+                          <div style={{
+                            fontSize: 12,
+                            fontWeight: 800,
+                            color: isToday ? (isTechnician ? '#0d9488' : '#0284c7') : isWeekend ? 'var(--text-3)' : 'var(--text)',
+                            textTransform: 'capitalize',
+                          }}>
+                            {capDayName}
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--text-3)' }}>
+                            {format(day, 'MMM yyyy', { locale: fr })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {isToday && (
+                        <span style={{
+                          fontSize: 9,
+                          fontWeight: 800,
+                          background: isTechnician ? '#0d9488' : '#0284c7',
+                          color: '#fff',
+                          padding: '2px 6px',
+                          borderRadius: 8,
+                          textTransform: 'uppercase',
+                        }}>
+                          Aujourd'hui
+                        </span>
+                      )}
+                      {isWeekend && !isToday && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', background: 'var(--bg)', padding: '2px 5px', borderRadius: 6 }}>
+                          W-E
+                        </span>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* Staff Cells */}
+                  {activeStaffList.map(staff => {
+                    const { pEvents, clEvents } = getStaffEvents(staff, dayKey);
+                    const totalCellEvents = pEvents.length + clEvents.length;
+
+                    return (
+                      <td
+                        key={staff.id}
+                        style={{
+                          borderRight: '1px solid var(--border)',
+                          borderBottom: '1px solid var(--border)',
+                          padding: 8,
+                          verticalAlign: 'top',
+                          background: totalCellEvents > 0 ? (isTechnician ? 'rgba(13,148,136,0.02)' : 'rgba(2,132,199,0.02)') : 'transparent',
+                          minHeight: 60,
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {pEvents.map(ev => {
+                            const isCl = Boolean(ev.is_clino || ev.clino_id);
+                            return (
+                              <div
+                                key={'p' + ev.id}
+                                onClick={() => onSelectDetail?.({ ...ev, _t: 'p' })}
+                                style={{
+                                  background: isCl ? '#ecfdf5' : '#f0f9ff',
+                                  borderRadius: 8,
+                                  padding: '8px 10px',
+                                  borderLeft: isCl ? '3.5px solid #059669' : '3.5px solid #0284c7',
+                                  border: isCl ? '1px solid #a7f3d0' : '1px solid #bae6fd',
+                                  borderLeftWidth: 3.5,
+                                  cursor: 'pointer',
+                                  boxShadow: isCl ? '0 1px 3px rgba(5,150,105,0.08)' : '0 1px 3px rgba(2,132,199,0.06)',
+                                }}
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{
+                                    fontSize: 9,
+                                    fontWeight: 800,
+                                    background: isCl ? '#059669' : '#0284c7',
+                                    color: '#fff',
+                                    padding: '1px 5px',
+                                    borderRadius: 4,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                  }}>
+                                    {isCl ? '🚗 Clino' : '📋'} {ev.heure_debut || ''}
+                                  </span>
+                                  {ev.heure_fin && (
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: isCl ? '#047857' : '#0369a1' }}>
+                                      → {ev.heure_fin}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginTop: 4, lineHeight: 1.25 }}>
+                                  {ev.titre || ev.entreprise_nom || 'Visite médicale'}
+                                </div>
+
+                                {/* Counterpart info: Show medecin if viewing technician, or technicien if viewing medecin */}
+                                {isTechnician ? (
+                                  ev.medecin_nom && (
+                                    <div style={{ fontSize: 10, fontWeight: 600, color: '#0369a1', marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                      <span>👨‍⚕️</span>
+                                      <span>{ev.medecin_nom}</span>
+                                    </div>
+                                  )
+                                ) : (
+                                  ev.technicien_nom && (
+                                    <div style={{ fontSize: 10, fontWeight: 600, color: '#475569', marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                      <span>🔧</span>
+                                      <span>{ev.technicien_nom}</span>
+                                    </div>
+                                  )
+                                )}
+
+                                {ev.adresse && (
+                                  <div style={{ marginTop: 3 }}>
+                                    <MapLink addr={ev.adresse} style={{ fontSize: 10 }} />
+                                  </div>
+                                )}
+
+                                {isAdmin && (
+                                  <div style={{ display: 'flex', gap: 4, marginTop: 6, alignItems: 'center', justifyContent: 'flex-end', paddingTop: 4, borderTop: '1px solid #e0f2fe' }}>
+                                    <button
+                                      className="btn btn-ghost btn-sm"
+                                      style={{ padding: '1px 5px', fontSize: 10, color: 'var(--text-2)' }}
+                                      title="Modifier"
+                                      onClick={e => { e.stopPropagation(); setModal({ t: 'p', data: ev }); }}
+                                    >
+                                      ✏️
+                                    </button>
+                                    <button
+                                      className="btn btn-ghost btn-sm"
+                                      style={{ padding: '1px 5px', fontSize: 10, color: 'var(--danger)' }}
+                                      title="Supprimer"
+                                      onClick={e => { e.stopPropagation(); setConfirm({ _t: 'p', t: 'p', id: ev.id, titre: ev.titre }); }}
+                                    >
+                                      🗑️
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+
+                          {clEvents.map(ev => (
+                            <div
+                              key={'cl' + ev.id}
+                              onClick={() => onSelectDetail?.({ ...ev, _t: 'cl' })}
+                              style={{
+                                background: '#ecfdf5',
+                                borderRadius: 8,
+                                padding: '8px 10px',
+                                borderLeft: '3.5px solid #059669',
+                                border: '1px solid #a7f3d0',
+                                borderLeftWidth: 3.5,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 9, fontWeight: 800, background: '#059669', color: '#fff', padding: '1px 5px', borderRadius: 4 }}>
+                                  🚗 Clino {ev.heure ? String(ev.heure).slice(0, 5) : ''}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginTop: 4, lineHeight: 1.25 }}>
+                                {ev.entreprise_nom || ev.planning_titre || ev.titre || 'Mission Clino Mobile'}
+                              </div>
+                              {isTechnician ? (
+                                (ev.medecin_full || ev.medecin_nom) && (
+                                  <div style={{ fontSize: 10, color: '#0369a1', marginTop: 2 }}>
+                                    👨‍⚕️ {ev.medecin_full || ev.medecin_nom}
+                                  </div>
+                                )
+                              ) : (
+                                (ev.technicien_full || ev.technicien_nom) && (
+                                  <div style={{ fontSize: 10, color: '#065f46', marginTop: 2 }}>
+                                    🔧 {ev.technicien_full || ev.technicien_nom}
+                                  </div>
+                                )
+                              )}
+                              {ev.adresse && (
+                                <div style={{ marginTop: 3 }}><MapLink addr={ev.adresse} style={{ fontSize: 10 }} /></div>
+                              )}
+                              {isAdmin && (
+                                <div style={{ display: 'flex', gap: 4, marginTop: 4, justifyContent: 'flex-end', borderTop: '1px solid #d1fae5', paddingTop: 2 }}>
+                                  <button
+                                    className="btn btn-ghost btn-sm"
+                                    style={{ padding: '1px 5px', fontSize: 10, color: 'var(--danger)' }}
+                                    onClick={e => { e.stopPropagation(); setConfirm({ _t: 'cl', t: 'cl', id: ev.id, titre: ev.entreprise_nom || ev.planning_titre || 'Clino Mobile' }); }}
+                                  >
+                                    🗑️
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+
+                          {isAdmin && (
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              style={{
+                                opacity: totalCellEvents === 0 ? 0.4 : 0.7,
+                                fontSize: 10,
+                                padding: '2px 4px',
+                                borderRadius: 4,
+                                border: '1px dashed var(--border)',
+                                width: '100%',
+                                justifyContent: 'center',
+                              }}
+                              onClick={() => setModal({
+                                t: 'p',
+                                data: {
+                                  date: dayKey,
+                                  medecin_id: !isTechnician && !staff.isVirtual ? staff.id : '',
+                                  technicien_id: isTechnician && !staff.isVirtual ? staff.id : '',
+                                  heure_debut: '',
+                                  heure_fin: '',
+                                },
+                              })}
+                              title={`Planifier pour ${isTechnician ? staff.nom : `Dr. ${staff.prenom || ''} ${staff.nom}`} le ${format(day, 'dd/MM/yyyy')}`}
+                            >
+                              + Ajouter
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+
+                  {hasUnassignedEvents && (
+                    <td style={{
+                      borderRight: '1px solid var(--border)',
+                      borderBottom: '1px solid var(--border)',
+                      padding: 8,
+                      verticalAlign: 'top',
+                      background: 'var(--surface2)',
+                    }}>
+                      {(() => {
+                        const { pEvents, clEvents } = getStaffEvents(null, dayKey);
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {pEvents.map(ev => (
+                              <div key={'un_p' + ev.id} onClick={() => onSelectDetail?.({ ...ev, _t: 'p' })} style={{ background: '#fef3c7', borderRadius: 8, padding: 6, borderLeft: '3px solid #f59e0b', fontSize: 11, cursor: 'pointer' }}>
+                                <div style={{ fontWeight: 800, color: '#b45309' }}>📋 {ev.titre}</div>
+                                {ev.adresse && <div style={{ marginTop: 2 }}><MapLink addr={ev.adresse} style={{ fontSize: 10 }} /></div>}
+                              </div>
+                            ))}
+                            {clEvents.map(ev => (
+                              <div key={'un_cl' + ev.id} onClick={() => onSelectDetail?.({ ...ev, _t: 'cl' })} style={{ background: '#ecfdf5', borderRadius: 8, padding: 6, borderLeft: '3px solid #059669', fontSize: 11, cursor: 'pointer' }}>
+                                <div style={{ fontWeight: 800, color: '#065f46' }}>
+                                  🚗 {ev.entreprise_nom || ev.planning_titre || ev.titre || 'Mission Clino Mobile'}{ev.heure ? ' ' + String(ev.heure).slice(0, 5) : ''}
+                                </div>
+                                {ev.adresse && <div style={{ marginTop: 2 }}><MapLink addr={ev.adresse} style={{ fontSize: 10 }} /></div>}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {modal?.t === 'p' && (
+        <PlanningModal
+          event={modal.data}
+          medecins={medecins}
+          techniciens={techniciens}
+          defaultDate={modal.data?.date}
+          defaultMedecinId={modal.data?.medecin_id}
+          defaultTechnicienId={modal.data?.technicien_id}
+          onSave={() => { setModal(null); onRefresh(); toast('Enregistré avec succès ✓', 'success'); }}
+          onClose={() => setModal(null)}
+          toast={toast}
+        />
+      )}
+      {modal?.t === 'e' && (
+        <EventModal
+          event={modal.data}
+          defaultDate={modal.data?.date_debut?.slice(0, 10)}
+          onSave={() => { setModal(null); onRefresh(); toast('Enregistré avec succès ✓', 'success'); }}
+          onClose={() => setModal(null)}
+          toast={toast}
+        />
+      )}
+      {confirm && (
+        <ConfirmDialog
+          title="Confirmer la suppression"
+          message={confirm.titre ? `Supprimer "${confirm.titre}" ? Action irréversible.` : 'Action irréversible.'}
+          danger
+          onConfirm={() => del(confirm)}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
     </div>
-    {modal?.t==='p'&&<PlanningModal event={modal.data} medecins={medecins} techniciens={techniciens}
-      onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
-    {modal?.t==='e'&&<EventModal event={modal.data}
-      onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
-    {confirm&&<ConfirmDialog title="Supprimer?" message={confirm.titre ? `Supprimer "${confirm.titre}" ? Action irréversible.` : "Action irréversible."} danger
-      onConfirm={()=>del(confirm)} onCancel={()=>setConfirm(null)}/>}
-  </>);
+  );
 }
 
-/* ── MONTH view ─────────────────────────────────────────────── */
-function MonthView({current,pe,ce,cl = [],isAdmin,medecins,techniciens,onRefresh,toast,onSign}){
-  const [selected,setSelected]=useState(null);
-  const [modal,setModal]=useState(null);
-  const [confirm,setConfirm]=useState(null);
-  const days=eachDayOfInterval({
-    start:startOfWeek(startOfMonth(current),{weekStartsOn:1}),
-    end:  endOfWeek(endOfMonth(current),{weekStartsOn:1}),
+/* ── 3. MONTH (CALENDAR GRID) view ──────────────────────────── */
+function MonthView({ current, pe, ce, cl = [], isAdmin, medecins, techniciens, onRefresh, toast, onSelectDetail }) {
+  const [selected, setSelected] = useState(null);
+  const [modal, setModal] = useState(null);
+  const [confirm, setConfirm] = useState(null);
+
+  const days = eachDayOfInterval({
+    start: startOfWeek(startOfMonth(current), { weekStartsOn: 1 }),
+    end:   endOfWeek(endOfMonth(current), { weekStartsOn: 1 }),
   });
-  const gp=d=>pe.filter(e=>e.date===format(d,'yyyy-MM-dd'));
-  const gc=d=>ce.filter(e=>e.date_debut?.slice(0,10)===format(d,'yyyy-MM-dd'));
-  const gcl=d=>cl.filter(e=>e.date===format(d,'yyyy-MM-dd'));
-  const sp=selected?pe.filter(e=>e.date===selected):[];
-  const sc=selected?ce.filter(e=>e.date_debut?.slice(0,10)===selected):[];
-  const scl=selected?cl.filter(e=>e.date===selected):[];
-  async function del(item){
-    try{
+
+  const gp = d => pe.filter(e => e.date === format(d, 'yyyy-MM-dd'));
+  const gc = d => ce.filter(e => e.date_debut?.slice(0, 10) === format(d, 'yyyy-MM-dd'));
+  const gcl = d => cl.filter(e => e.date === format(d, 'yyyy-MM-dd'));
+
+  const sp = selected ? pe.filter(e => e.date === selected) : [];
+  const sc = selected ? ce.filter(e => e.date_debut?.slice(0, 10) === selected) : [];
+  const scl = selected ? cl.filter(e => e.date === selected) : [];
+
+  async function del(item) {
+    try {
       const type = item._t || item.t;
-      if(type==='p') await axios.delete(`/api/planning/${item.id}`);
-      else if(type==='cl'||type==='clino') await axios.delete(`/api/clino/${item.id}`);
+      if (type === 'p') await axios.delete(`/api/planning/${item.id}`);
+      else if (type === 'cl' || type === 'clino') await axios.delete(`/api/clino/${item.id}`);
       else await axios.delete(`/api/events/${item.id}`);
-      onRefresh(); toast('Supprimé avec succès','success');
-    }catch(err){
+      onRefresh();
+      toast('Supprimé avec succès', 'success');
+    } catch (err) {
       console.error(err);
-      toast('Erreur lors de la suppression','error');
-    }finally{
+      toast('Erreur lors de la suppression', 'error');
+    } finally {
       setConfirm(null);
     }
   }
-  return(
-    <div style={{flex:1,display:'flex',overflow:'hidden'}}>
-      <div style={{flex:1,overflowY:'auto',padding:12}}>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',marginBottom:4}}>
-          {DAYS_FR.map(d=><div key={d} style={{textAlign:'center',fontSize:11,fontWeight:700,color:'var(--text-3)',padding:'4px 0',textTransform:'uppercase'}}>{d}</div>)}
+
+  return (
+    <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 6 }}>
+          {DAYS_FULL_FR.map(d => (
+            <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 800, color: 'var(--text-3)', padding: '6px 0', textTransform: 'uppercase' }}>
+              {d}
+            </div>
+          ))}
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>
-          {days.map(day=>{
-            const key=format(day,'yyyy-MM-dd');
-            const pEvts=gp(day); const cEvts=gc(day); const clEvts=gcl(day);
-            const total=pEvts.length+cEvts.length+clEvts.length;
-            const today=isTodayFn(day); const sel=selected===key; const inMon=isSameMonth(day,current);
-            return(
-              <div key={key} onClick={()=>setSelected(sel?null:key)} style={{
-                minHeight:72,padding:5,borderRadius:8,cursor:'pointer',
-                background:sel?'var(--primary-lt)':today?'#fff7ed':'var(--surface)',
-                border:`1px solid ${sel?'var(--primary)':today?'var(--warn)':'var(--border)'}`,
-                opacity:inMon?1:.4,transition:'all .1s',
-              }}>
-                <div style={{fontSize:12,fontWeight:today?800:500,color:today?'var(--warn)':'var(--text)',marginBottom:2}}>{format(day,'d')}</div>
-                {pEvts.slice(0,1).map(ev=>(
-                  <div key={'p'+ev.id} style={{fontSize:10,padding:'1px 4px',borderRadius:3,background:'#e0f2fe',color:'#0284c7',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',borderLeft:'2px solid #0ea5e9',marginBottom:2}}>
-                    📋 {ev.titre||'Programme'}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+          {days.map(day => {
+            const key = format(day, 'yyyy-MM-dd');
+            const pEvts = gp(day);
+            const cEvts = gc(day);
+            const clEvts = gcl(day);
+            const total = pEvts.length + cEvts.length + clEvts.length;
+            const today = isTodayFn(day);
+            const sel = selected === key;
+            const inMon = isSameMonth(day, current);
+            return (
+              <div
+                key={key}
+                onClick={() => setSelected(sel ? null : key)}
+                style={{
+                  minHeight: 84,
+                  padding: 7,
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  background: sel ? 'var(--primary-lt)' : today ? '#fff7ed' : 'var(--surface)',
+                  border: `1.5px solid ${sel ? 'var(--primary)' : today ? '#f97316' : 'var(--border)'}`,
+                  opacity: inMon ? 1 : 0.4,
+                  transition: 'all .1s',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 3,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, fontWeight: today ? 900 : 700, color: today ? '#f97316' : 'var(--text)' }}>
+                    {format(day, 'd')}
+                  </span>
+                  {today && (
+                    <span style={{ fontSize: 9, fontWeight: 800, background: '#f97316', color: '#fff', padding: '1px 5px', borderRadius: 10 }}>
+                      Aujourd'hui
+                    </span>
+                  )}
+                </div>
+                {pEvts.slice(0, 1).map(ev => (
+                  <div key={'p' + ev.id} style={{ fontSize: 10, padding: '2px 4px', borderRadius: 4, background: '#e0f2fe', color: '#0284c7', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderLeft: '3px solid #0ea5e9' }}>
+                    📋 {ev.titre || 'Programme'}
                   </div>
                 ))}
-                {clEvts.slice(0,1).map(ev=>(
-                  <div key={'cl'+ev.id} style={{fontSize:10,padding:'1px 4px',borderRadius:3,background:CLINO_COLOR.bg,color:CLINO_COLOR.text,fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',borderLeft:`2px solid ${CLINO_COLOR.border}`,marginBottom:2}}>
-                    🚗 Clino {ev.medecin_nom||''}
+                {clEvts.slice(0, 1).map(ev => (
+                  <div key={'cl' + ev.id} style={{ fontSize: 10, padding: '2px 4px', borderRadius: 4, background: CLINO_COLOR.bg, color: CLINO_COLOR.text, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderLeft: `3px solid ${CLINO_COLOR.border}` }}>
+                    🚗 {ev.entreprise_nom || ev.planning_titre || ev.titre || 'Clino Mobile'}
                   </div>
                 ))}
-                {cEvts.slice(0,1).map(ev=>{const c=TYPE_COLORS[ev.type]||TYPE_COLORS.autre;return(
-                  <div key={'c'+ev.id} style={{fontSize:10,padding:'1px 4px',borderRadius:3,background:c.bg,color:c.text,fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',borderLeft:`2px solid ${c.border}`,marginBottom:2}}>
-                    {ev.titre}
-                  </div>
-                );})}
-                {total>2&&<div style={{fontSize:9,color:'var(--text-3)'}}>+{total-2}</div>}
+                {cEvts.slice(0, 1).map(ev => {
+                  const c = TYPE_COLORS[ev.type] || TYPE_COLORS.autre;
+                  return (
+                    <div key={'c' + ev.id} style={{ fontSize: 10, padding: '2px 4px', borderRadius: 4, background: c.bg, color: c.text, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderLeft: `3px solid ${c.border}` }}>
+                      {ev.titre}
+                    </div>
+                  );
+                })}
+                {total > 2 && <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)' }}>+{total - 2} autre(s)</div>}
               </div>
             );
           })}
         </div>
       </div>
-      {selected&&(
-        <div style={{width:290,borderLeft:'1px solid var(--border)',padding:14,overflowY:'auto',background:'var(--surface)',flexShrink:0}}>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
-            <span style={{fontWeight:700,fontSize:14}}>{format(parseISO(selected),'d MMMM yyyy',{locale:fr})}</span>
-            <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>setSelected(null)}>✕</button>
+      {selected && (
+        <div style={{ width: 320, borderLeft: '1px solid var(--border)', padding: 16, overflowY: 'auto', background: 'var(--surface)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div>
+              <span style={{ fontWeight: 800, fontSize: 15 }}>{format(parseISO(selected), 'd MMMM yyyy', { locale: fr })}</span>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--text-3)' }}>Détail des activités de cette journée</p>
+            </div>
+            <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setSelected(null)}>✕</button>
           </div>
-          {sp.length===0&&sc.length===0&&scl.length===0&&<p style={{fontSize:13,color:'var(--text-3)',textAlign:'center',marginTop:20}}>Aucun événement</p>}
-          {sp.map(ev=>(
-            <div key={'sp'+ev.id} style={{background:'#e0f2fe',borderRadius:8,padding:'10px 12px',borderLeft:'3px solid #0ea5e9',marginBottom:8}}>
-              <div style={{fontWeight:600,fontSize:13,color:'#0284c7'}}>📋 {ev.titre||'Programme'}</div>
-              {ev.heure_debut&&<div style={{fontSize:11,color:'var(--text-2)'}}>⏰ {ev.heure_debut}{ev.heure_fin?' → '+ev.heure_fin:''}</div>}
-              {ev.medecin_nom&&<div style={{fontSize:11,color:'var(--text-2)'}}>👨‍⚕️ {ev.medecin_nom}</div>}
-              {ev.technicien_nom&&<div style={{fontSize:11,color:'var(--text-2)'}}>🔧 {ev.technicien_nom}</div>}
-              {ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:11}}/>}
-              <div style={{display:'flex',gap:4,marginTop:6,alignItems:'center',flexWrap:'wrap'}}>
-                <button className="btn btn-ghost btn-sm" style={{fontSize:11,color:'#0284c7',fontWeight:600}} onClick={()=>onSign?.(ev)}>✍️ Signer</button>
-                {isAdmin&&<>
-                  <button className="btn btn-outline btn-sm" style={{fontSize:11}} onClick={()=>setModal({t:'p',data:ev})}>✏️</button>
-                  <button className="btn btn-danger btn-sm" style={{fontSize:11}} onClick={()=>setConfirm({...ev,_t:'p',t:'p'})}>🗑</button>
-                </>}
-              </div>
+          {sp.length === 0 && sc.length === 0 && scl.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-3)' }}>
+              <div style={{ fontSize: 24, marginBottom: 6 }}>☕</div>
+              <p style={{ fontSize: 13 }}>Aucun événement ce jour</p>
+            </div>
+          )}
+          {sp.map(ev => (
+            <div key={'sp' + ev.id} onClick={() => onSelectDetail?.({ ...ev, _t: 'p' })} style={{ background: '#f0f9ff', borderRadius: 10, padding: '10px 12px', borderLeft: '4px solid #0284c7', border: '1px solid #bae6fd', borderLeftWidth: 4, marginBottom: 8, cursor: 'pointer' }}>
+              <div style={{ fontWeight: 800, fontSize: 13, color: '#0284c7' }}>📋 {ev.titre || 'Programme'}</div>
+              {ev.heure_debut && <div style={{ fontSize: 11, fontWeight: 600, color: '#0369a1', marginTop: 2 }}>⏰ {ev.heure_debut}{ev.heure_fin ? ' → ' + ev.heure_fin : ''}</div>}
+              {ev.medecin_nom && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>👨‍⚕️ Dr. {ev.medecin_nom}</div>}
+              {ev.technicien_nom && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 1 }}>🔧 {ev.technicien_nom}</div>}
+              {ev.adresse && <div style={{ marginTop: 4 }}><MapLink addr={ev.adresse} style={{ fontSize: 11 }} /></div>}
             </div>
           ))}
-          {scl.map(ev=>(
-            <div key={'scl'+ev.id} style={{background:CLINO_COLOR.bg,borderRadius:8,padding:'10px 12px',borderLeft:`3px solid ${CLINO_COLOR.border}`,marginBottom:8}}>
-              <div style={{fontWeight:600,fontSize:13,color:CLINO_COLOR.text}}>🚗 Clino Mobile</div>
-              {ev.heure&&<div style={{fontSize:11,color:'var(--text-2)'}}>⏰ {String(ev.heure).slice(0,5)}</div>}
-              {ev.medecin_nom&&<div style={{fontSize:11,color:'var(--text-2)'}}>👨‍⚕️ {ev.medecin_nom}</div>}
-              {ev.technicien_nom&&<div style={{fontSize:11,color:'var(--text-2)'}}>🔧 {ev.technicien_nom}</div>}
-              {ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:11}}/>}
-              {ev.commentaire&&<div style={{fontSize:11,color:'var(--text-3)',marginTop:3}}>{ev.commentaire}</div>}
-              <div style={{display:'flex',gap:4,marginTop:6,alignItems:'center',flexWrap:'wrap'}}>
-                <button className="btn btn-ghost btn-sm" style={{fontSize:11,color:'#059669',fontWeight:600}} onClick={()=>onSign?.(ev)}>✍️ Signer</button>
-                {isAdmin&&<button className="btn btn-danger btn-sm" style={{fontSize:11}} onClick={()=>setConfirm({...ev,_t:'cl',t:'cl'})}>🗑</button>}
+          {scl.map(ev => (
+            <div key={'scl' + ev.id} onClick={() => onSelectDetail?.({ ...ev, _t: 'cl' })} style={{ background: CLINO_COLOR.bg, borderRadius: 10, padding: '10px 12px', borderLeft: `4px solid ${CLINO_COLOR.border}`, border: `1px solid ${CLINO_COLOR.border}40`, borderLeftWidth: 4, marginBottom: 8, cursor: 'pointer' }}>
+              <div style={{ fontWeight: 800, fontSize: 13, color: CLINO_COLOR.text }}>
+                🚗 {ev.entreprise_nom || ev.planning_titre || ev.titre || 'Mission Clino Mobile'}
               </div>
+              {ev.heure && <div style={{ fontSize: 11, fontWeight: 600, color: '#047857', marginTop: 2 }}>⏰ {String(ev.heure).slice(0, 5)}</div>}
+              {ev.medecin_nom && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>👨‍⚕️ Dr. {ev.medecin_nom}</div>}
+              {ev.technicien_nom && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 1 }}>🔧 {ev.technicien_nom}</div>}
+              {ev.adresse && <div style={{ marginTop: 4 }}><MapLink addr={ev.adresse} style={{ fontSize: 11 }} /></div>}
             </div>
           ))}
-          {sc.map(ev=>{const c=TYPE_COLORS[ev.type]||TYPE_COLORS.autre;return(
-            <div key={'sc'+ev.id} style={{background:c.bg,borderRadius:8,padding:'10px 12px',borderLeft:`3px solid ${c.border}`,marginBottom:8}}>
-              <div style={{fontWeight:600,fontSize:13,color:c.text}}>📅 {ev.titre}</div>
-              <div style={{fontSize:11,color:'var(--text-2)',display:'flex',flexWrap:'wrap',gap:6,alignItems:'center'}}>
-                🕐 {format(parseISO(ev.date_debut),'HH:mm',{locale:fr})}
-                {ev.lieu&&<MapLink addr={ev.lieu} style={{fontSize:11}}/>}
+          {sc.map(ev => {
+            const c = TYPE_COLORS[ev.type] || TYPE_COLORS.autre;
+            return (
+              <div key={'sc' + ev.id} onClick={() => onSelectDetail?.({ ...ev, _t: 'e' })} style={{ background: c.bg, borderRadius: 10, padding: '10px 12px', borderLeft: `4px solid ${c.border}`, marginBottom: 8, cursor: 'pointer' }}>
+                <div style={{ fontWeight: 800, fontSize: 13, color: c.text }}>📅 {ev.titre}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>
+                  ⏰ {format(parseISO(ev.date_debut), 'HH:mm', { locale: fr })}
+                </div>
+                {ev.lieu && <div style={{ marginTop: 4 }}><MapLink addr={ev.lieu} style={{ fontSize: 11 }} /></div>}
               </div>
-              {isAdmin&&<div style={{display:'flex',gap:4,marginTop:6}}>
-                <button className="btn btn-outline btn-sm" style={{fontSize:11}} onClick={()=>setModal({t:'e',data:ev})}>✏️</button>
-                <button className="btn btn-danger btn-sm" style={{fontSize:11}} onClick={()=>setConfirm({...ev,_t:'e',t:'e'})}>🗑</button>
-              </div>}
+            );
+          })}
+          {isAdmin && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+              <button className="btn btn-primary btn-sm" style={{ flex: 1, fontSize: 12, fontWeight: 700 }} onClick={() => setModal({ t: 'p', data: { date: selected, heure_debut: '', heure_fin: '' } })}>+ Visite / Prog.</button>
+              <button className="btn btn-outline btn-sm" style={{ flex: 1, fontSize: 12, fontWeight: 700 }} onClick={() => setModal({ t: 'e', data: { date_debut: selected + 'T08:30' } })}>+ Événement</button>
             </div>
-          );})}
-          {isAdmin&&<div style={{display:'flex',gap:6,marginTop:8}}>
-            <button className="btn btn-primary btn-sm" style={{flex:1,fontSize:12}} onClick={()=>setModal({t:'p',data:{date:selected}})}>+ Prog.</button>
-            <button className="btn btn-outline btn-sm" style={{flex:1,fontSize:12}} onClick={()=>setModal({t:'e',data:{date_debut:selected+'T08:00'}})}>+ Évén.</button>
-          </div>}
+          )}
         </div>
       )}
-      {modal?.t==='p'&&<PlanningModal event={modal.data} medecins={medecins} techniciens={techniciens}
-        onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
-      {modal?.t==='e'&&<EventModal event={modal.data}
-        onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
-      {confirm&&<ConfirmDialog title="Supprimer?" message={confirm.titre ? `Supprimer "${confirm.titre}" ? Action irréversible.` : "Action irréversible."} danger
-        onConfirm={()=>del(confirm)} onCancel={()=>setConfirm(null)}/>}
+      {modal?.t === 'p' && (
+        <PlanningModal
+          event={modal.data}
+          medecins={medecins}
+          techniciens={techniciens}
+          defaultDate={modal.data?.date}
+          onSave={() => { setModal(null); onRefresh(); toast('Enregistré avec succès ✓', 'success'); }}
+          onClose={() => setModal(null)}
+          toast={toast}
+        />
+      )}
+      {modal?.t === 'e' && (
+        <EventModal
+          event={modal.data}
+          defaultDate={modal.data?.date_debut?.slice(0, 10)}
+          onSave={() => { setModal(null); onRefresh(); toast('Enregistré avec succès ✓', 'success'); }}
+          onClose={() => setModal(null)}
+          toast={toast}
+        />
+      )}
+      {confirm && (
+        <ConfirmDialog
+          title="Supprimer?"
+          message={confirm.titre ? `Supprimer "${confirm.titre}" ? Action irréversible.` : 'Action irréversible.'}
+          danger
+          onConfirm={() => del(confirm)}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
     </div>
   );
 }
 
-/* ── LIST view ───────────────────────────────────────────────── */
-function ListView({pe,ce,cl = [],isAdmin,medecins,techniciens,onRefresh,toast,onSign}){
-  const [modal,setModal]=useState(null);
-  const [confirm,setConfirm]=useState(null);
-  const all=[
-    ...pe.map(e=>({...e,_t:'p',t:'p'})),
-    ...ce.map(e=>({...e,_t:'e',t:'e',date:e.date_debut?.slice(0,10)})),
-    ...cl.map(e=>({...e,_t:'cl',t:'cl',titre:'Clino Mobile ' + (e.medecin_nom || '')})),
-  ].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-  async function del(item){
-    try{
+/* ── 4. LIST view ────────────────────────────────────────────── */
+function ListView({ pe, ce, cl = [], isAdmin, medecins, techniciens, onRefresh, toast, onSelectDetail }) {
+  const [modal, setModal] = useState(null);
+  const [confirm, setConfirm] = useState(null);
+  const all = [
+    ...pe.map(e => ({ ...e, _t: 'p', t: 'p' })),
+    ...ce.map(e => ({ ...e, _t: 'e', t: 'e', date: e.date_debut?.slice(0, 10) })),
+    ...cl.map(e => ({ ...e, _t: 'cl', t: 'cl', titre: e.entreprise_nom || e.planning_titre || e.titre || ('Mission Clino Mobile ' + (e.medecin_nom || '')) })),
+  ].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  async function del(item) {
+    try {
       const type = item._t || item.t;
-      if(type==='p') await axios.delete(`/api/planning/${item.id}`);
-      else if(type==='cl'||type==='clino') await axios.delete(`/api/clino/${item.id}`);
+      if (type === 'p') await axios.delete(`/api/planning/${item.id}`);
+      else if (type === 'cl' || type === 'clino') await axios.delete(`/api/clino/${item.id}`);
       else await axios.delete(`/api/events/${item.id}`);
-      onRefresh(); toast('Supprimé avec succès','success');
-    }catch(err){
+      onRefresh();
+      toast('Supprimé avec succès', 'success');
+    } catch (err) {
       console.error(err);
-      toast('Erreur lors de la suppression','error');
-    }finally{
+      toast('Erreur lors de la suppression', 'error');
+    } finally {
       setConfirm(null);
     }
   }
-  return(
-    <div style={{flex:1,overflowY:'auto',padding:20}}>
-      {all.length===0
-        ?<div className="empty-state"><div className="empty-icon">📋</div><p>Aucun événement</p></div>
-        :<div className="table-wrap"><table>
-          <thead><tr>
-            <th>Type</th><th>Titre</th><th>Date</th><th>Horaire</th>
-            <th>Médecin / Lieu</th><th>Technicien / Adresse</th>
-            <th>Actions</th>
-          </tr></thead>
-          <tbody>
-            {all.map(ev=>{
-              if(ev._t==='p') return(
-                <tr key={'p'+ev.id}>
-                  <td><span className="badge badge-blue">📋 Programme</span></td>
-                  <td style={{fontWeight:600}}>{ev.titre||'—'}</td>
-                  <td>{fmtDisplay(ev.date)}</td>
-                  <td>{ev.heure_debut?`${ev.heure_debut}${ev.heure_fin?' → '+ev.heure_fin:''}`:'—'}</td>
-                  <td>{ev.medecin_nom||'—'}</td>
-                  <td>{ev.technicien_nom||'—'}{ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:11,display:'block',marginTop:2}}/>}</td>
-                  <td><div style={{display:'flex',gap:4}}>
-                    <button className="btn btn-ghost btn-sm" style={{fontSize:11,color:'#0284c7'}} title="Valider & Signer" onClick={()=>onSign?.(ev)}>✍️</button>
-                    {isAdmin&&<>
-                      <button className="btn btn-outline btn-sm" onClick={()=>setModal({t:'p',data:ev})}>✏️</button>
-                      <button className="btn btn-danger btn-sm" onClick={()=>setConfirm(ev)}>🗑</button>
-                    </>}
-                  </div></td>
-                </tr>
-              );
-              if(ev._t==='cl') return(
-                <tr key={'cl'+ev.id}>
-                  <td><span className="badge badge-green" style={{background:CLINO_COLOR.bg,color:CLINO_COLOR.text,border:`1px solid ${CLINO_COLOR.border}`}}>🚗 Clino Mobile</span></td>
-                  <td style={{fontWeight:600}}>Programme Clino Mobile</td>
-                  <td>{fmtDisplay(ev.date)}</td>
-                  <td>{ev.heure?String(ev.heure).slice(0,5):'—'}</td>
-                  <td>{ev.medecin_nom||'—'}</td>
-                  <td>{ev.adresse&&<MapLink addr={ev.adresse} style={{fontSize:11,display:'block'}}/>}{ev.commentaire&&<small style={{color:'var(--text-3)'}}>{ev.commentaire}</small>}</td>
-                  <td><div style={{display:'flex',gap:4}}>
-                    <button className="btn btn-ghost btn-sm" style={{fontSize:11,color:'#059669'}} title="Valider & Signer" onClick={()=>onSign?.(ev)}>✍️</button>
-                    {isAdmin&&<button className="btn btn-danger btn-sm" onClick={()=>setConfirm(ev)}>🗑</button>}
-                  </div></td>
-                </tr>
-              );
-              const c=TYPE_COLORS[ev.type]||TYPE_COLORS.autre;
-              return(
-                <tr key={'e'+ev.id}>
-                  <td><span className="badge" style={{background:c.bg,color:c.text}}>📅 {ev.type}</span></td>
-                  <td style={{fontWeight:600}}>{ev.titre}</td>
-                  <td>{fmtDisplay(ev.date_debut?.slice(0,10))}</td>
-                  <td>{ev.date_debut?format(parseISO(ev.date_debut),'HH:mm',{locale:fr}):'—'}</td>
-                  <td>{ev.lieu?<MapLink addr={ev.lieu} style={{fontSize:12}}/>:'—'}</td><td>—</td>
-                  <td><div style={{display:'flex',gap:4}}>
-                    {isAdmin&&<>
-                      <button className="btn btn-outline btn-sm" onClick={()=>setModal({t:'e',data:ev})}>✏️</button>
-                      <button className="btn btn-danger btn-sm" onClick={()=>setConfirm(ev)}>🗑</button>
-                    </>}
-                  </div></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table></div>
-      }
-      {modal?.t==='p'&&<PlanningModal event={modal.data} medecins={medecins} techniciens={techniciens}
-        onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
-      {modal?.t==='e'&&<EventModal event={modal.data}
-        onSave={()=>{setModal(null);onRefresh();toast('Enregistré ✓','success');}} onClose={()=>setModal(null)}/>}
-      {confirm&&<ConfirmDialog title="Supprimer?" message={confirm.titre ? `Supprimer "${confirm.titre}" ? Action irréversible.` : "Action irréversible."} danger
-        onConfirm={()=>del(confirm)} onCancel={()=>setConfirm(null)}/>}
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+      {all.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">📋</div>
+          <p>Aucun événement planifié</p>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Titre / Entreprise</th>
+                <th>Jour & Date</th>
+                <th>Horaire</th>
+                <th>Médecin / Lieu</th>
+                <th>Technicien / Adresse</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {all.map(ev => {
+                if (ev._t === 'p') {
+                  const isCl = Boolean(ev.is_clino || ev.clino_id);
+                  return (
+                    <tr key={'p' + ev.id} style={{ cursor: 'pointer' }} onClick={() => onSelectDetail?.(ev)}>
+                      <td>
+                        {isCl ? (
+                          <span className="badge badge-green" style={{ background: CLINO_COLOR.bg, color: CLINO_COLOR.text, border: `1px solid ${CLINO_COLOR.border}` }}>🚗 Clino Mobile</span>
+                        ) : (
+                          <span className="badge badge-blue">📋 Programme</span>
+                        )}
+                      </td>
+                      <td style={{ fontWeight: 700 }}>{ev.titre || '—'}</td>
+                      <td>{fmtDisplayWithDay(ev.date)}</td>
+                      <td>{ev.heure_debut ? `${ev.heure_debut}${ev.heure_fin ? ' → ' + ev.heure_fin : ''}` : '—'}</td>
+                      <td>{ev.medecin_nom ? `👨‍⚕️ ${ev.medecin_nom}` : '—'}</td>
+                      <td>
+                        {ev.technicien_nom ? `🔧 ${ev.technicien_nom}` : '—'}
+                        {ev.adresse && <MapLink addr={ev.adresse} style={{ fontSize: 11, display: 'block', marginTop: 2 }} />}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
+                          {isAdmin && (
+                            <>
+                              <button className="btn btn-outline btn-sm" onClick={() => setModal({ t: 'p', data: ev })}>✏️</button>
+                              <button className="btn btn-danger btn-sm" onClick={() => setConfirm(ev)}>🗑</button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+                if (ev._t === 'cl') {
+                  return (
+                    <tr key={'cl' + ev.id} style={{ cursor: 'pointer' }} onClick={() => onSelectDetail?.(ev)}>
+                      <td><span className="badge badge-green" style={{ background: CLINO_COLOR.bg, color: CLINO_COLOR.text, border: `1px solid ${CLINO_COLOR.border}` }}>🚗 Clino Mobile</span></td>
+                      <td style={{ fontWeight: 700 }}>{ev.entreprise_nom || ev.planning_titre || ev.titre || 'Mission Clino Mobile'}</td>
+                      <td>{fmtDisplayWithDay(ev.date)}</td>
+                      <td>{ev.heure ? String(ev.heure).slice(0, 5) : '—'}</td>
+                      <td>{ev.medecin_nom ? `👨‍⚕️ ${ev.medecin_nom}` : '—'}</td>
+                      <td>
+                        {ev.technicien_nom ? `🔧 ${ev.technicien_nom}` : '—'}
+                        {ev.adresse && <MapLink addr={ev.adresse} style={{ fontSize: 11, display: 'block', marginTop: 2 }} />}
+                        {ev.commentaire && <small style={{ color: 'var(--text-3)' }}>{ev.commentaire}</small>}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
+                          {isAdmin && <button className="btn btn-danger btn-sm" onClick={() => setConfirm(ev)}>🗑</button>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+                const c = TYPE_COLORS[ev.type] || TYPE_COLORS.autre;
+                return (
+                  <tr key={'e' + ev.id} style={{ cursor: 'pointer' }} onClick={() => onSelectDetail?.(ev)}>
+                    <td><span className="badge" style={{ background: c.bg, color: c.text }}>📅 {ev.type}</span></td>
+                    <td style={{ fontWeight: 700 }}>{ev.titre}</td>
+                    <td>{fmtDisplayWithDay(ev.date_debut?.slice(0, 10))}</td>
+                    <td>{ev.date_debut ? format(parseISO(ev.date_debut), 'HH:mm', { locale: fr }) : '—'}</td>
+                    <td>{ev.lieu ? <MapLink addr={ev.lieu} style={{ fontSize: 12 }} /> : '—'}</td>
+                    <td>—</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
+                        {isAdmin && (
+                          <>
+                            <button className="btn btn-outline btn-sm" onClick={() => setModal({ t: 'e', data: ev })}>✏️</button>
+                            <button className="btn btn-danger btn-sm" onClick={() => setConfirm(ev)}>🗑</button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {modal?.t === 'p' && (
+        <PlanningModal
+          event={modal.data}
+          medecins={medecins}
+          techniciens={techniciens}
+          defaultDate={modal.data?.date}
+          onSave={() => { setModal(null); onRefresh(); toast('Enregistré avec succès ✓', 'success'); }}
+          onClose={() => setModal(null)}
+          toast={toast}
+        />
+      )}
+      {modal?.t === 'e' && (
+        <EventModal
+          event={modal.data}
+          defaultDate={modal.data?.date_debut?.slice(0, 10)}
+          onSave={() => { setModal(null); onRefresh(); toast('Enregistré avec succès ✓', 'success'); }}
+          onClose={() => setModal(null)}
+          toast={toast}
+        />
+      )}
+      {confirm && (
+        <ConfirmDialog
+          title="Supprimer?"
+          message={confirm.titre ? `Supprimer "${confirm.titre}" ? Action irréversible.` : 'Action irréversible.'}
+          danger
+          onConfirm={() => del(confirm)}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
     </div>
   );
 }
 
-/* ── MAIN ────────────────────────────────────────────────────── */
+/* ── MAIN COMPONENT ──────────────────────────────────────────── */
 export default function Planning({ toast }) {
   const { user } = useAuth();
   const { on }   = useSocket();
   const location = useLocation();
-  const isAdmin  = user?.role==='administrateur';
+  const isAdmin  = user?.role === 'administrateur';
 
-  const [view,      setView]     = useState('week');
-  const [weekStart, setWeekStart]= useState(startOfWeek(new Date(),{weekStartsOn:1}));
-  const [monthDate, setMonthDate]= useState(new Date());
-  const [pe,  setPe]  = useState([]);
-  const [ce,  setCe]  = useState([]);
-  const [cl,  setCl]  = useState([]); // clino mobile events
+  const [view, setView] = useState('doctor_matrix');
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [monthDate, setMonthDate] = useState(() => new Date());
+  const [pe, setPe] = useState([]);
+  const [ce, setCe] = useState([]);
+  const [cl, setCl] = useState([]);
   const [med, setMed] = useState([]);
   const [tec, setTec] = useState([]);
   const [ents, setEnts] = useState([]);
   const [modal, setModal] = useState(null);
-  const [sigModal, setSigModal] = useState(null);
+  const [detailItem, setDetailItem] = useState(null);
+  const [confirmItem, setConfirmItem] = useState(null);
   const [filters, setFilters] = useState({ role: '', entreprise: '', search: '', date: '' });
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
@@ -591,48 +1793,76 @@ export default function Planning({ toast }) {
           titre: `Visite médicale - ${location.state.prefillEntreprise || ''}`,
           adresse: location.state.prefillAdresse || '',
           date: today,
-          heure_debut: '08:30',
-          heure_fin: '12:30',
+          heure_debut: '',
+          heure_fin: '',
         },
       });
       toast?.(`Planification de la visite pour ${location.state.prefillEntreprise}`, 'info');
     }
   }, [location.state, toast]);
 
-  const loadAll = useCallback(async()=>{
-    try{
-      const [pr,cr,clr]=await Promise.all([
+  const loadAll = useCallback(async () => {
+    try {
+      const [pr, cr, clr] = await Promise.all([
         axios.get('/api/planning'),
         axios.get('/api/events'),
         axios.get('/api/clino'),
       ]);
-      setPe(pr.data || []); setCe(cr.data || []);
-      setCl((clr.data || []).map(c=>({
+      const pData = pr.data || [];
+      const cData = cr.data || [];
+      const clData = clr.data || [];
+      const linkedClinoIds = new Set(pData.filter(p => p.clino_id).map(p => String(p.clino_id)));
+
+      setPe(pData);
+      setCe(cData);
+      setCl(clData.filter(c => !linkedClinoIds.has(String(c.id)) && !c.planning_id).map(c => ({
         ...c,
         _t: 'clino',
-        date: c.date ? String(c.date).slice(0,10) : '',
+        date: c.date ? String(c.date).slice(0, 10) : '',
       })));
-    }catch{ toast?.('Erreur chargement','error'); }
-    finally{ setLoading(false); }
-  },[toast]);
+    } catch {
+      toast?.('Erreur lors du chargement des données', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
 
-  useEffect(()=>{ loadAll(); },[loadAll,tick]);
+  useEffect(() => { loadAll(); }, [loadAll, tick]);
 
-  useEffect(()=>{
-    const off1=on('planning_refresh',()=>setTick(t=>t+1));
-    const off2=on('calendar_refresh',()=>setTick(t=>t+1));
-    const off3=on('clino_refresh',()=>setTick(t=>t+1));
-    return ()=>{ off1?.(); off2?.(); off3?.(); };
-  },[on]);
+  useEffect(() => {
+    const off1 = on('planning_refresh', () => setTick(t => t + 1));
+    const off2 = on('calendar_refresh', () => setTick(t => t + 1));
+    const off3 = on('clino_refresh', () => setTick(t => t + 1));
+    return () => { off1?.(); off2?.(); off3?.(); };
+  }, [on]);
 
-  useEffect(()=>{
-    axios.get('/api/users/by-role/medecin').then(r=>setMed(r.data||[])).catch(()=>{});
-    axios.get('/api/users/by-role/technicien').then(r=>setTec(r.data||[])).catch(()=>{});
-    axios.get('/api/entreprises').then(r=>setEnts(r.data||[])).catch(()=>{});
-  },[]);
+  useEffect(() => {
+    axios.get('/api/users/by-role/medecin').then(r => setMed(r.data || [])).catch(() => {});
+    axios.get('/api/users/by-role/technicien').then(r => setTec(r.data || [])).catch(() => {});
+    axios.get('/api/entreprises').then(r => setEnts(r.data || [])).catch(() => {});
+  }, []);
 
-  const weekEnd=addDays(weekStart,6);
-  const filterWeek=arr=>arr.filter(e=>{const d=toRaw(e.date||e.date_debut?.slice(0,10)||'');return d>=format(weekStart,'yyyy-MM-dd')&&d<=format(weekEnd,'yyyy-MM-dd');});
+  const weekEnd = addDays(weekStart, 6);
+  const currentWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const nextWeekStart = addWeeks(currentWeekStart, 1);
+
+  const isCurrentWeek = format(weekStart, 'yyyy-MM-dd') === format(currentWeekStart, 'yyyy-MM-dd');
+  const isNextWeek = format(weekStart, 'yyyy-MM-dd') === format(nextWeekStart, 'yyyy-MM-dd');
+  const weekDiff = differenceInCalendarWeeks(weekStart, currentWeekStart, { weekStartsOn: 1 });
+  const isoWeekNum = getISOWeek(weekStart);
+
+  const filterWeek = arr => arr.filter(e => {
+    const d = toRaw(e.date || e.date_debut?.slice(0, 10) || '');
+    return d >= format(weekStart, 'yyyy-MM-dd') && d <= format(weekEnd, 'yyyy-MM-dd');
+  });
+
+  const filterMonth = arr => arr.filter(e => {
+    const d = toRaw(e.date || e.date_debut?.slice(0, 10) || '');
+    if (!d) return false;
+    const startStr = format(startOfMonth(monthDate), 'yyyy-MM-dd');
+    const endStr   = format(endOfMonth(monthDate), 'yyyy-MM-dd');
+    return d >= startStr && d <= endStr;
+  });
 
   const filteredPe = pe.filter(e => {
     if (filters.date && toRaw(e.date) !== filters.date) return false;
@@ -672,12 +1902,19 @@ export default function Planning({ toast }) {
     }
     if (filters.entreprise) {
       const q = filters.entreprise.toLowerCase();
-      const match = (e.adresse || '').toLowerCase().includes(q) || (e.commentaire || '').toLowerCase().includes(q);
+      const match = (e.adresse || '').toLowerCase().includes(q) ||
+                    (e.titre || '').toLowerCase().includes(q) ||
+                    (e.entreprise_nom || '').toLowerCase().includes(q) ||
+                    (e.planning_titre || '').toLowerCase().includes(q) ||
+                    (e.commentaire || '').toLowerCase().includes(q);
       if (!match) return false;
     }
     if (filters.search) {
       const s = filters.search.toLowerCase();
       const match = (e.adresse || '').toLowerCase().includes(s) ||
+                    (e.titre || '').toLowerCase().includes(s) ||
+                    (e.entreprise_nom || '').toLowerCase().includes(s) ||
+                    (e.planning_titre || '').toLowerCase().includes(s) ||
                     (e.medecin_nom || '').toLowerCase().includes(s) ||
                     (e.medecin_full || '').toLowerCase().includes(s) ||
                     (e.technicien_nom || '').toLowerCase().includes(s) ||
@@ -724,7 +1961,7 @@ export default function Planning({ toast }) {
       ...e,
       _t: 'cl',
       type_label: 'Clino Mobile',
-      titre: 'Programme Clino Mobile',
+      titre: e.entreprise_nom || e.planning_titre || e.titre || 'Programme Clino Mobile',
       date: toRaw(e.date),
       date_display: fmtDisplayWithDay(e.date),
       heure_debut: e.heure ? String(e.heure).slice(0, 5) : '',
@@ -753,20 +1990,57 @@ export default function Planning({ toast }) {
   ].sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.heure_debut || '').localeCompare(b.heure_debut || ''));
 
   const totalFilteredCount = filteredPe.length + filteredCl.length + filteredCe.length;
-  const hasActiveFilters = Boolean(filters.medecin_id || filters.technicien_id || filters.entreprise || filters.search);
+  const hasActiveFilters = Boolean(filters.role || filters.entreprise || filters.search || filters.date);
 
-  if(loading) return <div className="loading-center"><div className="spinner"/></div>;
+  function handleJumpToDate(dateVal) {
+    if (!dateVal) return;
+    const parsed = parseISO(dateVal);
+    if (!isNaN(parsed.getTime())) {
+      setWeekStart(startOfWeek(parsed, { weekStartsOn: 1 }));
+      setMonthDate(parsed);
+    }
+  }
 
-  return(
-    <div style={{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}}>
-      <TodayBanner pe={pe} ce={ce} cl={cl}/>
+  function handleCreateForCurrentView() {
+    const targetDate = view === 'week' ? format(weekStart, 'yyyy-MM-dd') : format(monthDate, 'yyyy-MM-01');
+    setModal({
+      t: 'p',
+      data: {
+        date: targetDate,
+        heure_debut: '',
+        heure_fin: '',
+      },
+    });
+  }
+
+  async function handleDeleteItem(item) {
+    try {
+      const type = item._t || item.t;
+      if (type === 'p') await axios.delete(`/api/planning/${item.id}`);
+      else if (type === 'cl' || type === 'clino') await axios.delete(`/api/clino/${item.id}`);
+      else await axios.delete(`/api/events/${item.id}`);
+      setTick(t => t + 1);
+      toast('Supprimé avec succès', 'success');
+    } catch (err) {
+      console.error(err);
+      toast('Erreur lors de la suppression', 'error');
+    } finally {
+      setConfirmItem(null);
+    }
+  }
+
+  if (loading) return <div className="loading-center"><div className="spinner" /></div>;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <TodayBanner pe={pe} ce={ce} cl={cl} />
 
       {/* Executive Header Banner */}
       <div style={{
         background: 'var(--surface)',
         borderRadius: 16,
-        padding: '20px 24px',
-        margin: '16px 20px 12px',
+        padding: '16px 22px',
+        margin: '12px 16px 8px',
         border: '1px solid var(--border)',
         borderTop: '4px solid #0284c7',
         boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
@@ -774,11 +2048,11 @@ export default function Planning({ toast }) {
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: 16,
-        flexShrink: 0
+        gap: 14,
+        flexShrink: 0,
       }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
             <span style={{
               background: 'linear-gradient(135deg, #0284c7, #0369a1)',
               color: '#fff',
@@ -787,185 +2061,480 @@ export default function Planning({ toast }) {
               padding: '3px 10px',
               borderRadius: 6,
               textTransform: 'uppercase',
-              letterSpacing: 0.5
+              letterSpacing: 0.5,
             }}>
-              📋 Tournées & Événements
+              📋 Planning Médical
             </span>
-            <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600 }}>
               GMT Ariana Santé au Travail
             </span>
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0, color: 'var(--text)', letterSpacing: -0.5 }}>
-            Planning Médical
+          <h1 style={{ fontSize: 22, fontWeight: 900, margin: 0, color: 'var(--text)', letterSpacing: -0.5 }}>
+            {view === 'doctor_matrix' && `Planning Mensuel : Médecins & Jours — ${format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}`}
+            {view === 'week' && `Semaine ${isoWeekNum} : Du ${format(weekStart, 'd MMMM', { locale: fr })} au ${format(weekEnd, 'd MMMM yyyy', { locale: fr })}`}
+            {view === 'month' && format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}
+            {view === 'list' && 'Vue Liste Globale'}
           </h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-2)' }}>
-            Calendrier hebdomadaire, mensuel et programmation des visites médicales
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+            {view === 'week' && (
+              <>
+                {isCurrentWeek && (
+                  <span style={{ fontSize: 11, fontWeight: 800, background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: 10 }}>
+                    🟢 Semaine en cours
+                  </span>
+                )}
+                {isNextWeek && (
+                  <span style={{ fontSize: 11, fontWeight: 800, background: '#dbeafe', color: '#1d4ed8', padding: '2px 8px', borderRadius: 10 }}>
+                    🚀 Semaine prochaine
+                  </span>
+                )}
+                {!isCurrentWeek && !isNextWeek && weekDiff < 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, background: 'var(--surface2)', color: 'var(--text-3)', padding: '2px 8px', borderRadius: 10 }}>
+                    ⏳ Semaine passée ({Math.abs(weekDiff)} sem. avant)
+                  </span>
+                )}
+                {!isCurrentWeek && !isNextWeek && weekDiff > 1 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, background: '#f3e8ff', color: '#7e22ce', padding: '2px 8px', borderRadius: 10 }}>
+                    🔮 Dans {weekDiff} semaines
+                  </span>
+                )}
+              </>
+            )}
+            {view === 'doctor_matrix' && (
+              <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 600 }}>
+                📊 Matrice mensuelle : Médecins en colonnes × Jours du mois en lignes ({filterMonth(filteredPe).length + filterMonth(filteredCl).length} visites ce mois)
+              </span>
+            )}
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Export buttons */}
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button className="btn btn-outline btn-sm" onClick={() => {
-              import('../utils/exportUtils').then(({exportToPDF}) => {
-                exportToPDF(exportItems, [
-                  {header:'Date',key:'date_display'},
-                  {header:'Horaire',key:'heure_display'},
-                  {header:'Titre / Sujet',key:'titre'},
-                  {header:'Médecin',key:'medecin_nom'},
-                  {header:'Technicien',key:'technicien_nom'},
-                  {header:'Adresse / Lieu',key:'adresse'},
-                ], 'Planning GMT Ariana');
+          {/* Creation buttons */}
+          {isAdmin && (
+            <>
+              <button
+                className="btn btn-primary btn-sm"
+                style={{ fontWeight: 800, borderRadius: 8, padding: '7px 14px' }}
+                onClick={handleCreateForCurrentView}
+                title="Ajouter une visite médicale / programme"
+              >
+                + Programme
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                style={{ fontWeight: 800, borderRadius: 8, padding: '7px 11px' }}
+                onClick={() => setModal({ t: 'e', data: { date_debut: format(weekStart, 'yyyy-MM-dd') + 'T08:30' } })}
+                title="Ajouter une réunion, formation ou événement"
+              >
+                + Événement
+              </button>
+            </>
+          )}
+
+          {/* Export dropdown */}
+          <ExportDropdown
+            label="Exporter / Imprimer"
+            onPrint={() => window.print()}
+            onPDF={() => {
+              import('../utils/exportUtils').then(({ exportMatrixToPDF }) => {
+                const isTechnician = filters.role === 'technicien';
+                const daysInterval = view === 'week'
+                  ? eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) })
+                  : eachDayOfInterval({ start: startOfMonth(monthDate), end: endOfMonth(monthDate) });
+                
+                const curPe = view === 'week' ? filterWeek(filteredPe) : filterMonth(filteredPe);
+                const curCl = view === 'week' ? filterWeek(filteredCl) : filterMonth(filteredCl);
+
+                const rawList = isTechnician ? [...tec] : [...med];
+                const seenIds = new Set(rawList.map(m => String(m.id)));
+                const seenNames = new Set(rawList.map(m => `${m.prenom || ''} ${m.nom || ''}`.toLowerCase().trim()));
+
+                [...curPe, ...curCl].forEach(item => {
+                  const staffId = isTechnician ? item.technicien_id : item.medecin_id;
+                  const staffNom = isTechnician ? (item.technicien_nom || item.technicien_full) : (item.medecin_nom || item.medecin_full);
+                  if (staffId && !seenIds.has(String(staffId))) {
+                    seenIds.add(String(staffId));
+                    rawList.push({
+                      id: staffId,
+                      nom: staffNom || (isTechnician ? 'Technicien' : 'Médecin'),
+                      prenom: '',
+                    });
+                  } else if (staffNom && staffNom !== '—' && staffNom !== '-') {
+                    const norm = staffNom.toLowerCase().trim();
+                    if (!seenNames.has(norm)) {
+                      seenNames.add(norm);
+                      rawList.push({
+                        id: 'nom_' + norm,
+                        nom: staffNom,
+                        prenom: '',
+                        isVirtual: true,
+                      });
+                    }
+                  }
+                });
+
+                const getStaffEvs = (staff, dayKey) => {
+                  const sId = staff ? String(staff.id) : null;
+                  const sName = staff ? `${staff.prenom || ''} ${staff.nom || ''}`.toLowerCase().trim() : null;
+
+                  if (isTechnician) {
+                    const pEvents = curPe.filter(e => {
+                      if (e.date !== dayKey) return false;
+                      if (sId && e.technicien_id && String(e.technicien_id) === sId) return true;
+                      if (sName && e.technicien_nom && e.technicien_nom.toLowerCase().includes(sName)) return true;
+                      if (!staff && !e.technicien_id && (!e.technicien_nom || e.technicien_nom === '—' || e.technicien_nom === '-')) return true;
+                      return false;
+                    });
+                    const clEvents = curCl.filter(e => {
+                      if (e.date !== dayKey) return false;
+                      if (sId && e.technicien_id && String(e.technicien_id) === sId) return true;
+                      if (sName && (e.technicien_nom || e.technicien_full) && (e.technicien_nom || e.technicien_full).toLowerCase().includes(sName)) return true;
+                      if (!staff && !e.technicien_id && !e.technicien_nom && !e.technicien_full) return true;
+                      return false;
+                    });
+                    return { pEvents, clEvents };
+                  } else {
+                    const pEvents = curPe.filter(e => {
+                      if (e.date !== dayKey) return false;
+                      if (sId && e.medecin_id && String(e.medecin_id) === sId) return true;
+                      if (sName && e.medecin_nom && e.medecin_nom.toLowerCase().includes(sName)) return true;
+                      if (!staff && !e.medecin_id && (!e.medecin_nom || e.medecin_nom === '—' || e.medecin_nom === '-')) return true;
+                      return false;
+                    });
+                    const clEvents = curCl.filter(e => {
+                      if (e.date !== dayKey) return false;
+                      if (sId && e.medecin_id && String(e.medecin_id) === sId) return true;
+                      if (sName && (e.medecin_nom || e.medecin_full) && (e.medecin_nom || e.medecin_full).toLowerCase().includes(sName)) return true;
+                      if (!staff && !e.medecin_id && !e.medecin_nom && !e.medecin_full) return true;
+                      return false;
+                    });
+                    return { pEvents, clEvents };
+                  }
+                };
+
+                exportMatrixToPDF({
+                  days: daysInterval,
+                  staffList: rawList,
+                  staffRole: isTechnician ? 'technicien' : 'medecin',
+                  hasUnassigned: isTechnician
+                    ? curPe.some(e => !e.technicien_id) || curCl.some(e => !e.technicien_id)
+                    : curPe.some(e => !e.medecin_id) || curCl.some(e => !e.medecin_id),
+                  getStaffEvents: getStaffEvs,
+                  title: view === 'week'
+                    ? `Planning Semaine ${isoWeekNum} (${format(weekStart, 'dd/MM/yyyy')} au ${format(weekEnd, 'dd/MM/yyyy')})`
+                    : `Planning Mensuel : ${format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}`,
+                  subtitle: `GROUPEMENT DE MÉDECINE DU TRAVAIL DE L'ARIANA - Matrice ${isTechnician ? 'Techniciens' : 'Médecins'} & Jours`,
+                });
               });
-            }} title="Exporter PDF (Programmes + Clino + Calendrier)">📄 PDF</button>
-            <button className="btn btn-outline btn-sm" onClick={() => {
-              import('../utils/exportUtils').then(({exportToExcel}) => {
+            }}
+            onExcel={() => {
+              import('../utils/exportUtils').then(({ exportToExcel }) => {
                 exportToExcel(exportItems, [
-                  {header:'Type',key:'type_label'},
-                  {header:'Date',key:'date_display'},
-                  {header:'Heure début',key:'heure_debut'},
-                  {header:'Heure fin',key:'heure_fin'},
-                  {header:'Titre',key:'titre'},
-                  {header:'Médecin',key:'medecin_nom'},
-                  {header:'Technicien',key:'technicien_nom'},
-                  {header:'Adresse / Lieu',key:'adresse'},
-                  {header:'Commentaires / Détails',key:'commentaire'},
+                  { header: 'Type', key: 'type_label' },
+                  { header: 'Date', key: 'date_display' },
+                  { header: 'Heure début', key: 'heure_debut' },
+                  { header: 'Heure fin', key: 'heure_fin' },
+                  { header: 'Titre', key: 'titre' },
+                  { header: 'Médecin', key: 'medecin_nom' },
+                  { header: 'Technicien', key: 'technicien_nom' },
+                  { header: 'Adresse / Lieu', key: 'adresse' },
+                  { header: 'Commentaires', key: 'commentaire' },
                 ], 'Planning_GMT_Ariana');
               });
-            }} title="Exporter Excel (Programmes + Clino + Calendrier)">📊 Excel</button>
-            <button className="btn btn-outline btn-sm" onClick={() => {
-              import('../utils/exportUtils').then(({exportToWord}) => {
+            }}
+            onWord={() => {
+              import('../utils/exportUtils').then(({ exportToWord }) => {
                 exportToWord(exportItems, [
-                  {header:'Type',key:'type_label'},
-                  {header:'Date',key:'date_display'},
-                  {header:'Horaire',key:'heure_display'},
-                  {header:'Titre / Sujet',key:'titre'},
-                  {header:'Médecin',key:'medecin_nom'},
-                  {header:'Technicien',key:'technicien_nom'},
-                  {header:'Adresse / Lieu',key:'adresse'},
-                  {header:'Notes',key:'commentaire'},
+                  { header: 'Type', key: 'type_label' },
+                  { header: 'Date', key: 'date_display' },
+                  { header: 'Horaire', key: 'heure_display' },
+                  { header: 'Titre / Sujet', key: 'titre' },
+                  { header: 'Médecin', key: 'medecin_nom' },
+                  { header: 'Technicien', key: 'technicien_nom' },
+                  { header: 'Adresse / Lieu', key: 'adresse' },
+                  { header: 'Notes', key: 'commentaire' },
                 ], 'Planning Medical GMT Ariana');
               });
-            }} title="Exporter Word (Document .doc officiel)">📝 Word</button>
-          </div>
+            }}
+          />
 
-          {/* Navigation and views */}
-          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            {view==='week'&&<>
-              <button className="btn btn-outline btn-sm" onClick={()=>setWeekStart(w=>subWeeks(w,1))}>‹</button>
-              <button className="btn btn-outline btn-sm" onClick={()=>setWeekStart(startOfWeek(new Date(),{weekStartsOn:1}))}>Aujourd'hui</button>
-              <button className="btn btn-outline btn-sm" onClick={()=>setWeekStart(w=>addWeeks(w,1))}>›</button>
-            </>}
-            {view==='month'&&<>
-              <button className="btn btn-outline btn-sm" onClick={()=>setMonthDate(d=>subMonths(d,1))}>‹</button>
-              <button className="btn btn-outline btn-sm" onClick={()=>setMonthDate(new Date())}>Aujourd'hui</button>
-              <button className="btn btn-outline btn-sm" onClick={()=>setMonthDate(d=>addMonths(d,1))}>›</button>
-            </>}
-          </div>
-
-          <div style={{display:'flex',gap:2,background:'var(--bg)',borderRadius:8,padding:3,border:'1px solid var(--border)'}}>
-            {[['week','📅 Semaine'],['month','📆 Mois'],['list','📋 Liste']].map(([v,l])=>(
-              <button key={v} className={`btn btn-sm ${view===v?'btn-primary':'btn-ghost'}`}
-                onClick={()=>setView(v)} style={{padding:'4px 10px',fontSize:12}}>{l}</button>
+          {/* View switcher */}
+          <div style={{ display: 'flex', gap: 2, background: 'var(--bg)', borderRadius: 8, padding: 3, border: '1px solid var(--border)' }}>
+            {[
+              ['week', '📅 Semaine'],
+              ['doctor_matrix', '📊 Grille Mois'],
+              ['month', '📆 Calendrier'],
+              ['list', '📋 Liste']
+            ].map(([v, l]) => (
+              <button
+                key={v}
+                className={`btn btn-sm ${view === v ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setView(v)}
+                style={{ padding: '4px 10px', fontSize: 12, fontWeight: 700 }}
+              >
+                {l}
+              </button>
             ))}
           </div>
-
-          {isAdmin&&<>
-            <button className="btn btn-primary btn-sm" style={{ fontWeight: 800, borderRadius: 8 }} onClick={()=>setModal({t:'p'})}>+ Programme</button>
-            <button className="btn btn-outline btn-sm" style={{ fontWeight: 800, borderRadius: 8 }} onClick={()=>setModal({t:'e'})}>+ Événement</button>
-          </>}
         </div>
       </div>
 
-      {/* Filter Bar (Rôle: Médecins / Techniciens, Entreprise, Recherche) */}
-      <div style={{display:'flex',gap:10,padding:'10px 20px',background:'var(--surface2)',borderBottom:'1px solid var(--border)',flexShrink:0,flexWrap:'wrap',alignItems:'center'}}>
-        <span style={{fontSize:13,fontWeight:700,color:'var(--text)',display:'flex',alignItems:'center',gap:4}}>
-          🏷️ Filtres :
-        </span>
-
-        {/* Filter by Category: All / Medecins / Techniciens */}
-        <select
-          className="input"
-          style={{width:'auto',fontSize:12,padding:'5px 10px',height:32,borderRadius:8,fontWeight:600}}
-          value={filters.role}
-          onChange={e=>setFilters(f=>({...f,role:e.target.value}))}
-        >
-          <option value="">👥 Tous les intervenants</option>
-          <option value="medecin">👨‍⚕️ Médecins uniquement</option>
-          <option value="technicien">🔧 Techniciens uniquement</option>
-        </select>
-
-        {/* Filter by Date */}
+      {/* Navigation Ribbon */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '8px 18px',
+        background: 'var(--surface)',
+        borderBottom: '1px solid var(--border)',
+        flexShrink: 0,
+        flexWrap: 'wrap',
+        gap: 10,
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>📅</span>
-          <input
-            type="date"
-            className="input"
-            value={filters.date}
-            onChange={e=>setFilters(f=>({...f,date:e.target.value}))}
-            style={{ width: 'auto', fontSize: 12, padding: '4px 8px', height: 32, borderRadius: 8 }}
-            title="Filtrer par date exacte"
-          />
+          {view === 'week' ? (
+            <>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => setWeekStart(w => subWeeks(w, 1))}
+                style={{ fontWeight: 800, padding: '5px 12px', borderRadius: 8 }}
+                title="Semaine précédente"
+              >
+                ‹ Précédente
+              </button>
+
+              <button
+                className={`btn btn-sm ${isCurrentWeek ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setWeekStart(currentWeekStart)}
+                style={{ fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}
+              >
+                📅 Cette semaine
+              </button>
+
+              <button
+                className={`btn btn-sm ${isNextWeek ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setWeekStart(nextWeekStart)}
+                style={{ fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}
+                title="Passer à la semaine prochaine"
+              >
+                🚀 Semaine prochaine
+              </button>
+
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => setWeekStart(w => addWeeks(w, 1))}
+                style={{ fontWeight: 800, padding: '5px 12px', borderRadius: 8 }}
+                title="Semaine suivante"
+              >
+                Suivante ›
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => setMonthDate(d => subMonths(d, 1))}
+                style={{ fontWeight: 800, padding: '5px 12px', borderRadius: 8 }}
+              >
+                ‹ Mois préc.
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => setMonthDate(new Date())}
+                style={{ fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}
+              >
+                Ce mois-ci
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => setMonthDate(d => addMonths(d, 1))}
+                style={{ fontWeight: 800, padding: '5px 12px', borderRadius: 8 }}
+              >
+                Mois suiv. ›
+              </button>
+            </>
+          )}
+
+          {/* Date Picker Jump */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8, borderLeft: '1px solid var(--border)', paddingLeft: 10 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600 }}>Aller à :</span>
+            <input
+              type="date"
+              className="input"
+              style={{ width: 'auto', fontSize: 12, padding: '3px 8px', height: 30, borderRadius: 6 }}
+              value={format(view === 'week' ? weekStart : monthDate, 'yyyy-MM-dd')}
+              onChange={e => handleJumpToDate(e.target.value)}
+              title="Sélectionner une date pour y naviguer directement"
+            />
+          </div>
         </div>
 
-        {/* Filter by Company */}
-        {ents.length > 0 ? (
+        {/* Filters */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <select
             className="input"
-            style={{width:'auto',fontSize:12,padding:'5px 10px',height:32,borderRadius:8}}
-            value={filters.entreprise}
-            onChange={e=>setFilters(f=>({...f,entreprise:e.target.value}))}
+            style={{ width: 'auto', fontSize: 12, padding: '3px 8px', height: 30, borderRadius: 6, fontWeight: 600 }}
+            value={filters.role}
+            onChange={e => setFilters(f => ({ ...f, role: e.target.value }))}
           >
-            <option value="">🏢 Toutes les entreprises</option>
-            {ents.map(ent=><option key={ent.id} value={ent.nom}>{ent.nom}</option>)}
+            <option value="">👥 Tous les intervenants</option>
+            <option value="medecin">👨‍⚕️ Médecins</option>
+            <option value="technicien">🔧 Techniciens</option>
           </select>
-        ) : (
+
+          {ents.length > 0 ? (
+            <select
+              className="input"
+              style={{ width: 'auto', fontSize: 12, padding: '3px 8px', height: 30, borderRadius: 6 }}
+              value={filters.entreprise}
+              onChange={e => setFilters(f => ({ ...f, entreprise: e.target.value }))}
+            >
+              <option value="">🏢 Entreprises (Toutes)</option>
+              {ents.map(ent => <option key={ent.id} value={ent.nom}>{ent.nom}</option>)}
+            </select>
+          ) : (
+            <input
+              className="input"
+              type="text"
+              placeholder="🏢 Entreprise..."
+              style={{ width: 130, fontSize: 12, padding: '3px 8px', height: 30, borderRadius: 6 }}
+              value={filters.entreprise}
+              onChange={e => setFilters(f => ({ ...f, entreprise: e.target.value }))}
+            />
+          )}
+
           <input
             className="input"
             type="text"
-            placeholder="🏢 Entreprise..."
-            style={{width:160,fontSize:12,padding:'5px 10px',height:32,borderRadius:8}}
-            value={filters.entreprise}
-            onChange={e=>setFilters(f=>({...f,entreprise:e.target.value}))}
+            placeholder="🔍 Chercher..."
+            style={{ width: 140, fontSize: 12, padding: '3px 8px', height: 30, borderRadius: 6 }}
+            value={filters.search}
+            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
           />
-        )}
 
-        {/* Search input */}
-        <input
-          className="input"
-          type="text"
-          placeholder="🔍 Recherche mot-clé..."
-          style={{width:180,fontSize:12,padding:'5px 10px',height:32,borderRadius:8}}
-          value={filters.search}
-          onChange={e=>setFilters(f=>({...f,search:e.target.value}))}
-        />
-
-        {hasActiveFilters && (
-          <>
+          {hasActiveFilters && (
             <button
               className="btn btn-ghost btn-sm"
-              onClick={()=>setFilters({role:'',entreprise:'',search:'',date:''})}
-              style={{fontSize:12,padding:'4px 8px',color:'var(--danger)'}}
-              title="Réinitialiser tous les filtres"
+              onClick={() => setFilters({ role: '', entreprise: '', search: '', date: '' })}
+              style={{ fontSize: 11, padding: '3px 6px', color: 'var(--danger)', fontWeight: 700 }}
+              title="Réinitialiser les filtres"
             >
-              ✕ Réinitialiser
+              ✕ Effacer ({totalFilteredCount})
             </button>
-            <span className="badge badge-blue" style={{fontSize:11}}>
-              {totalFilteredCount} élément{totalFilteredCount > 1 ? 's' : ''} trouvé{totalFilteredCount > 1 ? 's' : ''}
-            </span>
-          </>
-        )}
+          )}
+        </div>
       </div>
 
-      {view==='week'&&<WeekView weekStart={weekStart} pe={filterWeek(filteredPe)} ce={filterWeek(filteredCe.map(e=>({...e,date:e.date_debut?.slice(0,10)})))} cl={filterWeek(filteredCl)} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast} onSign={item=>setSigModal(item)}/>}
-      {view==='month'&&<MonthView current={monthDate} pe={filteredPe} ce={filteredCe} cl={filteredCl} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast} onSign={item=>setSigModal(item)}/>}
-      {view==='list'&&<ListView pe={filteredPe} ce={filteredCe} cl={filteredCl} isAdmin={isAdmin} medecins={med} techniciens={tec} onRefresh={()=>setTick(t=>t+1)} toast={toast} onSign={item=>setSigModal(item)}/>}
+      {/* Content View */}
+      {view === 'doctor_matrix' && (
+        <DoctorMatrixView
+          days={eachDayOfInterval({ start: startOfMonth(monthDate), end: endOfMonth(monthDate) })}
+          periodLabel={format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}
+          periodSubtitle="Jours du mois"
+          pe={filterMonth(filteredPe)}
+          ce={filterMonth(filteredCe)}
+          cl={filterMonth(filteredCl)}
+          medecins={med}
+          techniciens={tec}
+          isAdmin={isAdmin}
+          defaultRole={filters.role || 'medecin'}
+          onRefresh={() => setTick(t => t + 1)}
+          toast={toast}
+          onSelectDetail={item => setDetailItem(item)}
+        />
+      )}
 
-      {modal?.t==='p'&&<PlanningModal event={modal?.data || null} medecins={med} techniciens={tec}
-        onSave={()=>{setModal(null);setTick(t=>t+1);toast('Programme enregistré ✓ — Email envoyé 📧','success');}} onClose={()=>setModal(null)}/>}
-      {modal?.t==='e'&&<EventModal event={modal?.data || null}
-        onSave={()=>{setModal(null);setTick(t=>t+1);toast('Événement créé ✓ — Email envoyé 📧','success');}} onClose={()=>setModal(null)}/>}
-      {sigModal&&<SignaturePadModal event={sigModal} onClose={()=>setSigModal(null)} onSave={()=>{setSigModal(null);setTick(t=>t+1);}} toast={toast}/>}
+      {view === 'week' && (
+        <DoctorMatrixView
+          days={eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) })}
+          periodLabel={`Semaine ${isoWeekNum} : Du ${format(weekStart, 'd MMMM', { locale: fr })} au ${format(weekEnd, 'd MMMM yyyy', { locale: fr })}`}
+          periodSubtitle="Jours de la semaine"
+          pe={filterWeek(filteredPe)}
+          ce={filterWeek(filteredCe)}
+          cl={filterWeek(filteredCl)}
+          medecins={med}
+          techniciens={tec}
+          isAdmin={isAdmin}
+          defaultRole={filters.role || 'medecin'}
+          onRefresh={() => setTick(t => t + 1)}
+          toast={toast}
+          onSelectDetail={item => setDetailItem(item)}
+        />
+      )}
+
+      {view === 'month' && (
+        <MonthView
+          current={monthDate}
+          pe={filteredPe}
+          ce={filteredCe}
+          cl={filteredCl}
+          isAdmin={isAdmin}
+          medecins={med}
+          techniciens={tec}
+          onRefresh={() => setTick(t => t + 1)}
+          toast={toast}
+          onSelectDetail={item => setDetailItem(item)}
+        />
+      )}
+
+      {view === 'list' && (
+        <ListView
+          pe={filteredPe}
+          ce={filteredCe}
+          cl={filteredCl}
+          isAdmin={isAdmin}
+          medecins={med}
+          techniciens={tec}
+          onRefresh={() => setTick(t => t + 1)}
+          toast={toast}
+          onSelectDetail={item => setDetailItem(item)}
+        />
+      )}
+
+      {/* Modals */}
+      {modal?.t === 'p' && (
+        <PlanningModal
+          event={modal?.data || null}
+          medecins={med}
+          techniciens={tec}
+          entreprises={ents}
+          defaultDate={modal?.data?.date}
+          defaultMedecinId={modal?.data?.medecin_id}
+          onSave={() => { setModal(null); setTick(t => t + 1); toast('Programme enregistré ✓ — Notification envoyée 📧', 'success'); }}
+          onClose={() => setModal(null)}
+          toast={toast}
+        />
+      )}
+
+      {modal?.t === 'e' && (
+        <EventModal
+          event={modal?.data || null}
+          defaultDate={modal?.data?.date_debut?.slice(0, 10)}
+          onSave={() => { setModal(null); setTick(t => t + 1); toast('Événement créé ✓', 'success'); }}
+          onClose={() => setModal(null)}
+          toast={toast}
+        />
+      )}
+
+      {detailItem && (
+        <DetailModal
+          item={detailItem}
+          isAdmin={isAdmin}
+          onEdit={item => setModal({ t: item._t === 'e' ? 'e' : 'p', data: item })}
+          onDelete={item => setConfirmItem(item)}
+          onClose={() => setDetailItem(null)}
+        />
+      )}
+
+      {confirmItem && (
+        <ConfirmDialog
+          title="Confirmer la suppression"
+          message={confirmItem.titre ? `Supprimer "${confirmItem.titre}" ? Cette action est irréversible.` : 'Action irréversible.'}
+          danger
+          onConfirm={() => handleDeleteItem(confirmItem)}
+          onCancel={() => setConfirmItem(null)}
+        />
+      )}
     </div>
   );
 }

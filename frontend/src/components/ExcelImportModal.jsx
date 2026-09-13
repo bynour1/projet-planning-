@@ -98,71 +98,91 @@ export default function ExcelImportModal({ onClose, onSuccess, toast }) {
           return;
         }
 
-        // Normalisation intelligente des colonnes
-        const normalized = jsonData.map((row, idx) => {
-          const nom = findValue(row, ['nom', 'societe', 'société', 'entreprise', 'raison', 'client']) || '';
-          const secteur = findValue(row, ['secteur', 'activite', 'activité', 'domaine', 'branche']) || '';
-          const adresse = findValue(row, ['adresse', 'ville', 'lieu', 'localisation']) || '';
-          const telephone = findValue(row, ['tel', 'tél', 'phone', 'contact_tel', 'mobile']) || '';
-          const email = findValue(row, ['email', 'mail', 'courriel']) || '';
-          const site_web = findValue(row, ['site', 'web', 'url', 'lien']) || '';
-          const description = findValue(row, ['description', 'obs', 'remarque', 'note', 'commentaire']) || '';
+        // Normalisation intelligente des colonnes selon le format standard :
+        // CODE | SOCIETE | EFFEC | ADRESSE | TEL | ACTIVITE | DATE ADHESION
+        const normalized = jsonData
+          .map((row, idx) => {
+            const rawCode = findValue(row, ['code', 'cod', 'ref', 'reference', 'identifiant', 'num']) || '';
+            const rawNom = findValue(row, ['societe', 'société', 'soc', 'nom', 'entreprise', 'raison', 'client']) || '';
+            const effectif_total = Math.max(0, parseInt(findValue(row, ['effec', 'eff', 'effectif', 'total', 'salari', 'personnel', 'employe', 'employé']) || 0, 10));
+            const adresse = findValue(row, ['adresse', 'adr', 'ville', 'lieu', 'localisation', 'siege', 'siège']) || '';
+            const telephone = findValue(row, ['tel', 'tél', 'telephone', 'téléphone', 'phone', 'contact_tel', 'mobile', 'gsm']) || '';
+            const secteur = findValue(row, ['activite', 'activité', 'act', 'secteur', 'domaine', 'branche', 'metier']) || '';
+            
+            const rawAdhesion = findValue(row, ['date adhesion', 'date_adhesion', 'adhesion', 'adhésion', 'date debut', 'date_debut', 'debut', 'début', 'start', 'convention']);
+            const date_debut_convention = parseExcelDate(rawAdhesion);
 
-          const rawConv = findValue(row, ['conv', 'convention', 'conventionne', 'conventionnée']);
-          let convensionne = 1;
-          if (rawConv !== undefined && rawConv !== '') {
-            const s = String(rawConv).toLowerCase().trim();
-            if (s === 'non' || s === '0' || s === 'false' || s === 'non conv' || s === 'non conventionnée' || s === 'no') {
-              convensionne = 0;
+            const hasAnyData = !!(rawCode || rawNom || effectif_total || adresse || telephone || secteur || date_debut_convention);
+            if (!hasAnyData) return null;
+
+            const email = findValue(row, ['email', 'mail', 'courriel']) || '';
+            const site_web = findValue(row, ['site', 'web', 'url', 'lien']) || '';
+            const description = findValue(row, ['description', 'obs', 'remarque', 'note', 'commentaire']) || '';
+
+            const rawConv = findValue(row, ['conv', 'convention', 'conventionne', 'conventionnée']);
+            let convensionne = 1;
+            if (rawConv !== undefined && rawConv !== '') {
+              const s = String(rawConv).toLowerCase().trim();
+              if (s === 'non' || s === '0' || s === 'false' || s === 'non conv' || s === 'non conventionnée' || s === 'no') {
+                convensionne = 0;
+              }
             }
-          }
 
-          const rawRenouv = findValue(row, ['renouv', 'renouvelable']);
-          let renouvelable = 1;
-          if (rawRenouv !== undefined && rawRenouv !== '') {
-            const s = String(rawRenouv).toLowerCase().trim();
-            if (s === 'non' || s === '0' || s === 'false' || s === 'no') {
-              renouvelable = 0;
+            const rawRenouv = findValue(row, ['renouv', 'renouvelable']);
+            let renouvelable = 1;
+            if (rawRenouv !== undefined && rawRenouv !== '') {
+              const s = String(rawRenouv).toLowerCase().trim();
+              if (s === 'non' || s === '0' || s === 'false' || s === 'no') {
+                renouvelable = 0;
+              }
             }
-          }
 
-          const rawDebut = findValue(row, ['date_debut', 'debut', 'début', 'start']);
-          const rawFin = findValue(row, ['date_fin', 'fin', 'expiration', 'échéance', 'echeance']);
-          const rawDerniere = findValue(row, ['derniere_visite', 'dernière', 'visite_date', 'date_visite']);
+            const rawFin = findValue(row, ['date_fin', 'fin', 'expiration', 'échéance', 'echeance']);
+            const rawDerniere = findValue(row, ['derniere_visite', 'dernière', 'visite_date', 'date_visite']);
 
-          const date_debut_convention = parseExcelDate(rawDebut);
-          const date_fin_convention = parseExcelDate(rawFin);
-          const date_derniere_visite = parseExcelDate(rawDerniere);
+            const date_fin_convention = parseExcelDate(rawFin);
+            const date_derniere_visite = parseExcelDate(rawDerniere);
 
-          const effectif_total = Math.max(0, parseInt(findValue(row, ['effectif', 'salari', 'personnel', 'employe', 'employé', 'total']) || 0, 10));
-          const nb_visites_faites = Math.max(0, parseInt(findValue(row, ['visites_faites', 'vus', 'visite_faite', 'visites faites', 'deja vu', 'déjà vu']) || 0, 10));
-          const nb_bilans_faits = Math.max(0, parseInt(findValue(row, ['bilans_faits', 'bilan fait', 'bilans faits']) || 0, 10));
-          const nb_bilans_manquants = Math.max(0, parseInt(findValue(row, ['bilans_manquants', 'manquant', 'bilan manquant']) || 0, 10));
+            const nb_visites_faites = Math.max(0, parseInt(findValue(row, ['visites_faites', 'vus', 'visite_faite', 'visites faites', 'deja vu', 'déjà vu']) || 0, 10));
+            const nb_bilans_faits = Math.max(0, parseInt(findValue(row, ['bilans_faits', 'bilan fait', 'bilans faits']) || 0, 10));
+            const nb_bilans_manquants = Math.max(0, parseInt(findValue(row, ['bilans_manquants', 'manquant', 'bilan manquant']) || 0, 10));
 
-          const isValid = !!String(nom).trim();
+            const codeClean = String(rawCode).trim() || null;
+            let nomClean = String(rawNom).trim();
+            const isAutoNamed = !nomClean;
+            if (!nomClean) {
+              if (codeClean) {
+                nomClean = `Entreprise ${codeClean}`;
+              } else {
+                nomClean = `Entreprise #${idx + 1}`;
+              }
+            }
 
-          return {
-            _index: idx + 1,
-            _isValid: isValid,
-            nom: String(nom).trim(),
-            secteur: String(secteur).trim(),
-            adresse: String(adresse).trim(),
-            telephone: String(telephone).trim(),
-            email: String(email).trim(),
-            site_web: String(site_web).trim(),
-            description: String(description).trim(),
-            convensionne,
-            renouvelable,
-            date_debut_convention,
-            date_fin_convention,
-            date_derniere_visite,
-            annee_campagne: new Date().getFullYear(),
-            effectif_total: isNaN(effectif_total) ? 0 : effectif_total,
-            nb_visites_faites: isNaN(nb_visites_faites) ? 0 : nb_visites_faites,
-            nb_bilans_faits: isNaN(nb_bilans_faits) ? 0 : nb_bilans_faits,
-            nb_bilans_manquants: isNaN(nb_bilans_manquants) ? 0 : nb_bilans_manquants,
-          };
-        });
+            return {
+              _index: idx + 1,
+              _isValid: true,
+              _isAutoNamed: isAutoNamed,
+              code: codeClean,
+              nom: nomClean,
+              secteur: String(secteur).trim(),
+              adresse: String(adresse).trim(),
+              telephone: String(telephone).trim(),
+              email: String(email).trim(),
+              site_web: String(site_web).trim(),
+              description: String(description).trim(),
+              convensionne,
+              renouvelable,
+              date_debut_convention,
+              date_fin_convention,
+              date_derniere_visite,
+              annee_campagne: new Date().getFullYear(),
+              effectif_total: isNaN(effectif_total) ? 0 : effectif_total,
+              nb_visites_faites: isNaN(nb_visites_faites) ? 0 : nb_visites_faites,
+              nb_bilans_faits: isNaN(nb_bilans_faits) ? 0 : nb_bilans_faits,
+              nb_bilans_manquants: isNaN(nb_bilans_manquants) ? 0 : nb_bilans_manquants,
+            };
+          })
+          .filter(Boolean);
 
         setData(normalized);
       } catch (err) {
@@ -173,10 +193,26 @@ export default function ExcelImportModal({ onClose, onSuccess, toast }) {
     reader.readAsBinaryString(f);
   }
 
+  const handleUpdateRowNom = (index, newNom) => {
+    setData((prev) =>
+      prev.map((r) => {
+        if (r._index === index) {
+          return {
+            ...r,
+            nom: newNom,
+            _isAutoNamed: false,
+            _isValid: !!String(newNom).trim(),
+          };
+        }
+        return r;
+      })
+    );
+  };
+
   async function handleImport() {
-    const validItems = data.filter((d) => d._isValid);
+    const validItems = data.filter((d) => d && d._isValid);
     if (validItems.length === 0) {
-      setError('Aucune entreprise valide à importer. Le nom de l\'entreprise est obligatoire.');
+      setError('Aucune entreprise valide à importer.');
       return;
     }
 
@@ -203,15 +239,17 @@ export default function ExcelImportModal({ onClose, onSuccess, toast }) {
   }
 
   const validCount = data.filter((d) => d._isValid).length;
-  const invalidCount = data.length - validCount;
+  const autoNamedCount = data.filter((d) => d._isAutoNamed).length;
 
   const filteredPreview = data.filter((row) => {
     if (!previewFilter) return true;
     const q = previewFilter.toLowerCase();
     return (
-      row.nom.toLowerCase().includes(q) ||
-      row.secteur.toLowerCase().includes(q) ||
-      row.adresse.toLowerCase().includes(q)
+      (row.code && String(row.code).toLowerCase().includes(q)) ||
+      (row.nom && String(row.nom).toLowerCase().includes(q)) ||
+      (row.secteur && String(row.secteur).toLowerCase().includes(q)) ||
+      (row.adresse && String(row.adresse).toLowerCase().includes(q)) ||
+      (row.telephone && String(row.telephone).toLowerCase().includes(q))
     );
   });
 
@@ -322,9 +360,9 @@ export default function ExcelImportModal({ onClose, onSuccess, toast }) {
                 }}
               >
                 <div>
-                  <strong style={{ fontSize: 13, color: '#0369a1' }}>💡 Vous n'avez pas le bon format ?</strong>
-                  <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>
-                    Téléchargez notre modèle Excel préformaté avec colonnes types et exemples concrets.
+                  <strong style={{ fontSize: 13, color: '#0369a1' }}>💡 Colonnes standards attendues :</strong>
+                  <div style={{ fontSize: 12, color: 'var(--text)', marginTop: 3, fontWeight: 700 }}>
+                    <code>CODE</code> • <code>SOCIETE</code> • <code>EFFEC</code> • <code>ADRESSE</code> • <code>TEL</code> • <code>ACTIVITE</code> • <code>DATE ADHESION</code>
                   </div>
                 </div>
                 <button
@@ -419,16 +457,16 @@ export default function ExcelImportModal({ onClose, onSuccess, toast }) {
                       gap: 8,
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>
                         Aperçu ({data.length} détectées) :
                       </span>
                       <span style={{ fontSize: 11, background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
-                        {validCount} valides
+                        {validCount} prêtes à importer
                       </span>
-                      {invalidCount > 0 && (
-                        <span style={{ fontSize: 11, background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
-                          {invalidCount} sans nom
+                      {autoNamedCount > 0 && (
+                        <span style={{ fontSize: 11, background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
+                          {autoNamedCount} sans nom initial (nom auto-attribué / éditable)
                         </span>
                       )}
                     </div>
@@ -445,7 +483,7 @@ export default function ExcelImportModal({ onClose, onSuccess, toast }) {
                   {/* Tableau de prévisualisation */}
                   <div
                     style={{
-                      maxHeight: 220,
+                      maxHeight: 240,
                       overflowY: 'auto',
                       border: '1px solid var(--border)',
                       borderRadius: 10,
@@ -456,14 +494,14 @@ export default function ExcelImportModal({ onClose, onSuccess, toast }) {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
                       <thead>
                         <tr style={{ background: 'var(--surface2)', borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
-                          <th style={{ padding: '8px 10px', width: 40 }}>#</th>
-                          <th style={{ padding: '8px 10px' }}>Entreprise</th>
-                          <th style={{ padding: '8px 10px' }}>Secteur</th>
-                          <th style={{ padding: '8px 10px' }}>Statut Conv.</th>
-                          <th style={{ padding: '8px 10px' }}>Effectif</th>
-                          <th style={{ padding: '8px 10px' }}>Visites Faites</th>
-                          <th style={{ padding: '8px 10px' }}>Dates Convention</th>
-                          <th style={{ padding: '8px 10px' }}>Téléphone / Ville</th>
+                          <th style={{ padding: '8px 10px', width: 35 }}>#</th>
+                          <th style={{ padding: '8px 10px', width: 90 }}>CODE</th>
+                          <th style={{ padding: '8px 10px', minWidth: 200 }}>SOCIÉTÉ</th>
+                          <th style={{ padding: '8px 10px', width: 70 }}>EFFEC</th>
+                          <th style={{ padding: '8px 10px' }}>ADRESSE</th>
+                          <th style={{ padding: '8px 10px', width: 110 }}>TEL</th>
+                          <th style={{ padding: '8px 10px' }}>ACTIVITÉ</th>
+                          <th style={{ padding: '8px 10px', width: 120 }}>DATE ADHÉSION</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -472,39 +510,85 @@ export default function ExcelImportModal({ onClose, onSuccess, toast }) {
                             key={row._index}
                             style={{
                               borderBottom: '1px solid var(--border)',
-                              background: !row._isValid ? '#fff1f2' : undefined,
+                              background: row._isAutoNamed ? '#fffbeb15' : undefined,
                             }}
                           >
                             <td style={{ padding: '6px 10px', color: 'var(--text-3)' }}>{row._index}</td>
-                            <td style={{ padding: '6px 10px', fontWeight: 700, color: row._isValid ? 'var(--text)' : '#dc2626' }}>
-                              {row.nom || '❌ (Nom manquant)'}
-                            </td>
-                            <td style={{ padding: '6px 10px', color: 'var(--text-2)' }}>{row.secteur || '—'}</td>
                             <td style={{ padding: '6px 10px' }}>
-                              <span
-                                style={{
-                                  fontSize: 10.5,
-                                  fontWeight: 700,
-                                  padding: '1px 6px',
-                                  borderRadius: 6,
-                                  background: row.convensionne ? '#dcfce7' : '#f1f5f9',
-                                  color: row.convensionne ? '#166534' : '#64748b',
-                                }}
-                              >
-                                {row.convensionne ? '📜 Conventionnée' : 'Non conv.'}
-                              </span>
+                              {row.code ? (
+                                <span
+                                  style={{
+                                    fontSize: 10.5,
+                                    background: '#fffbeb',
+                                    color: '#92400e',
+                                    border: '1px solid #fde68a',
+                                    padding: '2px 6px',
+                                    borderRadius: 4,
+                                    fontWeight: 800,
+                                    display: 'inline-block',
+                                    fontFamily: 'monospace',
+                                  }}
+                                  title="Code entreprise (Admin)"
+                                >
+                                  🔒 {row.code}
+                                </span>
+                              ) : (
+                                <span style={{ color: 'var(--text-3)', fontSize: 11 }}>—</span>
+                              )}
+                            </td>
+                            <td style={{ padding: '4px 8px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <input
+                                  className="input"
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    height: 28,
+                                    padding: '2px 8px',
+                                    border: row._isAutoNamed ? '1px dashed #f59e0b' : '1px solid var(--border)',
+                                    background: row._isAutoNamed ? '#fffbeb' : 'var(--surface)',
+                                    color: 'var(--text)',
+                                    borderRadius: 6,
+                                    width: '100%',
+                                  }}
+                                  value={row.nom}
+                                  onChange={(e) => handleUpdateRowNom(row._index, e.target.value)}
+                                  placeholder="Nom de l'entreprise..."
+                                  title={row._isAutoNamed ? "Nom attribué automatiquement car absent dans votre fichier Excel. Vous pouvez le modifier directement ici avant d'importer." : "Modifier le nom de l'entreprise"}
+                                />
+                                {row._isAutoNamed && (
+                                  <span
+                                    style={{
+                                      fontSize: 9.5,
+                                      background: '#fef3c7',
+                                      color: '#b45309',
+                                      border: '1px solid #fde68a',
+                                      padding: '1px 5px',
+                                      borderRadius: 4,
+                                      whiteSpace: 'nowrap',
+                                      fontWeight: 700,
+                                    }}
+                                    title="Nom auto-généré (colonne SOCIETE vide dans Excel)"
+                                  >
+                                    Auto
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td style={{ padding: '6px 10px', fontWeight: 800, color: '#0284c7' }}>
-                              {row.effectif_total}
-                            </td>
-                            <td style={{ padding: '6px 10px', fontWeight: 700, color: '#16a34a' }}>
-                              {row.nb_visites_faites}
-                            </td>
-                            <td style={{ padding: '6px 10px', fontSize: 11, color: 'var(--text-3)' }}>
-                              {row.date_debut_convention || '—'} → {row.date_fin_convention || '—'}
+                              {row.effectif_total || 0}
                             </td>
                             <td style={{ padding: '6px 10px', color: 'var(--text-2)', fontSize: 11 }}>
-                              {row.telephone || row.adresse || '—'}
+                              {row.adresse || '—'}
+                            </td>
+                            <td style={{ padding: '6px 10px', color: 'var(--text-2)', fontSize: 11 }}>
+                              {row.telephone || '—'}
+                            </td>
+                            <td style={{ padding: '6px 10px', color: 'var(--text-2)', fontSize: 11 }}>
+                              {row.secteur || '—'}
+                            </td>
+                            <td style={{ padding: '6px 10px', fontSize: 11, color: 'var(--text-2)', fontWeight: 600 }}>
+                              {row.date_debut_convention || '—'}
                             </td>
                           </tr>
                         ))}

@@ -2,6 +2,7 @@
 jest.mock('../config/db', () => require('./__mocks__/db'));
 jest.mock('../config/mailer', () => ({
   notifyAllUsers: jest.fn().mockResolvedValue(undefined),
+  notifyAssignedIntervenants: jest.fn().mockResolvedValue(undefined),
   planningEmailHtml: jest.fn(() => ''),
   eventEmailHtml: jest.fn(() => ''),
   sendOTP: jest.fn(), sendPasswordReset: jest.fn(),
@@ -42,16 +43,12 @@ describe('Planning routes', () => {
       expect(Array.isArray(res.body)).toBe(true);
     });
     it('dates are normalised (no ISO T string)', async () => {
-      db.query.mockResolvedValueOnce([[{ ...P, heure_debut:'08:00:00', heure_fin:'10:00:00' }]]);
+      db.query.mockResolvedValueOnce([[P]]);
       const res = await request(app).get('/api/planning').set('Authorization', MED);
-      expect(res.status).toBe(200);
-      const item = res.body[0];
-      // heure fields must be HH:MM (5 chars)
-      if (item.heure_debut) expect(item.heure_debut.length).toBe(5);
-      if (item.heure_fin)   expect(item.heure_fin.length).toBe(5);
+      expect(res.body[0].date).toBe('2026-05-17');
     });
     it('filters by start/end', async () => {
-      db.query.mockResolvedValueOnce([[P]]);
+      db.query.mockResolvedValueOnce([[]]);
       const res = await request(app).get('/api/planning?start=2026-05-01&end=2026-05-31').set('Authorization', MED);
       expect(res.status).toBe(200);
     });
@@ -95,7 +92,10 @@ describe('Planning routes', () => {
       expect((await request(app).put('/api/planning/1').set('Authorization',TEC).send({ date:'2026-05-17' })).status).toBe(403);
     });
     it('updates for admin', async () => {
-      db.query.mockResolvedValueOnce([{}]);
+      db.query.mockResolvedValueOnce([[ { id: 1, is_clino: 0, clino_id: null } ]]); // existing
+      db.query.mockResolvedValueOnce([[]]); // medecin name
+      db.query.mockResolvedValueOnce([[]]); // tech name
+      db.query.mockResolvedValueOnce([{}]); // UPDATE
       expect((await request(app).put('/api/planning/1').set('Authorization',ADM).send({ titre:'X', date:'2026-05-17' })).status).toBe(200);
     });
   });

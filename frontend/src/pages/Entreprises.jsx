@@ -6,6 +6,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import NavigationSelector from '../components/NavigationSelector';
 import ExcelImportModal from '../components/ExcelImportModal';
+import ExportDropdown from '../components/ExportDropdown';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -157,6 +158,7 @@ function getConventionBadge(dateFin) {
 function EntrepriseModal({ item, onSave, onClose }) {
   const init = item || {};
   const [f, setF] = useState({
+    code: init.code || '',
     nom: init.nom || '',
     secteur: init.secteur || '',
     adresse: init.adresse || '',
@@ -186,6 +188,7 @@ function EntrepriseModal({ item, onSave, onClose }) {
     setSaving(true);
     const payload = {
       ...f,
+      code: f.code?.trim() || null,
       date_debut_convention: f.convensionne && f.date_debut_convention ? f.date_debut_convention : null,
       date_fin_convention: f.convensionne && f.date_fin_convention ? f.date_fin_convention : null,
       renouvelable: f.convensionne ? (f.renouvelable ? 1 : 0) : 0,
@@ -214,22 +217,37 @@ function EntrepriseModal({ item, onSave, onClose }) {
               {init.id ? '✏️ Modifier l\'entreprise' : '➕ Nouvelle entreprise'}
             </h3>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-              Fiche administrative, coordonnées et suivi des effectifs de santé au travail
+              Fiche administrative, code interne réservé à l'admin et suivi des effectifs
             </div>
           </div>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body" style={{ maxHeight: '76vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, padding: '18px 22px' }}>
-          <div className="form-group">
-            <label style={{ fontWeight: 700, fontSize: 13 }}>Nom de l'entreprise / Société *</label>
-            <input
-              className="input"
-              placeholder="Ex : Clinique Les Oliviers, SOTUVER, STEG..."
-              value={f.nom}
-              onChange={(e) => s('nom', e.target.value)}
-              autoFocus
-              style={{ fontSize: 14, fontWeight: 600 }}
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 12 }}>
+            <div className="form-group">
+              <label style={{ fontWeight: 700, fontSize: 13 }}>Nom de l'entreprise / Société *</label>
+              <input
+                className="input"
+                placeholder="Ex : Clinique Les Oliviers, SOTUVER, STEG..."
+                value={f.nom}
+                onChange={(e) => s('nom', e.target.value)}
+                autoFocus
+                style={{ fontSize: 14, fontWeight: 600 }}
+              />
+            </div>
+            <div className="form-group">
+              <label style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>🔒 Code Entreprise</span>
+                <span style={{ fontSize: 9.5, background: '#fee2e2', color: '#991b1b', padding: '1px 5px', borderRadius: 4, fontWeight: 800 }}>ADMIN</span>
+              </label>
+              <input
+                className="input"
+                placeholder="Ex : ENT-001, COD-2024..."
+                value={f.code}
+                onChange={(e) => s('code', e.target.value)}
+                style={{ fontSize: 13, fontWeight: 700, background: '#fffbeb', borderColor: '#fde68a' }}
+              />
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -518,6 +536,8 @@ function EntrepriseModal({ item, onSave, onClose }) {
 
 // ── Modal de Calcul Rapide & Bilan Effectif ───────────────────
 function QuickBilanModal({ entreprise, onSave, onClose }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'administrateur';
   const currentYear = new Date().getFullYear();
   const [effectif, setEffectif] = useState(entreprise.effectif_total !== undefined ? entreprise.effectif_total : 0);
   const [faites, setFaites] = useState(entreprise.nb_visites_faites !== undefined ? entreprise.nb_visites_faites : 0);
@@ -536,13 +556,17 @@ function QuickBilanModal({ entreprise, onSave, onClose }) {
   async function handleSave() {
     setSaving(true);
     try {
-      await axios.patch(`/api/entreprises/${entreprise.id}/bilan`, {
-        effectif_total: parseInt(effectif, 10) || 0,
+      const payload = {
         nb_visites_faites: parseInt(faites, 10) || 0,
         nb_bilans_faits: parseInt(bilansFaits, 10) || 0,
         nb_bilans_manquants: parseInt(bilansManquants, 10) || 0,
-        annee_campagne: parseInt(anneeCampagne, 10) || currentYear,
-      });
+        date_derniere_visite: new Date().toISOString().slice(0, 10),
+      };
+      if (isAdmin) {
+        payload.effectif_total = parseInt(effectif, 10) || 0;
+        payload.annee_campagne = parseInt(anneeCampagne, 10) || currentYear;
+      }
+      await axios.patch(`/api/entreprises/${entreprise.id}/bilan`, payload);
       onSave();
     } catch (e) {
       alert(e.response?.data?.message || 'Erreur');
@@ -600,8 +624,30 @@ function QuickBilanModal({ entreprise, onSave, onClose }) {
           <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '18px 22px' }}>
+          {/* Bannière de contrôle administratif pour les médecins / techniciens */}
+          {!isAdmin ? (
+            <div
+              style={{
+                padding: '10px 14px',
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: 10,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 12,
+                color: '#166534',
+              }}
+            >
+              <span style={{ fontSize: 18 }}>🛡️</span>
+              <div>
+                <strong>Saisie sous contrôle de l'Administration :</strong> Enregistrement du nombre de salariés examinés et des bilans sur site.
+              </div>
+            </div>
+          ) : null}
+
           {/* Alerte si nouvelle année disponible */}
-          {isNouvelleAnneeRequise && (
+          {isAdmin && isNouvelleAnneeRequise && (
             <div
               style={{
                 padding: '12px 14px',
@@ -675,57 +721,66 @@ function QuickBilanModal({ entreprise, onSave, onClose }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div className="form-group">
-                <label style={{ fontSize: 12, fontWeight: 700 }}>📅 Année de Campagne</label>
-                <input
-                  className="input"
-                  type="number"
-                  min="2020"
-                  max="2040"
-                  value={anneeCampagne}
-                  onChange={(e) => setAnneeCampagne(e.target.value)}
-                  style={{ fontWeight: 800, fontSize: 14 }}
-                />
+            {isAdmin && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label style={{ fontSize: 12, fontWeight: 700 }}>📅 Année de Campagne</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min="2020"
+                    max="2040"
+                    value={anneeCampagne}
+                    onChange={(e) => setAnneeCampagne(e.target.value)}
+                    style={{ fontWeight: 800, fontSize: 14 }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label style={{ fontSize: 12, fontWeight: 700 }}>🔄 Cycle Annuel</label>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={handleStartNewCampaign}
+                    disabled={startingNewCampaign}
+                    style={{ width: '100%', height: 38, fontWeight: 700, fontSize: 11.5 }}
+                  >
+                    {startingNewCampaign ? 'Initialisation...' : `🔄 Reset pour ${currentYear}`}
+                  </button>
+                </div>
               </div>
-              <div className="form-group">
-                <label style={{ fontSize: 12, fontWeight: 700 }}>🔄 Cycle Annuel</label>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={handleStartNewCampaign}
-                  disabled={startingNewCampaign}
-                  style={{ width: '100%', height: 38, fontWeight: 700, fontSize: 11.5 }}
-                >
-                  {startingNewCampaign ? 'Initialisation...' : `🔄 Reset pour ${currentYear}`}
-                </button>
-              </div>
-            </div>
+            )}
 
-            <div className="form-group">
-              <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700 }}>
-                <span>👥 Effectif total de salariés</span>
-                <span style={{ color: '#0284c7', fontSize: 11, fontWeight: 600 }}>Ajustement rapide</span>
-              </label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input
-                  className="input"
-                  type="number"
-                  min="0"
-                  value={effectif}
-                  onChange={(e) => setEffectif(e.target.value)}
-                  style={{ fontWeight: 800, fontSize: 15 }}
-                />
-                <button type="button" className="btn btn-outline btn-sm" onClick={() => setEffectif((v) => (parseInt(v, 10) || 0) + 5)}>+5</button>
-                <button type="button" className="btn btn-outline btn-sm" onClick={() => setEffectif((v) => (parseInt(v, 10) || 0) + 20)}>+20</button>
-                <button type="button" className="btn btn-outline btn-sm" onClick={() => setEffectif((v) => (parseInt(v, 10) || 0) + 50)}>+50</button>
+            {isAdmin ? (
+              <div className="form-group">
+                <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700 }}>
+                  <span>👥 Effectif total de salariés</span>
+                  <span style={{ color: '#0284c7', fontSize: 11, fontWeight: 600 }}>Ajustement admin</span>
+                </label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    className="input"
+                    type="number"
+                    min="0"
+                    value={effectif}
+                    onChange={(e) => setEffectif(e.target.value)}
+                    style={{ fontWeight: 800, fontSize: 15 }}
+                  />
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setEffectif((v) => (parseInt(v, 10) || 0) + 5)}>+5</button>
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setEffectif((v) => (parseInt(v, 10) || 0) + 20)}>+20</button>
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setEffectif((v) => (parseInt(v, 10) || 0) + 50)}>+50</button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div style={{ padding: '8px 12px', background: 'var(--surface2)', borderRadius: 8, fontSize: 12, color: 'var(--text-2)', display: 'flex', justifyContent: 'space-between' }}>
+                <span>👥 Effectif total de l'entreprise :</span>
+                <strong>{effNum} salariés</strong>
+              </div>
+            )}
 
             <div className="form-group">
               <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700 }}>
                 <span>🩺 Effectif ayant fait sa visite ({anneeCampagne})</span>
-                <span style={{ color: '#16a34a', fontSize: 11, fontWeight: 600 }}>Incrémentation</span>
+                <span style={{ color: '#16a34a', fontSize: 11, fontWeight: 600 }}>Incrémentation rapide</span>
               </label>
               <div style={{ display: 'flex', gap: 6 }}>
                 <input
@@ -770,6 +825,14 @@ function QuickBilanModal({ entreprise, onSave, onClose }) {
         </div>
         <div className="modal-footer" style={{ borderTop: '1px solid var(--border)', padding: '14px 22px' }}>
           <button className="btn btn-outline" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ padding: '8px 22px', fontWeight: 800 }}>
+            {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : '💾 Enregistrer les effectifs'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
           <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ padding: '8px 22px' }}>
             {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : '💾 Enregistrer les chiffres'}
           </button>
@@ -943,6 +1006,25 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
               <h2 style={{ fontSize: 22, fontWeight: 900, color: 'var(--text)' }}>{entreprise.nom}</h2>
+              {isAdmin && entreprise.code && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    padding: '3px 9px',
+                    borderRadius: 6,
+                    background: '#fffbeb',
+                    color: '#92400e',
+                    border: '1px solid #fde68a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                  title="Code Entreprise visible uniquement par l'administrateur"
+                >
+                  🔒 Code : <strong>{entreprise.code}</strong>
+                </span>
+              )}
               <span className={`badge ${entreprise.convensionne ? 'badge-green' : 'badge-red'}`}>
                 {entreprise.convensionne ? '✅ Conventionnée' : '❌ Non conventionnée'}
               </span>
@@ -1331,7 +1413,7 @@ export default function Entreprises({ toast }) {
   const filtered = useMemo(() => {
     return entreprises.filter((e) => {
       const q = search.toLowerCase();
-      const matchSearch = !q || `${e.nom} ${e.secteur || ''} ${e.adresse || ''}`.toLowerCase().includes(q);
+      const matchSearch = !q || `${e.nom} ${e.code || ''} ${e.secteur || ''} ${e.adresse || ''}`.toLowerCase().includes(q);
       const matchConv = filterConv === 'all' || (filterConv === 'conv' ? e.convensionne : !e.convensionne);
       
       const eff = parseInt(e.effectif_total, 10) || 0;
@@ -1389,7 +1471,7 @@ export default function Entreprises({ toast }) {
     const vf = parseInt(e.nb_visites_faites, 10) || 0;
     const vaf = Math.max(0, eff - vf);
     const tx = eff > 0 ? `${Math.round((vf / eff) * 100)}%` : '0%';
-    return {
+    const row = {
       nom: e.nom || '—',
       secteur: e.secteur || '—',
       campagne: e.annee_campagne || currentYear,
@@ -1406,9 +1488,14 @@ export default function Entreprises({ toast }) {
       telephone: e.telephone || '—',
       email: e.email || '—',
     };
+    if (isAdmin) {
+      row.code = e.code || '—';
+    }
+    return row;
   });
 
   const exportColumns = [
+    ...(isAdmin ? [{ header: 'Code Entreprise', key: 'code' }] : []),
     { header: 'Entreprise', key: 'nom' },
     { header: 'Secteur', key: 'secteur' },
     { header: 'Campagne', key: 'campagne' },
@@ -1533,33 +1620,14 @@ export default function Entreprises({ toast }) {
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Boutons d'exportation */}
-          <div style={{ display: 'flex', gap: 6, background: 'var(--surface2)', padding: 4, borderRadius: 10, border: '1px solid var(--border)' }}>
-            <button
-              className="btn btn-outline btn-sm"
-              onClick={handleExportExcel}
-              title="Exporter vers Excel"
-              style={{ fontWeight: 700, fontSize: 11.5, padding: '5px 9px', color: '#166534' }}
-            >
-              📗 Excel
-            </button>
-            <button
-              className="btn btn-outline btn-sm"
-              onClick={handleExportWord}
-              title="Exporter vers Word"
-              style={{ fontWeight: 700, fontSize: 11.5, padding: '5px 9px', color: '#1e40af' }}
-            >
-              📘 Word
-            </button>
-            <button
-              className="btn btn-outline btn-sm"
-              onClick={handleExportPDF}
-              title="Exporter vers PDF"
-              style={{ fontWeight: 700, fontSize: 11.5, padding: '5px 9px', color: '#991b1b' }}
-            >
-              📕 PDF
-            </button>
-          </div>
+          {/* Menu d'exportation unifié */}
+          <ExportDropdown
+            label="Exporter / Imprimer"
+            onPrint={() => window.print()}
+            onPDF={handleExportPDF}
+            onExcel={handleExportExcel}
+            onWord={handleExportWord}
+          />
 
           {isAdmin && (
             <>
@@ -1872,8 +1940,24 @@ export default function Entreprises({ toast }) {
                       onMouseLeave={(el) => (el.currentTarget.style.background = 'transparent')}
                     >
                       <td style={{ padding: '14px 18px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <span style={{ fontWeight: 800, color: 'var(--text)', fontSize: 14 }}>{e.nom}</span>
+                          {isAdmin && e.code && (
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 800,
+                                padding: '1px 6px',
+                                borderRadius: 4,
+                                background: '#fffbeb',
+                                color: '#92400e',
+                                border: '1px solid #fde68a',
+                              }}
+                              title="Code Entreprise (Admin)"
+                            >
+                              🔒 {e.code}
+                            </span>
+                          )}
                           <span
                             style={{
                               fontSize: 10,
@@ -2038,7 +2122,25 @@ export default function Entreprises({ toast }) {
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                     <div>
-                      <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text)', marginBottom: 2 }}>{e.nom}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
+                        <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text)' }}>{e.nom}</div>
+                        {isAdmin && e.code && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 800,
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              background: '#fffbeb',
+                              color: '#92400e',
+                              border: '1px solid #fde68a',
+                            }}
+                            title="Code Entreprise (Admin)"
+                          >
+                            🔒 {e.code}
+                          </span>
+                        )}
+                      </div>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                         {e.secteur && <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>🏷 {e.secteur}</span>}
                         <span
