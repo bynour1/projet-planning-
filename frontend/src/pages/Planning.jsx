@@ -965,31 +965,33 @@ function TodayBanner({ pe, ce, cl = [] }) {
   if (!tp.length && !tc.length && !tcl.length) return null;
   return (
     <div style={{
-      padding: '10px 20px',
+      padding: '7px 14px',
       background: 'linear-gradient(90deg, #0284c7, #0d9488)',
       color: '#fff',
       display: 'flex',
       alignItems: 'center',
-      gap: 10,
+      gap: 8,
       flexShrink: 0,
-      flexWrap: 'wrap',
+      overflowX: 'auto',
+      whiteSpace: 'nowrap',
+      WebkitOverflowScrolling: 'touch',
       boxShadow: '0 2px 8px rgba(2,132,199,0.15)'
     }}>
-      <span style={{ fontWeight: 800, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 4 }}>
-        ⚡ Aujourd'hui :
+      <span style={{ fontWeight: 800, fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+        ⚡ Aujourd'hui ({tp.length + tc.length + tcl.length}) :
       </span>
       {tp.map(e => (
-        <span key={'tp' + e.id} style={{ background: 'rgba(255,255,255,0.22)', backdropFilter: 'blur(4px)', padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
+        <span key={'tp' + e.id} style={{ background: 'rgba(255,255,255,0.22)', backdropFilter: 'blur(4px)', padding: '2px 8px', borderRadius: 16, fontSize: 11.5, fontWeight: 600, flexShrink: 0 }}>
           📋 {e.heure_debut ? e.heure_debut + ' ' : ''}{e.titre || 'Programme'}{e.medecin_nom ? ' · 👨‍⚕️ ' + e.medecin_nom : ''}{e.technicien_nom ? ' · 🔧 ' + e.technicien_nom : ''}
         </span>
       ))}
       {tc.map(e => (
-        <span key={'tc' + e.id} style={{ background: 'rgba(255,255,255,0.2)', padding: '3px 10px', borderRadius: 20, fontSize: 12 }}>
+        <span key={'tc' + e.id} style={{ background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: 16, fontSize: 11.5, flexShrink: 0 }}>
           📅 {e.titre}{e.lieu ? ' · ' + e.lieu : ''}
         </span>
       ))}
       {tcl.map(e => (
-        <span key={'tcl' + e.id} style={{ background: 'rgba(255,255,255,0.25)', padding: '3px 10px', borderRadius: 20, fontSize: 12, border: '1px solid rgba(255,255,255,0.4)', fontWeight: 600 }}>
+        <span key={'tcl' + e.id} style={{ background: 'rgba(255,255,255,0.25)', padding: '2px 8px', borderRadius: 16, fontSize: 11.5, border: '1px solid rgba(255,255,255,0.4)', fontWeight: 600, flexShrink: 0 }}>
           🚗 {e.entreprise_nom || e.planning_titre || e.titre || 'Clino Mobile'}{e.heure ? ' · ⏰ ' + String(e.heure).slice(0, 5) : ''}{e.medecin_nom ? ' · 👨‍⚕️ ' + e.medecin_nom : ''}{e.technicien_nom ? ' · 🔧 ' + e.technicien_nom : ''}
         </span>
       ))}
@@ -1272,8 +1274,15 @@ function DoctorMatrixView({
     });
   };
 
-  const isSmallScreen = typeof window !== 'undefined' && window.innerWidth < 768;
-  const [mobileMode, setMobileMode] = useState(() => (isSmallScreen ? 'cards' : 'matrix'));
+  const [isSmallScreen, setIsSmallScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsSmallScreen(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const [mobileMode, setMobileMode] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'cards' : 'matrix'));
   const [selectedMobileDay, setSelectedMobileDay] = useState(() => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const dayKeys = (days || []).map(d => typeof d === 'string' ? d : format(d, 'yyyy-MM-dd'));
@@ -1302,7 +1311,7 @@ function DoctorMatrixView({
   };
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)', padding: '8px 10px' }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)', padding: isSmallScreen ? '6px 8px' : '8px 10px' }}>
       {/* Mobile / Tablet Mode Switcher (< 768px) */}
       <div className="no-print" style={{
         display: isSmallScreen ? 'flex' : 'none',
@@ -1323,7 +1332,7 @@ function DoctorMatrixView({
             onClick={() => setMobileMode('cards')}
             style={{ padding: '4px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6 }}
           >
-            📱 Vue Cartes (Mobile)
+            📱 Vue Cartes
           </button>
           <button
             type="button"
@@ -1331,7 +1340,7 @@ function DoctorMatrixView({
             onClick={() => setMobileMode('matrix')}
             style={{ padding: '4px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6 }}
           >
-            📊 Grille Tableau
+            📊 Grille
           </button>
         </div>
 
@@ -1351,7 +1360,7 @@ function DoctorMatrixView({
               onClick={() => setMobileTab('all_days')}
               style={{ padding: '3px 8px', fontSize: 11, fontWeight: mobileTab === 'all_days' ? 800 : 600 }}
             >
-              Semaine
+              Tous les Jours
             </button>
           </div>
         )}
@@ -1359,7 +1368,7 @@ function DoctorMatrixView({
 
       {/* ── MOBILE CARDS VIEW (Clean, Highly Legible, Touch-Friendly) ── */}
       {mobileMode === 'cards' ? (
-        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 80 }}>
           {/* Quick Day Selector Pills */}
           <div style={{
             display: 'flex',
@@ -2277,6 +2286,7 @@ function MonthView({ current, pe, ce, cl = [], isAdmin, medecins, techniciens, e
   const [selected, setSelected] = useState(null);
   const [modal, setModal] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const isSmallScreen = typeof window !== 'undefined' && window.innerWidth < 768;
 
   const days = eachDayOfInterval({
     start: startOfWeek(startOfMonth(current), { weekStartsOn: 1 }),
@@ -2308,16 +2318,16 @@ function MonthView({ current, pe, ce, cl = [], isAdmin, medecins, techniciens, e
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: isSmallScreen ? 'column' : 'row', overflow: 'hidden' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: isSmallScreen ? '8px 6px' : 14, paddingBottom: isSmallScreen ? 80 : 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 6 }}>
-          {DAYS_FULL_FR.map(d => (
-            <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 800, color: 'var(--text-3)', padding: '6px 0', textTransform: 'uppercase' }}>
+          {DAYS_SHORT_FR.map(d => (
+            <div key={d} style={{ textAlign: 'center', fontSize: 10.5, fontWeight: 800, color: 'var(--text-3)', padding: '4px 0', textTransform: 'uppercase' }}>
               {d}
             </div>
           ))}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: isSmallScreen ? 3 : 6 }}>
           {days.map(day => {
             const key = format(day, 'yyyy-MM-dd');
             const pEvts = gp(day);
@@ -2332,9 +2342,9 @@ function MonthView({ current, pe, ce, cl = [], isAdmin, medecins, techniciens, e
                 key={key}
                 onClick={() => setSelected(sel ? null : key)}
                 style={{
-                  minHeight: 84,
-                  padding: 7,
-                  borderRadius: 10,
+                  minHeight: isSmallScreen ? 58 : 84,
+                  padding: isSmallScreen ? 3 : 7,
+                  borderRadius: 8,
                   cursor: 'pointer',
                   background: sel ? 'var(--primary-lt)' : today ? '#fff7ed' : 'var(--surface)',
                   border: `1.5px solid ${sel ? 'var(--primary)' : today ? '#f97316' : 'var(--border)'}`,
@@ -2342,56 +2352,67 @@ function MonthView({ current, pe, ce, cl = [], isAdmin, medecins, techniciens, e
                   transition: 'all .1s',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 3,
+                  gap: 2,
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontWeight: today ? 900 : 700, color: today ? '#f97316' : 'var(--text)' }}>
+                  <span style={{ fontSize: isSmallScreen ? 11 : 13, fontWeight: today ? 900 : 700, color: today ? '#f97316' : 'var(--text)' }}>
                     {format(day, 'd')}
                   </span>
                   {today && (
-                    <span style={{ fontSize: 9, fontWeight: 800, background: '#f97316', color: '#fff', padding: '1px 5px', borderRadius: 10 }}>
-                      Aujourd'hui
+                    <span style={{ fontSize: 8, fontWeight: 800, background: '#f97316', color: '#fff', padding: '1px 4px', borderRadius: 8 }}>
+                      {isSmallScreen ? '•' : 'Aujourd\'hui'}
                     </span>
                   )}
                 </div>
                 {pEvts.slice(0, 1).map(ev => (
-                  <div key={'p' + ev.id} style={{ fontSize: 10, padding: '2px 4px', borderRadius: 4, background: '#e0f2fe', color: '#0284c7', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderLeft: '3px solid #0ea5e9' }}>
+                  <div key={'p' + ev.id} style={{ fontSize: 9.5, padding: '1px 3px', borderRadius: 3, background: '#e0f2fe', color: '#0284c7', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderLeft: '2px solid #0ea5e9' }}>
                     📋 {ev.titre || 'Programme'}
                   </div>
                 ))}
                 {clEvts.slice(0, 1).map(ev => (
-                  <div key={'cl' + ev.id} style={{ fontSize: 10, padding: '2px 4px', borderRadius: 4, background: CLINO_COLOR.bg, color: CLINO_COLOR.text, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderLeft: `3px solid ${CLINO_COLOR.border}` }}>
-                    🚗 {ev.entreprise_nom || ev.planning_titre || ev.titre || 'Clino Mobile'}
+                  <div key={'cl' + ev.id} style={{ fontSize: 9.5, padding: '1px 3px', borderRadius: 3, background: CLINO_COLOR.bg, color: CLINO_COLOR.text, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderLeft: `2px solid ${CLINO_COLOR.border}` }}>
+                    🚗 {ev.entreprise_nom || ev.planning_titre || ev.titre || 'Clino'}
                   </div>
                 ))}
                 {cEvts.slice(0, 1).map(ev => {
                   const c = TYPE_COLORS[ev.type] || TYPE_COLORS.autre;
                   return (
-                    <div key={'c' + ev.id} style={{ fontSize: 10, padding: '2px 4px', borderRadius: 4, background: c.bg, color: c.text, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderLeft: `3px solid ${c.border}` }}>
+                    <div key={'c' + ev.id} style={{ fontSize: 9.5, padding: '1px 3px', borderRadius: 3, background: c.bg, color: c.text, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderLeft: `2px solid ${c.border}` }}>
                       {ev.titre}
                     </div>
                   );
                 })}
-                {total > 2 && <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)' }}>+{total - 2} autre(s)</div>}
+                {total > 2 && <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)' }}>+{total - 2}</div>}
               </div>
             );
           })}
         </div>
       </div>
       {selected && (
-        <div style={{ width: 320, borderLeft: '1px solid var(--border)', padding: 16, overflowY: 'auto', background: 'var(--surface)', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{
+          width: isSmallScreen ? '100%' : 320,
+          maxHeight: isSmallScreen ? '45vh' : 'none',
+          borderLeft: isSmallScreen ? 'none' : '1px solid var(--border)',
+          borderTop: isSmallScreen ? '2px solid var(--primary)' : 'none',
+          padding: isSmallScreen ? 12 : 16,
+          overflowY: 'auto',
+          background: 'var(--surface)',
+          flexShrink: 0,
+          boxShadow: isSmallScreen ? '0 -4px 16px rgba(0,0,0,0.1)' : 'none',
+          paddingBottom: isSmallScreen ? 80 : 16,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div>
-              <span style={{ fontWeight: 800, fontSize: 15 }}>{format(parseISO(selected), 'd MMMM yyyy', { locale: fr })}</span>
+              <span style={{ fontWeight: 800, fontSize: 14 }}>{format(parseISO(selected), 'd MMMM yyyy', { locale: fr })}</span>
               <p style={{ margin: 0, fontSize: 11, color: 'var(--text-3)' }}>Détail des activités de cette journée</p>
             </div>
             <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setSelected(null)}>✕</button>
           </div>
           {sp.length === 0 && sc.length === 0 && scl.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-3)' }}>
-              <div style={{ fontSize: 24, marginBottom: 6 }}>☕</div>
-              <p style={{ fontSize: 13 }}>Aucun événement ce jour</p>
+            <div style={{ textAlign: 'center', padding: '20px 10px', color: 'var(--text-3)' }}>
+              <div style={{ fontSize: 22, marginBottom: 4 }}>☕</div>
+              <p style={{ fontSize: 12 }}>Aucun événement ce jour</p>
             </div>
           )}
           {sp.map(ev => (
@@ -2654,6 +2675,14 @@ export default function Planning({ toast }) {
   const { on }   = useSocket();
   const location = useLocation();
   const isAdmin  = user?.role === 'administrateur';
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const [view, setView] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'week' : 'doctor_matrix'));
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -3032,169 +3061,239 @@ export default function Planning({ toast }) {
       <div className="planning-toolbar no-print" style={{
         background: 'var(--surface)',
         borderBottom: '1px solid var(--border)',
-        padding: '8px 14px',
+        padding: isMobile ? '6px 8px' : '8px 14px',
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: 10,
+        flexDirection: 'column',
+        gap: isMobile ? 6 : 8,
         flexShrink: 0,
       }}>
-        {/* Left: Navigation & Period */}
-        <div className="planning-toolbar-nav" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <button
-              className="btn btn-outline btn-sm"
-              style={{ padding: '4px 8px', fontWeight: 800, fontSize: 13, height: 28 }}
-              onClick={() => view === 'week' ? setWeekStart(w => subWeeks(w, 1)) : setMonthDate(d => subMonths(d, 1))}
-              title="Précédent"
-            >
-              ‹
-            </button>
-            <button
-              className="btn btn-outline btn-sm"
-              style={{ padding: '4px 10px', fontWeight: 700, fontSize: 11.5, height: 28 }}
-              onClick={() => {
-                setWeekStart(currentWeekStart);
-                setMonthDate(new Date());
-              }}
-            >
-              Aujourd'hui
-            </button>
-            <button
-              className="btn btn-outline btn-sm"
-              style={{ padding: '4px 8px', fontWeight: 800, fontSize: 13, height: 28 }}
-              onClick={() => view === 'week' ? setWeekStart(w => addWeeks(w, 1)) : setMonthDate(d => addMonths(d, 1))}
-              title="Suivant"
-            >
-              ›
-            </button>
-          </div>
-
-          <h1 style={{ fontSize: 14.5, fontWeight: 900, margin: 0, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span>
-              {view === 'week' ? `Sem. ${isoWeekNum} : ${format(weekStart, 'd MMM', { locale: fr })} - ${format(weekEnd, 'd MMM yyyy', { locale: fr })}` : format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}
-            </span>
-          </h1>
-
-          <input
-            type="date"
-            className="input"
-            style={{ width: 'auto', fontSize: 11, padding: '2px 6px', height: 28, borderRadius: 6 }}
-            value={format(view === 'week' ? weekStart : monthDate, 'yyyy-MM-dd')}
-            onChange={e => handleJumpToDate(e.target.value)}
-            title="Aller à une date précise"
-          />
-        </div>
-
-        {/* Center: View Switcher */}
-        <div className="planning-view-switcher" style={{ display: 'flex', gap: 2, background: 'var(--bg)', borderRadius: 8, padding: 2, border: '1px solid var(--border)', overflowX: 'auto', maxWidth: '100%' }}>
-          {[
-            ['week', '📅 Semaine'],
-            ['doctor_matrix', '📊 Grille Mois'],
-            ['month', '📆 Calendrier'],
-            ['list', '📋 Liste']
-          ].map(([v, l]) => (
-            <button
-              key={v}
-              className={`btn btn-sm ${view === v ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setView(v)}
-              style={{ padding: '3px 8px', fontSize: 11.5, fontWeight: 700 }}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-
-        {/* Right: Filters & Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <select
-            className="input"
-            style={{ width: 'auto', fontSize: 11.5, padding: '2px 6px', height: 28, borderRadius: 6, fontWeight: 600 }}
-            value={filters.role}
-            onChange={e => setFilters(f => ({ ...f, role: e.target.value }))}
-          >
-            <option value="">👥 Rôle (Tous)</option>
-            <option value="medecin">👨‍⚕️ Médecins</option>
-            <option value="technicien">🔧 Techniciens</option>
-          </select>
-
-          {ents.length > 0 && (
-            <select
-              className="input"
-              style={{ width: 'auto', maxWidth: 140, fontSize: 11.5, padding: '2px 6px', height: 28, borderRadius: 6 }}
-              value={filters.entreprise}
-              onChange={e => setFilters(f => ({ ...f, entreprise: e.target.value }))}
-            >
-              <option value="">🏢 Entreprise (Toutes)</option>
-              {ents.map(ent => <option key={ent.id} value={ent.nom}>{ent.nom}</option>)}
-            </select>
-          )}
-
-          <input
-            className="input"
-            type="text"
-            placeholder="🔍 Chercher..."
-            style={{ width: 110, fontSize: 11.5, padding: '2px 8px', height: 28, borderRadius: 6 }}
-            value={filters.search}
-            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-          />
-
-          {hasActiveFilters && (
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setFilters({ role: '', entreprise: '', search: '', date: '' })}
-              style={{ fontSize: 11, padding: '2px 6px', color: 'var(--danger)', fontWeight: 700 }}
-              title="Réinitialiser les filtres"
-            >
-              ✕ ({totalFilteredCount})
-            </button>
-          )}
-
-          {isAdmin && (
-            <>
+        {/* Top line: Navigation, Title & Segmented View Switcher */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 6,
+          width: '100%',
+        }}>
+          {/* Left: Navigation & Period */}
+          <div className="planning-toolbar-nav" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <button
-                className="btn btn-primary btn-sm"
-                style={{ fontWeight: 800, borderRadius: 8, padding: '4px 10px', fontSize: 11.5, height: 28 }}
-                onClick={handleCreateForCurrentView}
-                title="Ajouter une visite médicale / programme"
+                className="btn btn-outline btn-sm"
+                style={{ padding: '4px 8px', fontWeight: 800, fontSize: 13, height: 28 }}
+                onClick={() => view === 'week' ? setWeekStart(w => subWeeks(w, 1)) : setMonthDate(d => subMonths(d, 1))}
+                title="Précédent"
               >
-                + Programme
+                ‹
               </button>
               <button
                 className="btn btn-outline btn-sm"
-                style={{ fontWeight: 700, borderRadius: 8, padding: '4px 10px', fontSize: 11.5, height: 28 }}
-                onClick={() => setModal({ t: 'e', data: { date_debut: view === 'week' ? format(weekStart, 'yyyy-MM-dd') : format(monthDate, 'yyyy-MM-dd') } })}
-                title="Ajouter un événement (réunion, formation, congés, autre)"
+                style={{ padding: '4px 8px', fontWeight: 700, fontSize: 11, height: 28 }}
+                onClick={() => {
+                  setWeekStart(currentWeekStart);
+                  setMonthDate(new Date());
+                }}
               >
-                + Événement
+                Auj.
               </button>
-            </>
+              <button
+                className="btn btn-outline btn-sm"
+                style={{ padding: '4px 8px', fontWeight: 800, fontSize: 13, height: 28 }}
+                onClick={() => view === 'week' ? setWeekStart(w => addWeeks(w, 1)) : setMonthDate(d => addMonths(d, 1))}
+                title="Suivant"
+              >
+                ›
+              </button>
+            </div>
+
+            <h1 style={{ fontSize: isMobile ? 13 : 14.5, fontWeight: 900, margin: 0, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span>
+                {view === 'week' ? `Sem. ${isoWeekNum} : ${format(weekStart, 'd MMM', { locale: fr })} - ${format(weekEnd, 'd MMM yyyy', { locale: fr })}` : format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}
+              </span>
+            </h1>
+
+            <input
+              type="date"
+              className="input"
+              style={{ width: 'auto', fontSize: 11, padding: '2px 4px', height: 28, borderRadius: 6 }}
+              value={format(view === 'week' ? weekStart : monthDate, 'yyyy-MM-dd')}
+              onChange={e => handleJumpToDate(e.target.value)}
+              title="Aller à une date précise"
+            />
+          </div>
+
+          {/* Center/Right: View Switcher */}
+          <div className="planning-view-switcher" style={{ display: 'flex', gap: 2, background: 'var(--bg)', borderRadius: 8, padding: 2, border: '1px solid var(--border)', overflowX: 'auto' }}>
+            {[
+              ['week', '📅 Semaine'],
+              ['doctor_matrix', '📊 Grille'],
+              ['month', '📆 Mois'],
+              ['list', '📋 Liste']
+            ].map(([v, l]) => (
+              <button
+                key={v}
+                className={`btn btn-sm ${view === v ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setView(v)}
+                style={{ padding: '3px 7px', fontSize: 11, fontWeight: 700 }}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+
+          {/* Mobile Filter Toggle & Quick Actions */}
+          {isMobile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'space-between', marginTop: 2 }}>
+              <button
+                type="button"
+                className={`btn btn-sm ${mobileFiltersOpen || hasActiveFilters ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
+                style={{ fontSize: 11, padding: '4px 8px', borderRadius: 8, fontWeight: 700 }}
+              >
+                🔍 Filtres {hasActiveFilters ? `(${totalFilteredCount})` : ''} {mobileFiltersOpen ? '▲' : '▼'}
+              </button>
+
+              <div style={{ display: 'flex', gap: 4 }}>
+                {isAdmin && (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ fontWeight: 800, borderRadius: 8, padding: '4px 8px', fontSize: 11 }}
+                    onClick={handleCreateForCurrentView}
+                  >
+                    + Visite
+                  </button>
+                )}
+                <ExportDropdown
+                  label="Export"
+                  buttonStyle={{ height: 28, padding: '4px 8px', fontSize: 11 }}
+                  onPDF={() => {
+                    import('../utils/exportUtils').then(({ exportMatrixToPDF }) => {
+                      const config = getMatrixExportConfig();
+                      exportMatrixToPDF(config);
+                    });
+                  }}
+                  onExcel={() => {
+                    import('../utils/exportUtils').then(({ exportMatrixToExcel }) => {
+                      const config = getMatrixExportConfig();
+                      exportMatrixToExcel(config);
+                    });
+                  }}
+                  onWord={() => {
+                    import('../utils/exportUtils').then(({ exportMatrixToWord }) => {
+                      const config = getMatrixExportConfig();
+                      exportMatrixToWord(config);
+                    });
+                  }}
+                />
+              </div>
+            </div>
           )}
 
-          {/* Export dropdown */}
-          <ExportDropdown
-            label="Exporter"
-            buttonStyle={{ height: 28, padding: '4px 10px', fontSize: 11.5 }}
-            onPDF={() => {
-              import('../utils/exportUtils').then(({ exportMatrixToPDF }) => {
-                const config = getMatrixExportConfig();
-                exportMatrixToPDF(config);
-              });
-            }}
-            onExcel={() => {
-              import('../utils/exportUtils').then(({ exportMatrixToExcel }) => {
-                const config = getMatrixExportConfig();
-                exportMatrixToExcel(config);
-              });
-            }}
-            onWord={() => {
-              import('../utils/exportUtils').then(({ exportMatrixToWord }) => {
-                const config = getMatrixExportConfig();
-                exportMatrixToWord(config);
-              });
-            }}
-          />
+          {/* Filters & Actions Bar (Always on desktop, Collapsible on mobile) */}
+          {(!isMobile || mobileFiltersOpen) && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              flexWrap: 'wrap',
+              width: isMobile ? '100%' : 'auto',
+              background: isMobile ? 'var(--surface2)' : 'transparent',
+              padding: isMobile ? '8px' : 0,
+              borderRadius: isMobile ? 8 : 0,
+              border: isMobile ? '1px solid var(--border)' : 'none',
+              marginTop: isMobile ? 4 : 0,
+            }}>
+              <select
+                className="input"
+                style={{ width: isMobile ? 'calc(50% - 3px)' : 'auto', fontSize: 11.5, padding: '2px 6px', height: 28, borderRadius: 6, fontWeight: 600 }}
+                value={filters.role}
+                onChange={e => setFilters(f => ({ ...f, role: e.target.value }))}
+              >
+                <option value="">👥 Rôle (Tous)</option>
+                <option value="medecin">👨‍⚕️ Médecins</option>
+                <option value="technicien">🔧 Techniciens</option>
+              </select>
+
+              {ents.length > 0 && (
+                <select
+                  className="input"
+                  style={{ width: isMobile ? 'calc(50% - 3px)' : 'auto', maxWidth: isMobile ? 'none' : 140, fontSize: 11.5, padding: '2px 6px', height: 28, borderRadius: 6 }}
+                  value={filters.entreprise}
+                  onChange={e => setFilters(f => ({ ...f, entreprise: e.target.value }))}
+                >
+                  <option value="">🏢 Entreprise (Toutes)</option>
+                  {ents.map(ent => <option key={ent.id} value={ent.nom}>{ent.nom}</option>)}
+                </select>
+              )}
+
+              <input
+                className="input"
+                type="text"
+                placeholder="🔍 Chercher nom, adresse..."
+                style={{ width: isMobile ? '100%' : 110, fontSize: 11.5, padding: '2px 8px', height: 28, borderRadius: 6 }}
+                value={filters.search}
+                onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+              />
+
+              {hasActiveFilters && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setFilters({ role: '', entreprise: '', search: '', date: '' })}
+                  style={{ fontSize: 11, padding: '2px 6px', color: 'var(--danger)', fontWeight: 700 }}
+                  title="Réinitialiser les filtres"
+                >
+                  ✕ Effacer filtres ({totalFilteredCount})
+                </button>
+              )}
+
+              {!isMobile && isAdmin && (
+                <>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ fontWeight: 800, borderRadius: 8, padding: '4px 10px', fontSize: 11.5, height: 28 }}
+                    onClick={handleCreateForCurrentView}
+                    title="Ajouter une visite médicale / programme"
+                  >
+                    + Programme
+                  </button>
+                  <button
+                    className="btn btn-outline btn-sm"
+                    style={{ fontWeight: 700, borderRadius: 8, padding: '4px 10px', fontSize: 11.5, height: 28 }}
+                    onClick={() => setModal({ t: 'e', data: { date_debut: view === 'week' ? format(weekStart, 'yyyy-MM-dd') : format(monthDate, 'yyyy-MM-dd') } })}
+                    title="Ajouter un événement"
+                  >
+                    + Événement
+                  </button>
+                </>
+              )}
+
+              {!isMobile && (
+                <ExportDropdown
+                  label="Exporter"
+                  buttonStyle={{ height: 28, padding: '4px 10px', fontSize: 11.5 }}
+                  onPDF={() => {
+                    import('../utils/exportUtils').then(({ exportMatrixToPDF }) => {
+                      const config = getMatrixExportConfig();
+                      exportMatrixToPDF(config);
+                    });
+                  }}
+                  onExcel={() => {
+                    import('../utils/exportUtils').then(({ exportMatrixToExcel }) => {
+                      const config = getMatrixExportConfig();
+                      exportMatrixToExcel(config);
+                    });
+                  }}
+                  onWord={() => {
+                    import('../utils/exportUtils').then(({ exportMatrixToWord }) => {
+                      const config = getMatrixExportConfig();
+                      exportMatrixToWord(config);
+                    });
+                  }}
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
 

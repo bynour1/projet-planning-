@@ -10,6 +10,7 @@ import NotificationPermissionBanner from './components/NotificationPermissionBan
 import ErrorBoundary from './components/ErrorBoundary';
 
 import Sidebar        from './components/Sidebar';
+import BottomNav      from './components/BottomNav';
 import Login          from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword  from './pages/ResetPassword';
@@ -119,6 +120,7 @@ function AppShell() {
             </Suspense>
           </ErrorBoundary>
         </div>
+        <BottomNav />
       </div>
     </SocketProvider>
   );
