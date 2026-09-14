@@ -2350,6 +2350,46 @@ export default function Planning({ toast }) {
   const [filters, setFilters] = useState({ role: '', entreprise: '', search: '', date: '' });
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement || document.webkitFullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    document.addEventListener('webkitfullscreenchange', handleFsChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('webkitfullscreenchange', handleFsChange);
+    };
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen();
+        } else if (elem.webkitRequestFullscreen) {
+          await elem.webkitRequestFullscreen();
+        }
+        if (window.screen?.orientation?.lock) {
+          window.screen.orientation.lock('landscape').catch(() => {});
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          await document.webkitExitFullscreen();
+        }
+        if (window.screen?.orientation?.unlock) {
+          window.screen.orientation.unlock();
+        }
+      }
+    } catch (err) {
+      console.log('Fullscreen error:', err);
+    }
+  };
 
   useEffect(() => {
     if (location.state?.prefillEntreprise || location.state?.prefillAdresse) {
@@ -2933,6 +2973,24 @@ export default function Planning({ toast }) {
               });
             }}
           />
+
+          <button
+            className="btn btn-outline btn-sm fullscreen-toggle-btn"
+            onClick={toggleFullscreen}
+            style={{
+              height: 28,
+              padding: '4px 8px',
+              fontSize: 11,
+              fontWeight: 800,
+              borderRadius: 6,
+              background: isFullscreen ? 'var(--primary-lt)' : 'transparent',
+              borderColor: isFullscreen ? 'var(--primary)' : 'var(--border-dark)',
+              color: isFullscreen ? 'var(--primary-dk)' : 'var(--text-2)',
+            }}
+            title={isFullscreen ? "Quitter le plein écran" : "Plein écran / Mode horizontal optimal"}
+          >
+            {isFullscreen ? '↩ Quitter' : '📱⛶ Plein écran'}
+          </button>
         </div>
       </div>
 

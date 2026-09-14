@@ -602,6 +602,89 @@ tbody tr:hover { background: var(--surface2); }
 }
 
 /* ═══════════════════════════════════════════════════════
+   SMARTPHONE HORIZONTAL / LANDSCAPE MODE OPTIMIZATION
+═══════════════════════════════════════════════════════ */
+@media (max-height: 540px) and (orientation: landscape) {
+  .mobile-topbar {
+    height: 38px !important;
+    padding: 0 10px !important;
+  }
+  .mobile-topbar-brand span {
+    font-size: 13px !important;
+  }
+  .mobile-menu-btn, .mobile-search-btn {
+    font-size: 15px !important;
+    padding: 2px 6px !important;
+  }
+  .bottom-nav {
+    height: 36px !important;
+    padding-bottom: 0 !important;
+  }
+  .bottom-nav-item {
+    gap: 1px !important;
+    font-size: 9px !important;
+  }
+  .bottom-nav-icon {
+    font-size: 13px !important;
+  }
+  .bottom-nav-label {
+    font-size: 8px !important;
+  }
+  .today-banner {
+    display: none !important;
+  }
+  .planning-toolbar {
+    padding: 3px 8px !important;
+    gap: 4px !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+  }
+  .planning-toolbar-nav {
+    width: auto !important;
+    flex-shrink: 0 !important;
+  }
+  .planning-toolbar h1 {
+    font-size: 12px !important;
+  }
+  .planning-view-switcher {
+    width: auto !important;
+    flex-shrink: 0 !important;
+  }
+  .planning-toolbar .btn,
+  .planning-toolbar .input,
+  .planning-toolbar select {
+    height: 25px !important;
+    font-size: 10.5px !important;
+    padding: 2px 6px !important;
+  }
+  .print-matrix-wrapper {
+    border-radius: 8px !important;
+    margin-bottom: 0 !important;
+  }
+  .print-matrix-table th {
+    padding: 4px 6px !important;
+    font-size: 11px !important;
+  }
+  .print-matrix-table td {
+    padding: 4px 6px !important;
+  }
+}
+
+/* Fullscreen mode adjustments */
+:fullscreen .mobile-topbar,
+:-webkit-full-screen .mobile-topbar {
+  display: none !important;
+}
+:fullscreen .bottom-nav,
+:-webkit-full-screen .bottom-nav {
+  display: none !important;
+}
+:fullscreen .layout,
+:-webkit-full-screen .layout {
+  height: 100vh !important;
+}
+
+/* ═══════════════════════════════════════════════════════
    MODERN CHAT & MOBILE DRAWER STYLES
 ═══════════════════════════════════════════════════════ */
 .chat-container {
