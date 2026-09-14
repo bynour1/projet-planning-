@@ -2134,14 +2134,24 @@ export default function Planning({ toast }) {
           )}
 
           {isAdmin && (
-            <button
-              className="btn btn-primary btn-sm"
-              style={{ fontWeight: 800, borderRadius: 8, padding: '4px 10px', fontSize: 11.5, height: 28 }}
-              onClick={handleCreateForCurrentView}
-              title="Ajouter une visite médicale / programme"
-            >
-              + Programme
-            </button>
+            <>
+              <button
+                className="btn btn-primary btn-sm"
+                style={{ fontWeight: 800, borderRadius: 8, padding: '4px 10px', fontSize: 11.5, height: 28 }}
+                onClick={handleCreateForCurrentView}
+                title="Ajouter une visite médicale / programme"
+              >
+                + Programme
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                style={{ fontWeight: 700, borderRadius: 8, padding: '4px 10px', fontSize: 11.5, height: 28 }}
+                onClick={() => setModal({ t: 'e', data: { date_debut: view === 'week' ? format(weekStart, 'yyyy-MM-dd') : format(monthDate, 'yyyy-MM-dd') } })}
+                title="Ajouter un événement (réunion, formation, congés, autre)"
+              >
+                + Événement
+              </button>
+            </>
           )}
 
           {/* Export dropdown */}
