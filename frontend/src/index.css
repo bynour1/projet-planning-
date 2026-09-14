@@ -467,7 +467,7 @@ tbody tr:hover { background: var(--surface2); }
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
-    padding: 14px 10px;
+    padding: 14px 10px 95px !important;
     width: 100%;
     min-height: 0;
   }

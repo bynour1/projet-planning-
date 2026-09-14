@@ -1335,7 +1335,7 @@ function DoctorMatrixView({
   };
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)', padding: '8px 10px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 10 }}>
       {/* ── Active Filter Bar ── */}
       {activeFilterSummary && (
         <div style={{
@@ -2761,7 +2761,7 @@ export default function Planning({ toast }) {
   if (loading) return <div className="loading-center"><div className="spinner" /></div>;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div className="page-content" style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: '100%', width: '100%', minHeight: '100%' }}>
       <div className="no-print">
         <TodayBanner pe={pe} ce={ce} cl={cl} />
       </div>

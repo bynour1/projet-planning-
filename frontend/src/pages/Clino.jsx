@@ -420,13 +420,12 @@ export default function Clino({ toast }) {
   })).sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.heure_debut || '').localeCompare(b.heure_debut || ''));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div className="page-content" style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1400, margin: '0 auto', width: '100%' }}>
       {/* Executive Header Banner */}
       <div style={{
         background: 'var(--surface)',
         borderRadius: 16,
         padding: '20px 24px',
-        margin: '16px 20px 12px',
         border: '1px solid var(--border)',
         borderTop: '4px solid #0284c7',
         boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
@@ -435,7 +434,6 @@ export default function Clino({ toast }) {
         alignItems: 'center',
         flexWrap: 'wrap',
         gap: 16,
-        flexShrink: 0
       }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
@@ -527,7 +525,18 @@ export default function Clino({ toast }) {
       </div>
 
       {/* Filter Bar (Rôle: Médecins / Techniciens, Recherche) */}
-      <div style={{ display: 'flex', gap: 10, padding: '10px 20px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{
+        display: 'flex',
+        gap: 10,
+        padding: '12px 16px',
+        background: 'var(--surface)',
+        borderRadius: 14,
+        border: '1px solid var(--border)',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        width: '100%',
+      }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 4 }}>
           🏷️ Filtres :
         </span>
@@ -535,7 +544,7 @@ export default function Clino({ toast }) {
         {/* Filter by Category: All / Medecins / Techniciens */}
         <select
           className="input"
-          style={{ width: 'auto', fontSize: 12, padding: '5px 10px', height: 32, borderRadius: 8, fontWeight: 600 }}
+          style={{ width: 'auto', fontSize: 12, padding: '5px 10px', height: 36, borderRadius: 8, fontWeight: 600 }}
           value={filters.role}
           onChange={e => setFilters(f => ({ ...f, role: e.target.value }))}
         >
@@ -552,7 +561,7 @@ export default function Clino({ toast }) {
             className="input"
             value={filters.date}
             onChange={e => setFilters(f => ({ ...f, date: e.target.value }))}
-            style={{ width: 'auto', fontSize: 12, padding: '4px 8px', height: 32, borderRadius: 8 }}
+            style={{ width: 'auto', fontSize: 12, padding: '4px 8px', height: 36, borderRadius: 8 }}
             title="Filtrer par date de tournée"
           />
         </div>
@@ -562,7 +571,7 @@ export default function Clino({ toast }) {
           className="input"
           type="text"
           placeholder="🔍 Rechercher par entreprise, mot-clé, médecin ou adresse..."
-          style={{ width: 280, fontSize: 12, padding: '5px 10px', height: 32, borderRadius: 8 }}
+          style={{ flex: 1, minWidth: 200, fontSize: 12, padding: '5px 12px', height: 36, borderRadius: 8 }}
           value={filters.search}
           onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
         />
@@ -584,9 +593,9 @@ export default function Clino({ toast }) {
         )}
       </div>
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: 14 }}>
+      <div style={{ display: 'flex', width: '100%' }}>
         {/* Main content */}
-        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
           {activeTab === 'list' && (
             <>
               {loading ? <div className="loading-center"><div className="spinner" /></div>
