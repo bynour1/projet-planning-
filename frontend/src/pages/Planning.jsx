@@ -1311,400 +1311,18 @@ function DoctorMatrixView({
   };
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)', padding: isSmallScreen ? '6px 8px' : '8px 10px' }}>
-      {/* Mobile / Tablet Mode Switcher (< 768px) */}
-      <div className="no-print" style={{
-        display: isSmallScreen ? 'flex' : 'none',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        background: 'var(--surface)',
-        padding: '6px 10px',
-        borderRadius: 10,
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)', padding: '8px 10px' }}>
+      {/* ── MATRIX TABLE (Exact PC Version - Smooth Multi-directional Scrolling) ── */}
+      <div className="print-matrix-wrapper" style={{
+        flex: 1,
+        minHeight: 0,
+        overflow: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        borderRadius: 14,
         border: '1px solid var(--border)',
-        marginBottom: 8,
-        gap: 6,
-        flexWrap: 'wrap',
+        background: 'var(--surface)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
       }}>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button
-            type="button"
-            className={`btn btn-sm ${mobileMode === 'cards' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setMobileMode('cards')}
-            style={{ padding: '4px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6 }}
-          >
-            📱 Vue Cartes
-          </button>
-          <button
-            type="button"
-            className={`btn btn-sm ${mobileMode === 'matrix' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setMobileMode('matrix')}
-            style={{ padding: '4px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6 }}
-          >
-            📊 Grille
-          </button>
-        </div>
-
-        {mobileMode === 'cards' && (
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button
-              type="button"
-              className={`btn btn-sm ${mobileTab === 'selected_day' ? 'btn-outline' : 'btn-ghost'}`}
-              onClick={() => setMobileTab('selected_day')}
-              style={{ padding: '3px 8px', fontSize: 11, fontWeight: mobileTab === 'selected_day' ? 800 : 600 }}
-            >
-              Par Jour
-            </button>
-            <button
-              type="button"
-              className={`btn btn-sm ${mobileTab === 'all_days' ? 'btn-outline' : 'btn-ghost'}`}
-              onClick={() => setMobileTab('all_days')}
-              style={{ padding: '3px 8px', fontSize: 11, fontWeight: mobileTab === 'all_days' ? 800 : 600 }}
-            >
-              Tous les Jours
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ── MOBILE CARDS VIEW (Clean, Highly Legible, Touch-Friendly) ── */}
-      {mobileMode === 'cards' ? (
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 80 }}>
-          {/* Quick Day Selector Pills */}
-          <div style={{
-            display: 'flex',
-            gap: 6,
-            overflowX: 'auto',
-            padding: '4px 2px',
-            flexShrink: 0,
-            WebkitOverflowScrolling: 'touch',
-          }}>
-            {days.map(d => {
-              const dStr = typeof d === 'string' ? d : format(d, 'yyyy-MM-dd');
-              const dObj = typeof d === 'string' ? parseISO(d) : d;
-              const isSel = selectedMobileDay === dStr;
-              const isTod = isTodayFn(dObj);
-              const dayEvs = getDayAllEvents(dStr);
-              const count = dayEvs.length;
-              const dayName = format(dObj, 'EEE', { locale: fr });
-              const dayNum = format(dObj, 'd/MM');
-
-              return (
-                <button
-                  key={dStr}
-                  type="button"
-                  onClick={() => { setSelectedMobileDay(dStr); setMobileTab('selected_day'); }}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minWidth: 62,
-                    padding: '6px 8px',
-                    borderRadius: 10,
-                    border: isSel ? '2px solid var(--primary)' : isTod ? '1.5px solid var(--primary-lt)' : '1px solid var(--border)',
-                    background: isSel ? 'var(--primary)' : isTod ? 'rgba(2, 132, 199, 0.08)' : 'var(--surface)',
-                    color: isSel ? '#ffffff' : 'var(--text)',
-                    cursor: 'pointer',
-                    boxShadow: isSel ? '0 3px 8px rgba(2, 132, 199, 0.3)' : 'none',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', opacity: isSel ? 0.9 : 0.7 }}>
-                    {isTod ? 'Auj.' : dayName}
-                  </span>
-                  <span style={{ fontSize: 12.5, fontWeight: 900 }}>
-                    {dayNum}
-                  </span>
-                  {count > 0 && (
-                    <span style={{
-                      fontSize: 10,
-                      fontWeight: 800,
-                      marginTop: 2,
-                      padding: '1px 6px',
-                      borderRadius: 8,
-                      background: isSel ? 'rgba(255,255,255,0.25)' : 'var(--primary)',
-                      color: '#ffffff',
-                    }}>
-                      {count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Cards for Selected Day or All Days */}
-          {mobileTab === 'selected_day' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {/* Day Header */}
-              <div style={{
-                background: 'linear-gradient(135deg, #0f172a, #0369a1)',
-                color: '#ffffff',
-                padding: '10px 14px',
-                borderRadius: 12,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 900 }}>
-                    📅 {fmtDisplayWithDay(selectedMobileDay)}
-                  </div>
-                  <div style={{ fontSize: 11.5, color: '#bae6fd', marginTop: 2 }}>
-                    {getDayAllEvents(selectedMobileDay).length} intervention(s) planifiée(s)
-                  </div>
-                </div>
-                {isAdmin && (
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    style={{ background: '#ffffff', color: '#0f172a', fontWeight: 800, fontSize: 11, padding: '4px 10px', borderRadius: 8 }}
-                    onClick={() => setModal({ t: 'p', data: { date: selectedMobileDay } })}
-                  >
-                    + Visite
-                  </button>
-                )}
-              </div>
-
-              {/* Event Cards */}
-              {getDayAllEvents(selectedMobileDay).length === 0 ? (
-                <div style={{
-                  background: 'var(--surface)',
-                  border: '1px dashed var(--border)',
-                  borderRadius: 12,
-                  padding: '30px 16px',
-                  textAlign: 'center',
-                  color: 'var(--text-3)',
-                }}>
-                  <div style={{ fontSize: 32, marginBottom: 8 }}>☕</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-2)' }}>Aucune intervention prévue ce jour</div>
-                  <div style={{ fontSize: 12, marginTop: 4 }}>Le planning est libre pour le {fmtDisplayWithDay(selectedMobileDay)}.</div>
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      style={{ marginTop: 14, fontWeight: 700 }}
-                      onClick={() => setModal({ t: 'p', data: { date: selectedMobileDay } })}
-                    >
-                      + Programmer une visite médicale
-                    </button>
-                  )}
-                </div>
-              ) : (
-                getDayAllEvents(selectedMobileDay).map(ev => {
-                  const isClino = ev._t === 'cl' || ev._t === 'clino' || Boolean(ev.is_clino || ev.clino_id);
-                  const isProg = ev._t === 'p';
-                  const typeLabel = isClino ? '🚗 Clino Mobile' : isProg ? '📋 Programme' : `📅 ${ev.type || 'Événement'}`;
-                  const typeColor = isClino ? '#059669' : isProg ? '#0284c7' : '#6366f1';
-                  const heureDisplay = ev.heure_debut ? `${ev.heure_debut}${ev.heure_fin ? ' → ' + ev.heure_fin : ''}` : (ev.heure ? String(ev.heure).slice(0, 5) : 'Journée');
-
-                  return (
-                    <div
-                      key={(ev._t || 'e') + ev.id}
-                      onClick={() => onSelectDetail?.(ev)}
-                      style={{
-                        background: 'var(--surface)',
-                        border: '1px solid var(--border)',
-                        borderLeft: `4px solid ${typeColor}`,
-                        borderRadius: 12,
-                        padding: '12px 14px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 8,
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {/* Card Header: Type badge & Time */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                        <span style={{
-                          background: typeColor,
-                          color: '#ffffff',
-                          fontSize: 10.5,
-                          fontWeight: 800,
-                          padding: '2px 8px',
-                          borderRadius: 6,
-                          textTransform: 'uppercase',
-                        }}>
-                          {typeLabel}
-                        </span>
-                        <span style={{
-                          fontSize: 12,
-                          fontWeight: 800,
-                          color: 'var(--text)',
-                          background: 'var(--surface2)',
-                          padding: '2px 8px',
-                          borderRadius: 6,
-                          border: '1px solid var(--border)',
-                        }}>
-                          ⏰ {heureDisplay}
-                        </span>
-                      </div>
-
-                      {/* Card Title */}
-                      <div style={{ fontSize: 14.5, fontWeight: 900, color: 'var(--text)' }}>
-                        {ev.titre || (isClino ? 'Tournée Clino Mobile' : 'Intervention Médicale')}
-                      </div>
-
-                      {/* Doctor & Technician badges */}
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {ev.medecin_nom && (
-                          <span style={{
-                            fontSize: 11.5,
-                            fontWeight: 700,
-                            color: '#0369a1',
-                            background: '#e0f2fe',
-                            border: '1px solid #bae6fd',
-                            padding: '3px 8px',
-                            borderRadius: 6,
-                          }}>
-                            👨‍⚕️ {ev.medecin_nom.startsWith('Dr.') ? ev.medecin_nom : `Dr. ${ev.medecin_nom}`}
-                          </span>
-                        )}
-                        {ev.technicien_nom && (
-                          <span style={{
-                            fontSize: 11.5,
-                            fontWeight: 700,
-                            color: '#047857',
-                            background: '#d1fae5',
-                            border: '1px solid #a7f3d0',
-                            padding: '3px 8px',
-                            borderRadius: 6,
-                          }}>
-                            🔧 {ev.technicien_nom}
-                          </span>
-                        )}
-                        {!ev.medecin_nom && !ev.technicien_nom && (
-                          <span style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic' }}>
-                            Intervenant non assigné
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Location & GPS Link */}
-                      {(ev.adresse || ev.lieu) && (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, background: 'var(--surface2)', padding: '6px 10px', borderRadius: 8, marginTop: 2 }}>
-                          <span style={{ fontSize: 12, color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            📍 {ev.adresse || ev.lieu}
-                          </span>
-                          <MapLink addr={ev.adresse || ev.lieu} style={{ flexShrink: 0 }} />
-                        </div>
-                      )}
-
-                      {/* Comment / Notes */}
-                      {ev.commentaire && (
-                        <div style={{ fontSize: 11.5, color: 'var(--text-2)', fontStyle: 'italic', background: 'rgba(0,0,0,0.02)', padding: '4px 8px', borderRadius: 6 }}>
-                          💬 {ev.commentaire}
-                        </div>
-                      )}
-
-                      {/* Action buttons */}
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 2 }} onClick={e => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          style={{ fontSize: 11, padding: '3px 8px' }}
-                          onClick={() => onSelectDetail?.(ev)}
-                        >
-                          👁️ Détails
-                        </button>
-                        {isAdmin && (
-                          <>
-                            <button
-                              type="button"
-                              className="btn btn-outline btn-sm"
-                              style={{ fontSize: 11, padding: '3px 8px' }}
-                              onClick={() => setModal({ t: ev._t === 'e' ? 'e' : 'p', data: ev })}
-                            >
-                              ✏️ Modifier
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-danger btn-sm"
-                              style={{ fontSize: 11, padding: '3px 8px' }}
-                              onClick={() => setConfirm(ev)}
-                            >
-                              🗑️
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          ) : (
-            /* All Days in Period grouped */
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {days.map(d => {
-                const dStr = typeof d === 'string' ? d : format(d, 'yyyy-MM-dd');
-                const dEvs = getDayAllEvents(dStr);
-                if (dEvs.length === 0) return null;
-
-                return (
-                  <div key={dStr} style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
-                    <div style={{
-                      background: 'var(--surface2)',
-                      padding: '8px 12px',
-                      borderBottom: '1px solid var(--border)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>
-                        📅 {fmtDisplayWithDay(dStr)}
-                      </span>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)' }}>
-                        {dEvs.length} intervention(s)
-                      </span>
-                    </div>
-                    <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {dEvs.map(ev => (
-                        <div
-                          key={(ev._t || 'e') + ev.id}
-                          onClick={() => onSelectDetail?.(ev)}
-                          style={{
-                            padding: '8px 10px',
-                            background: 'var(--bg)',
-                            borderRadius: 8,
-                            border: '1px solid var(--border)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 2 }}>
-                            <span style={{ fontWeight: 800, color: 'var(--primary)' }}>
-                              {ev.heure_debut ? `${ev.heure_debut}${ev.heure_fin ? ' - ' + ev.heure_fin : ''}` : 'Journée'}
-                            </span>
-                            <span style={{ color: 'var(--text-3)' }}>
-                              {ev._t === 'cl' ? '🚗 Clino' : ev._t === 'p' ? '📋 Programme' : '📅 Événement'}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>
-                            {ev.titre || 'Intervention'}
-                          </div>
-                          <div style={{ fontSize: 11.5, color: 'var(--text-2)', marginTop: 2 }}>
-                            {ev.medecin_nom ? `👨‍⚕️ ${ev.medecin_nom}` : ''} {ev.technicien_nom ? `🔧 ${ev.technicien_nom}` : ''}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      ) : (
-        /* ── DESKTOP MATRIX TABLE (Scrollable) ── */
-        <div className="print-matrix-wrapper" style={{
-          flex: 1,
-          overflow: 'auto',
-          borderRadius: 14,
-          border: '1px solid var(--border)',
-          background: 'var(--surface)',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
-        }}>
         <table className="print-matrix-table" style={{
           width: '100%',
           borderCollapse: 'separate',
@@ -2240,7 +1858,6 @@ function DoctorMatrixView({
           </tbody>
         </table>
       </div>
-    )}
 
       {modal?.t === 'p' && (
         <PlanningModal
@@ -2675,16 +2292,7 @@ export default function Planning({ toast }) {
   const { on }   = useSocket();
   const location = useLocation();
   const isAdmin  = user?.role === 'administrateur';
-  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  const [view, setView] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'week' : 'doctor_matrix'));
+  const [view, setView] = useState('doctor_matrix');
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [monthDate, setMonthDate] = useState(() => new Date());
   const [pe, setPe] = useState([]);
@@ -3057,243 +2665,172 @@ export default function Planning({ toast }) {
       </div>
 
 
-      {/* ── UNIFIED COMPACT TOOLBAR (Single Sleek Bar) ── */}
+      {/* ── UNIFIED COMPACT TOOLBAR (Single Sleek Bar - Exact PC version) ── */}
       <div className="planning-toolbar no-print" style={{
         background: 'var(--surface)',
         borderBottom: '1px solid var(--border)',
-        padding: isMobile ? '6px 8px' : '8px 14px',
+        padding: '8px 14px',
         display: 'flex',
-        flexDirection: 'column',
-        gap: isMobile ? 6 : 8,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 10,
         flexShrink: 0,
       }}>
-        {/* Top line: Navigation, Title & Segmented View Switcher */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 6,
-          width: '100%',
-        }}>
-          {/* Left: Navigation & Period */}
-          <div className="planning-toolbar-nav" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <button
-                className="btn btn-outline btn-sm"
-                style={{ padding: '4px 8px', fontWeight: 800, fontSize: 13, height: 28 }}
-                onClick={() => view === 'week' ? setWeekStart(w => subWeeks(w, 1)) : setMonthDate(d => subMonths(d, 1))}
-                title="Précédent"
-              >
-                ‹
-              </button>
-              <button
-                className="btn btn-outline btn-sm"
-                style={{ padding: '4px 8px', fontWeight: 700, fontSize: 11, height: 28 }}
-                onClick={() => {
-                  setWeekStart(currentWeekStart);
-                  setMonthDate(new Date());
-                }}
-              >
-                Auj.
-              </button>
-              <button
-                className="btn btn-outline btn-sm"
-                style={{ padding: '4px 8px', fontWeight: 800, fontSize: 13, height: 28 }}
-                onClick={() => view === 'week' ? setWeekStart(w => addWeeks(w, 1)) : setMonthDate(d => addMonths(d, 1))}
-                title="Suivant"
-              >
-                ›
-              </button>
-            </div>
+        {/* Left: Navigation & Period */}
+        <div className="planning-toolbar-nav" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <button
+              className="btn btn-outline btn-sm"
+              style={{ padding: '4px 8px', fontWeight: 800, fontSize: 13, height: 28 }}
+              onClick={() => view === 'week' ? setWeekStart(w => subWeeks(w, 1)) : setMonthDate(d => subMonths(d, 1))}
+              title="Précédent"
+            >
+              ‹
+            </button>
+            <button
+              className="btn btn-outline btn-sm"
+              style={{ padding: '4px 10px', fontWeight: 700, fontSize: 11.5, height: 28 }}
+              onClick={() => {
+                setWeekStart(currentWeekStart);
+                setMonthDate(new Date());
+              }}
+            >
+              Aujourd'hui
+            </button>
+            <button
+              className="btn btn-outline btn-sm"
+              style={{ padding: '4px 8px', fontWeight: 800, fontSize: 13, height: 28 }}
+              onClick={() => view === 'week' ? setWeekStart(w => addWeeks(w, 1)) : setMonthDate(d => addMonths(d, 1))}
+              title="Suivant"
+            >
+              ›
+            </button>
+          </div>
 
-            <h1 style={{ fontSize: isMobile ? 13 : 14.5, fontWeight: 900, margin: 0, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span>
-                {view === 'week' ? `Sem. ${isoWeekNum} : ${format(weekStart, 'd MMM', { locale: fr })} - ${format(weekEnd, 'd MMM yyyy', { locale: fr })}` : format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}
-              </span>
-            </h1>
+          <h1 style={{ fontSize: 14.5, fontWeight: 900, margin: 0, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>
+              {view === 'week' ? `Sem. ${isoWeekNum} : ${format(weekStart, 'd MMM', { locale: fr })} - ${format(weekEnd, 'd MMM yyyy', { locale: fr })}` : format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}
+            </span>
+          </h1>
 
-            <input
-              type="date"
+          <input
+            type="date"
+            className="input"
+            style={{ width: 'auto', fontSize: 11, padding: '2px 6px', height: 28, borderRadius: 6 }}
+            value={format(view === 'week' ? weekStart : monthDate, 'yyyy-MM-dd')}
+            onChange={e => handleJumpToDate(e.target.value)}
+            title="Aller à une date précise"
+          />
+        </div>
+
+        {/* Center: View Switcher */}
+        <div className="planning-view-switcher" style={{ display: 'flex', gap: 2, background: 'var(--bg)', borderRadius: 8, padding: 2, border: '1px solid var(--border)', overflowX: 'auto', maxWidth: '100%' }}>
+          {[
+            ['week', '📅 Semaine'],
+            ['doctor_matrix', '📊 Grille Mois'],
+            ['month', '📆 Calendrier'],
+            ['list', '📋 Liste']
+          ].map(([v, l]) => (
+            <button
+              key={v}
+              className={`btn btn-sm ${view === v ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setView(v)}
+              style={{ padding: '3px 8px', fontSize: 11.5, fontWeight: 700 }}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {/* Right: Filters & Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <select
+            className="input"
+            style={{ width: 'auto', fontSize: 11.5, padding: '2px 6px', height: 28, borderRadius: 6, fontWeight: 600 }}
+            value={filters.role}
+            onChange={e => setFilters(f => ({ ...f, role: e.target.value }))}
+          >
+            <option value="">👥 Rôle (Tous)</option>
+            <option value="medecin">👨‍⚕️ Médecins</option>
+            <option value="technicien">🔧 Techniciens</option>
+          </select>
+
+          {ents.length > 0 && (
+            <select
               className="input"
-              style={{ width: 'auto', fontSize: 11, padding: '2px 4px', height: 28, borderRadius: 6 }}
-              value={format(view === 'week' ? weekStart : monthDate, 'yyyy-MM-dd')}
-              onChange={e => handleJumpToDate(e.target.value)}
-              title="Aller à une date précise"
-            />
-          </div>
-
-          {/* Center/Right: View Switcher */}
-          <div className="planning-view-switcher" style={{ display: 'flex', gap: 2, background: 'var(--bg)', borderRadius: 8, padding: 2, border: '1px solid var(--border)', overflowX: 'auto' }}>
-            {[
-              ['week', '📅 Semaine'],
-              ['doctor_matrix', '📊 Grille'],
-              ['month', '📆 Mois'],
-              ['list', '📋 Liste']
-            ].map(([v, l]) => (
-              <button
-                key={v}
-                className={`btn btn-sm ${view === v ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setView(v)}
-                style={{ padding: '3px 7px', fontSize: 11, fontWeight: 700 }}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
-
-          {/* Mobile Filter Toggle & Quick Actions */}
-          {isMobile && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'space-between', marginTop: 2 }}>
-              <button
-                type="button"
-                className={`btn btn-sm ${mobileFiltersOpen || hasActiveFilters ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
-                style={{ fontSize: 11, padding: '4px 8px', borderRadius: 8, fontWeight: 700 }}
-              >
-                🔍 Filtres {hasActiveFilters ? `(${totalFilteredCount})` : ''} {mobileFiltersOpen ? '▲' : '▼'}
-              </button>
-
-              <div style={{ display: 'flex', gap: 4 }}>
-                {isAdmin && (
-                  <button
-                    className="btn btn-primary btn-sm"
-                    style={{ fontWeight: 800, borderRadius: 8, padding: '4px 8px', fontSize: 11 }}
-                    onClick={handleCreateForCurrentView}
-                  >
-                    + Visite
-                  </button>
-                )}
-                <ExportDropdown
-                  label="Export"
-                  buttonStyle={{ height: 28, padding: '4px 8px', fontSize: 11 }}
-                  onPDF={() => {
-                    import('../utils/exportUtils').then(({ exportMatrixToPDF }) => {
-                      const config = getMatrixExportConfig();
-                      exportMatrixToPDF(config);
-                    });
-                  }}
-                  onExcel={() => {
-                    import('../utils/exportUtils').then(({ exportMatrixToExcel }) => {
-                      const config = getMatrixExportConfig();
-                      exportMatrixToExcel(config);
-                    });
-                  }}
-                  onWord={() => {
-                    import('../utils/exportUtils').then(({ exportMatrixToWord }) => {
-                      const config = getMatrixExportConfig();
-                      exportMatrixToWord(config);
-                    });
-                  }}
-                />
-              </div>
-            </div>
+              style={{ width: 'auto', maxWidth: 140, fontSize: 11.5, padding: '2px 6px', height: 28, borderRadius: 6 }}
+              value={filters.entreprise}
+              onChange={e => setFilters(f => ({ ...f, entreprise: e.target.value }))}
+            >
+              <option value="">🏢 Entreprise (Toutes)</option>
+              {ents.map(ent => <option key={ent.id} value={ent.nom}>{ent.nom}</option>)}
+            </select>
           )}
 
-          {/* Filters & Actions Bar (Always on desktop, Collapsible on mobile) */}
-          {(!isMobile || mobileFiltersOpen) && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              flexWrap: 'wrap',
-              width: isMobile ? '100%' : 'auto',
-              background: isMobile ? 'var(--surface2)' : 'transparent',
-              padding: isMobile ? '8px' : 0,
-              borderRadius: isMobile ? 8 : 0,
-              border: isMobile ? '1px solid var(--border)' : 'none',
-              marginTop: isMobile ? 4 : 0,
-            }}>
-              <select
-                className="input"
-                style={{ width: isMobile ? 'calc(50% - 3px)' : 'auto', fontSize: 11.5, padding: '2px 6px', height: 28, borderRadius: 6, fontWeight: 600 }}
-                value={filters.role}
-                onChange={e => setFilters(f => ({ ...f, role: e.target.value }))}
-              >
-                <option value="">👥 Rôle (Tous)</option>
-                <option value="medecin">👨‍⚕️ Médecins</option>
-                <option value="technicien">🔧 Techniciens</option>
-              </select>
+          <input
+            className="input"
+            type="text"
+            placeholder="🔍 Chercher..."
+            style={{ width: 110, fontSize: 11.5, padding: '2px 8px', height: 28, borderRadius: 6 }}
+            value={filters.search}
+            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+          />
 
-              {ents.length > 0 && (
-                <select
-                  className="input"
-                  style={{ width: isMobile ? 'calc(50% - 3px)' : 'auto', maxWidth: isMobile ? 'none' : 140, fontSize: 11.5, padding: '2px 6px', height: 28, borderRadius: 6 }}
-                  value={filters.entreprise}
-                  onChange={e => setFilters(f => ({ ...f, entreprise: e.target.value }))}
-                >
-                  <option value="">🏢 Entreprise (Toutes)</option>
-                  {ents.map(ent => <option key={ent.id} value={ent.nom}>{ent.nom}</option>)}
-                </select>
-              )}
-
-              <input
-                className="input"
-                type="text"
-                placeholder="🔍 Chercher nom, adresse..."
-                style={{ width: isMobile ? '100%' : 110, fontSize: 11.5, padding: '2px 8px', height: 28, borderRadius: 6 }}
-                value={filters.search}
-                onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-              />
-
-              {hasActiveFilters && (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => setFilters({ role: '', entreprise: '', search: '', date: '' })}
-                  style={{ fontSize: 11, padding: '2px 6px', color: 'var(--danger)', fontWeight: 700 }}
-                  title="Réinitialiser les filtres"
-                >
-                  ✕ Effacer filtres ({totalFilteredCount})
-                </button>
-              )}
-
-              {!isMobile && isAdmin && (
-                <>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    style={{ fontWeight: 800, borderRadius: 8, padding: '4px 10px', fontSize: 11.5, height: 28 }}
-                    onClick={handleCreateForCurrentView}
-                    title="Ajouter une visite médicale / programme"
-                  >
-                    + Programme
-                  </button>
-                  <button
-                    className="btn btn-outline btn-sm"
-                    style={{ fontWeight: 700, borderRadius: 8, padding: '4px 10px', fontSize: 11.5, height: 28 }}
-                    onClick={() => setModal({ t: 'e', data: { date_debut: view === 'week' ? format(weekStart, 'yyyy-MM-dd') : format(monthDate, 'yyyy-MM-dd') } })}
-                    title="Ajouter un événement"
-                  >
-                    + Événement
-                  </button>
-                </>
-              )}
-
-              {!isMobile && (
-                <ExportDropdown
-                  label="Exporter"
-                  buttonStyle={{ height: 28, padding: '4px 10px', fontSize: 11.5 }}
-                  onPDF={() => {
-                    import('../utils/exportUtils').then(({ exportMatrixToPDF }) => {
-                      const config = getMatrixExportConfig();
-                      exportMatrixToPDF(config);
-                    });
-                  }}
-                  onExcel={() => {
-                    import('../utils/exportUtils').then(({ exportMatrixToExcel }) => {
-                      const config = getMatrixExportConfig();
-                      exportMatrixToExcel(config);
-                    });
-                  }}
-                  onWord={() => {
-                    import('../utils/exportUtils').then(({ exportMatrixToWord }) => {
-                      const config = getMatrixExportConfig();
-                      exportMatrixToWord(config);
-                    });
-                  }}
-                />
-              )}
-            </div>
+          {hasActiveFilters && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setFilters({ role: '', entreprise: '', search: '', date: '' })}
+              style={{ fontSize: 11, padding: '2px 6px', color: 'var(--danger)', fontWeight: 700 }}
+              title="Réinitialiser les filtres"
+            >
+              ✕ ({totalFilteredCount})
+            </button>
           )}
+
+          {isAdmin && (
+            <>
+              <button
+                className="btn btn-primary btn-sm"
+                style={{ fontWeight: 800, borderRadius: 8, padding: '4px 10px', fontSize: 11.5, height: 28 }}
+                onClick={handleCreateForCurrentView}
+                title="Ajouter une visite médicale / programme"
+              >
+                + Programme
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                style={{ fontWeight: 700, borderRadius: 8, padding: '4px 10px', fontSize: 11.5, height: 28 }}
+                onClick={() => setModal({ t: 'e', data: { date_debut: view === 'week' ? format(weekStart, 'yyyy-MM-dd') : format(monthDate, 'yyyy-MM-dd') } })}
+                title="Ajouter un événement"
+              >
+                + Événement
+              </button>
+            </>
+          )}
+
+          <ExportDropdown
+            label="Exporter"
+            buttonStyle={{ height: 28, padding: '4px 10px', fontSize: 11.5 }}
+            onPDF={() => {
+              import('../utils/exportUtils').then(({ exportMatrixToPDF }) => {
+                const config = getMatrixExportConfig();
+                exportMatrixToPDF(config);
+              });
+            }}
+            onExcel={() => {
+              import('../utils/exportUtils').then(({ exportMatrixToExcel }) => {
+                const config = getMatrixExportConfig();
+                exportMatrixToExcel(config);
+              });
+            }}
+            onWord={() => {
+              import('../utils/exportUtils').then(({ exportMatrixToWord }) => {
+                const config = getMatrixExportConfig();
+                exportMatrixToWord(config);
+              });
+            }}
+          />
         </div>
       </div>
 
