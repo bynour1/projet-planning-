@@ -29,6 +29,12 @@ function getTransporter() {
     });
   }
 
+  return nodemailer.createTransport({
+    service: process.env.EMAIL_SERVICE,
+    auth: { user, pass },
+  });
+}
+
 // Helper: Obtenir l'adresse expéditeur officielle (Compte Administration GMT Ariana)
 function getFromAddress(prefix = 'Administration') {
   if (process.env.EMAIL_FROM) return process.env.EMAIL_FROM;

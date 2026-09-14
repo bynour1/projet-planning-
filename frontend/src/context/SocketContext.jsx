@@ -60,36 +60,36 @@ function playChime(type = 'message') {
 }
 
 // Safe System/PWA Notification helper (prevents hanging on serviceWorker.ready)
-export function sendSystemNotification(title, body) {
+export async function sendSystemNotification(title, body) {
   if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') return;
 
   try {
-    // 1. Try modern Service Worker notification if controller is active (PWA installed)
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.getRegistration().then((reg) => {
-        if (reg && 'showNotification' in reg) {
-          reg.showNotification(title, {
-            body,
-            icon: '/logo-gmt.png',
-            badge: '/icon-192.png',
-            vibrate: [150, 75, 150],
-            tag: 'gmt-notif-' + Date.now(),
-            renotify: true,
-          });
-          return;
-        }
-        new Notification(title, { body, icon: '/logo-gmt.png' });
-      }).catch(() => {
-        new Notification(title, { body, icon: '/logo-gmt.png' });
-      });
-    } else {
-      // 2. Direct browser Web Notification (instant on Desktop Chrome, Firefox, Edge, Safari)
-      new Notification(title, {
-        body,
-        icon: '/logo-gmt.png',
-        badge: '/icon-192.png',
-      });
+    // 1. Try Service Worker showNotification (mandatory on Android / Mobile Chrome / PWA)
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg && 'showNotification' in reg) {
+        await reg.showNotification(title, {
+          body,
+          icon: '/logo-gmt.png',
+          badge: '/icon-192.png',
+          vibrate: [200, 100, 200],
+          tag: 'gmt-notif-' + Date.now(),
+          renotify: true,
+        });
+        return;
+      }
     }
+  } catch (err) {
+    console.warn('[SW Notification Warning]:', err);
+  }
+
+  try {
+    // 2. Direct browser Web Notification (Desktop Chrome, Firefox, Edge, Safari)
+    new Notification(title, {
+      body,
+      icon: '/logo-gmt.png',
+      badge: '/icon-192.png',
+    });
   } catch {
     // Ignore restricted mobile browser errors
   }

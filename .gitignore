@@ -7,10 +7,17 @@ dist/
 frontend/dist/
 build/
 
-# Environment files
+# Environment files & secrets
+.env
+.env.*
 .env.local
 .env.*.local
 backend/.env
+frontend/.env
+*.pem
+*.key
+*.crt
+*.pfx
 
 # Logs
 *.log

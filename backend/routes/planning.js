@@ -119,7 +119,7 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     const planningId = result.insertId;
 
     if (clinoFlag) {
-      const clinoHeure = (heure_debut && heure_debut.trim()) ? heure_debut : '08:30:00';
+      const clinoHeure = (heure_debut && heure_debut.trim()) ? heure_debut : null;
       const clinoAdresse = (adresse && adresse.trim()) ? adresse : (titre || 'Visite sur site');
       const clinoComment = titre ? `[Planning] ${titre}` : 'Visite Clino';
       const [cRes] = await db.query(
@@ -184,7 +184,7 @@ router.put('/:id', authenticate, authorize('administrateur'), async (req, res) =
     let clino_id = existing[0].clino_id;
 
     if (clinoFlag) {
-      const clinoHeure = (heure_debut && heure_debut.trim()) ? heure_debut : '08:30:00';
+      const clinoHeure = (heure_debut && heure_debut.trim()) ? heure_debut : null;
       const clinoAdresse = (adresse && adresse.trim()) ? adresse : (titre || 'Visite sur site');
       const clinoComment = titre ? `[Planning] ${titre}` : 'Visite Clino';
 

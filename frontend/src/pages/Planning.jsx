@@ -12,6 +12,7 @@ import { useAuth }   from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AddressAutocomplete from '../components/AddressAutocomplete';
+import EnterpriseAutocomplete from '../components/EnterpriseAutocomplete';
 import NavigationSelector from '../components/NavigationSelector';
 import ExportDropdown from '../components/ExportDropdown';
 
@@ -219,7 +220,6 @@ function PlanningModal({ event, medecins, techniciens, entreprises = [], default
     technicien_id: init.technicien_id || defaultTechnicienId || '',
   });
   const [allEnts, setAllEnts] = useState(entreprises || []);
-  const [selectedEntId, setSelectedEntId] = useState('');
 
   useEffect(() => {
     if (entreprises && entreprises.length > 0) {
@@ -231,16 +231,6 @@ function PlanningModal({ event, medecins, techniciens, entreprises = [], default
 
   const [saving, setSaving] = useState(false);
   const s = (k, v) => setF(p => ({ ...p, [k]: v }));
-
-  const handleSelectEntreprise = (entId) => {
-    setSelectedEntId(entId);
-    if (!entId) return;
-    const found = allEnts.find(e => String(e.id) === String(entId));
-    if (found) {
-      s('titre', found.nom);
-      if (found.adresse) s('adresse', found.adresse);
-    }
-  };
 
   async function save() {
     if (!f.date || !f.titre) return;
@@ -328,56 +318,20 @@ function PlanningModal({ event, medecins, techniciens, entreprises = [], default
             </button>
           </div>
 
-          {/* Sélection / liaison rapide depuis la liste des Entreprises */}
-          <div style={{
-            background: 'var(--surface2)',
-            padding: '10px 14px',
-            borderRadius: 10,
-            border: '1px solid var(--border)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <label style={{ fontWeight: 700, fontSize: 12.5, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
-                <span>🏢</span>
-                <span>Lier / Remplir depuis une Entreprise conventionnée</span>
-              </label>
-              {allEnts.length > 0 && (
-                <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600 }}>
-                  {allEnts.length} entreprise(s)
-                </span>
-              )}
-            </div>
-            <select
-              className="input"
-              style={{ fontSize: 12.5, height: 36, fontWeight: 600 }}
-              value={selectedEntId}
-              onChange={e => handleSelectEntreprise(e.target.value)}
-            >
-              <option value="">— Sélectionner une entreprise pour pré-remplir le titre et l'adresse —</option>
-              {allEnts.map(ent => (
-                <option key={ent.id} value={ent.id}>
-                  {ent.code ? `[${ent.code}] ` : ''}{ent.nom}{ent.secteur ? ` • ${ent.secteur}` : ''}{ent.adresse ? ` (${ent.adresse})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
+          {/* Entreprise avec autocomplétion en direct lors de la saisie */}
           <div className="form-group">
-            <label style={{ fontWeight: 600 }}>Titre du programme / Entreprise *</label>
-            <input
-              className="input"
-              list="modal-entreprises-list"
-              placeholder="Ex: Société XYZ, Visite médicale périodique, Dépistage..."
+            <label style={{ fontWeight: 600 }}>Entreprise conventionnée / Titre de la visite *</label>
+            <EnterpriseAutocomplete
               value={f.titre}
-              onChange={e => s('titre', e.target.value)}
+              entreprises={allEnts}
+              placeholder="Tapez le nom de l'entreprise conventionnée..."
+              onChange={val => s('titre', val)}
+              onSelect={ent => {
+                s('titre', ent.nom);
+                if (ent.adresse) s('adresse', ent.adresse);
+              }}
               required
             />
-            <datalist id="modal-entreprises-list">
-              {allEnts.map(ent => (
-                <option key={ent.id} value={ent.nom}>
-                  {ent.code ? `[${ent.code}] ` : ''}{ent.secteur || ent.adresse || ''}
-                </option>
-              ))}
-            </datalist>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -467,7 +421,7 @@ function PlanningModal({ event, medecins, techniciens, entreprises = [], default
 /* ── Event (calendar) modal ─────────────────────────────────── */
 function EventModal({ event, defaultDate, onSave, onClose, toast }) {
   const init = event || {};
-  const defaultDt = defaultDate ? `${defaultDate}T08:30` : '';
+  const defaultDt = defaultDate ? `${defaultDate}T08:00` : '';
   const [f, setF] = useState({
     titre: init.titre || '',
     type: init.type || 'ponctuel',
@@ -612,6 +566,7 @@ function TodayBanner({ pe, ce, cl = [] }) {
 
 /* ── 1. MATRIX VIEW (MÉDECINS OU TECHNICIENS EN HAUT, JOURS EN LIGNES) ── */
 function DoctorMatrixView({
+  view = 'doctor_matrix',
   days,
   periodLabel,
   periodSubtitle,
@@ -625,6 +580,7 @@ function DoctorMatrixView({
   toast,
   onSelectDetail,
   defaultRole = 'medecin',
+  activeFilterSummary = '',
 }) {
   const [modal, setModal] = useState(null);
   const [confirm, setConfirm] = useState(null);
@@ -808,6 +764,11 @@ function DoctorMatrixView({
             <div style={{ fontSize: 12, fontWeight: 800, color: isTechnician ? '#0d9488' : '#0284c7', marginTop: 2 }}>
               Planning {isTechnician ? 'Technique (Techniciens & Clino Mobile)' : 'Médical (Médecins)'} : {periodLabel} {periodSubtitle ? `(${periodSubtitle})` : ''}
             </div>
+            {activeFilterSummary && (
+              <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginTop: 2 }}>
+                🔍 {activeFilterSummary}
+              </div>
+            )}
           </div>
           <div style={{ textAlign: 'right', fontSize: 9, color: '#64748b' }}>
             Document Officiel · Édition du {format(new Date(), 'dd/MM/yyyy HH:mm')}
@@ -815,14 +776,13 @@ function DoctorMatrixView({
         </div>
       </div>
 
-      {/* Top Controls Bar within Matrix (Switch Médecins / Techniciens & Print) */}
+      {/* Top Controls Bar within Matrix (Role Toggle) */}
       <div className="no-print" style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: 8,
         gap: 10,
-        flexWrap: 'wrap',
       }}>
         {/* Role Toggle */}
         <div style={{
@@ -841,7 +801,7 @@ function DoctorMatrixView({
             style={{
               fontSize: 12,
               fontWeight: 800,
-              padding: '5px 14px',
+              padding: '4px 12px',
               borderRadius: 8,
               background: !isTechnician ? 'linear-gradient(135deg, #0284c7, #0369a1)' : 'transparent',
             }}
@@ -855,44 +815,13 @@ function DoctorMatrixView({
             style={{
               fontSize: 12,
               fontWeight: 800,
-              padding: '5px 14px',
+              padding: '4px 12px',
               borderRadius: 8,
               background: isTechnician ? 'linear-gradient(135deg, #0d9488, #059669)' : 'transparent',
             }}
             onClick={() => setStaffRole('technicien')}
           >
             🔧 Vue Techniciens ({techniciansList.length})
-          </button>
-        </div>
-
-        {/* Quick Print & Export Bar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            style={{ fontWeight: 800, fontSize: 12, borderRadius: 8, padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 6 }}
-            onClick={handleExportPDF}
-            title="Télécharger la matrice en format PDF A4 Paysage"
-          >
-            📄 PDF Grille {isTechnician ? 'Techniciens' : 'Médecins'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            style={{
-              fontWeight: 800,
-              fontSize: 12,
-              borderRadius: 8,
-              padding: '5px 14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: isTechnician ? 'linear-gradient(135deg, #0d9488, #059669)' : 'linear-gradient(135deg, #0284c7, #0369a1)',
-            }}
-            onClick={() => window.print()}
-            title="Imprimer directement le planning en format A4 Paysage"
-          >
-            🖨️ Imprimer la grille
           </button>
         </div>
       </div>
@@ -910,7 +839,7 @@ function DoctorMatrixView({
           borderCollapse: 'separate',
           borderSpacing: 0,
           textAlign: 'left',
-          minWidth: Math.max(800, 240 + (activeStaffList.length + (hasUnassignedEvents ? 1 : 0)) * 260),
+          minWidth: Math.max(600, 80 + (activeStaffList.length + (hasUnassignedEvents ? 1 : 0)) * 180),
         }}>
           {/* ── TOP HEADER : NOMS DES MÉDECINS OU TECHNICIENS ── */}
           <thead>
@@ -923,26 +852,18 @@ function DoctorMatrixView({
                 background: 'var(--surface2)',
                 borderRight: '2px solid var(--border)',
                 borderBottom: '2px solid var(--border)',
-                padding: '12px 14px',
-                width: 220,
-                minWidth: 220,
+                padding: '8px 4px',
+                width: 80,
+                minWidth: 80,
+                maxWidth: 85,
+                textAlign: 'center',
                 boxShadow: '2px 2px 6px rgba(0,0,0,0.04)',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div>
-                    <span style={{
-                      fontSize: 10.5,
-                      fontWeight: 800,
-                      color: isTechnician ? '#0d9488' : 'var(--primary-dk)',
-                      textTransform: 'uppercase',
-                      letterSpacing: 0.6,
-                    }}>
-                      🗓️ {periodSubtitle || 'Jours'}
-                    </span>
-                    <div style={{ fontSize: 13.5, fontWeight: 900, color: 'var(--text)', textTransform: 'capitalize', marginTop: 1 }}>
-                      {periodLabel}
-                    </div>
-                  </div>
+                <div style={{ fontSize: 9.5, fontWeight: 800, color: isTechnician ? '#0d9488' : 'var(--primary-dk)', textTransform: 'uppercase' }}>
+                  🗓️ Jour
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 900, color: 'var(--text)' }}>
+                  {view === 'week' ? 'Sem.' : 'Mois'}
                 </div>
               </th>
 
@@ -963,15 +884,15 @@ function DoctorMatrixView({
                       background: 'var(--surface2)',
                       borderRight: '1px solid var(--border)',
                       borderBottom: '2px solid var(--border)',
-                      padding: '12px 16px',
-                      minWidth: 240,
+                      padding: '8px 10px',
+                      minWidth: 175,
                       boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{
-                        width: 38,
-                        height: 38,
+                        width: 30,
+                        height: 30,
                         borderRadius: '50%',
                         background: isTechnician
                           ? 'linear-gradient(135deg, #0d9488, #059669)'
@@ -981,16 +902,15 @@ function DoctorMatrixView({
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontWeight: 900,
-                        fontSize: 13,
-                        boxShadow: isTechnician ? '0 2px 6px rgba(13,148,136,0.3)' : '0 2px 6px rgba(2,132,199,0.3)',
+                        fontSize: 11,
                         flexShrink: 0,
                       }}>
                         {initials}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{
-                          fontSize: 13,
-                          fontWeight: 900,
+                          fontSize: 12.5,
+                          fontWeight: 800,
                           color: 'var(--text)',
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
@@ -998,17 +918,8 @@ function DoctorMatrixView({
                         }}>
                           {displayName}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                          <span style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: count > 0 ? (isTechnician ? '#0f766e' : '#0369a1') : 'var(--text-3)',
-                            background: count > 0 ? (isTechnician ? '#ccfbf1' : '#e0f2fe') : 'var(--bg)',
-                            padding: '1px 7px',
-                            borderRadius: 10,
-                          }}>
-                            {count} {isTechnician ? `mission${count > 1 ? 's' : ''}` : `visite${count > 1 ? 's' : ''}`}
-                          </span>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: count > 0 ? (isTechnician ? '#0f766e' : '#0369a1') : 'var(--text-3)' }}>
+                          {count} {isTechnician ? `mission${count > 1 ? 's' : ''}` : `visite${count > 1 ? 's' : ''}`}
                         </div>
                       </div>
                     </div>
@@ -1024,13 +935,13 @@ function DoctorMatrixView({
                   background: 'var(--surface2)',
                   borderRight: '1px solid var(--border)',
                   borderBottom: '2px solid var(--border)',
-                  padding: '12px 16px',
-                  minWidth: 220,
+                  padding: '8px 10px',
+                  minWidth: 160,
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <div style={{
-                      width: 36,
-                      height: 36,
+                      width: 28,
+                      height: 28,
                       borderRadius: '50%',
                       background: '#e2e8f0',
                       color: '#475569',
@@ -1038,16 +949,13 @@ function DoctorMatrixView({
                       alignItems: 'center',
                       justifyContent: 'center',
                       fontWeight: 800,
-                      fontSize: 14,
+                      fontSize: 12,
                     }}>
                       {isTechnician ? '🔧' : '🏥'}
                     </div>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>
-                        {isTechnician ? 'Sans technicien' : 'Non assigné / Autre'}
-                      </div>
-                      <div style={{ fontSize: 10, color: 'var(--text-3)' }}>
-                        {isTechnician ? 'Visites sans technicien' : 'Visites sans médecin'}
+                      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text)' }}>
+                        {isTechnician ? 'Sans tech.' : 'Non assigné'}
                       </div>
                     </div>
                   </div>
@@ -1064,8 +972,8 @@ function DoctorMatrixView({
               const isToday = isTodayFn(day);
               const dayOfWeek = day.getDay();
               const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-              const dayName = format(day, 'EEEE', { locale: fr });
-              const capDayName = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+              const dayShort = format(day, 'EEE', { locale: fr });
+              const capDayShort = dayShort.charAt(0).toUpperCase() + dayShort.slice(1);
 
               return (
                 <tr
@@ -1079,7 +987,7 @@ function DoctorMatrixView({
                     transition: 'background .15s ease',
                   }}
                 >
-                  {/* Left Sticky Day Column */}
+                  {/* Left Sticky Day Column - Compact 80px */}
                   <td style={{
                     position: 'sticky',
                     left: 0,
@@ -1091,51 +999,43 @@ function DoctorMatrixView({
                         : 'var(--surface)',
                     borderRight: '2px solid var(--border)',
                     borderBottom: '1px solid var(--border)',
-                    padding: '10px 14px',
+                    padding: '6px 4px',
+                    width: 80,
+                    minWidth: 80,
+                    maxWidth: 85,
+                    textAlign: 'center',
                     verticalAlign: 'top',
                     boxShadow: '2px 0 6px rgba(0,0,0,0.03)',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                        <span style={{
-                          fontSize: 22,
-                          fontWeight: 900,
-                          color: isToday ? (isTechnician ? '#0d9488' : '#0284c7') : isWeekend ? 'var(--text-3)' : 'var(--text)',
-                          lineHeight: 1,
-                        }}>
-                          {format(day, 'dd')}
-                        </span>
-                        <div>
-                          <div style={{
-                            fontSize: 12,
-                            fontWeight: 800,
-                            color: isToday ? (isTechnician ? '#0d9488' : '#0284c7') : isWeekend ? 'var(--text-3)' : 'var(--text)',
-                            textTransform: 'capitalize',
-                          }}>
-                            {capDayName}
-                          </div>
-                          <div style={{ fontSize: 10, color: 'var(--text-3)' }}>
-                            {format(day, 'MMM yyyy', { locale: fr })}
-                          </div>
-                        </div>
-                      </div>
-
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                      <span style={{
+                        fontSize: 15,
+                        fontWeight: 900,
+                        color: isToday ? (isTechnician ? '#0d9488' : '#0284c7') : isWeekend ? 'var(--text-3)' : 'var(--text)',
+                        lineHeight: 1.1,
+                      }}>
+                        {format(day, 'dd')}
+                      </span>
+                      <span style={{
+                        fontSize: 10.5,
+                        fontWeight: 800,
+                        color: isToday ? (isTechnician ? '#0d9488' : '#0284c7') : isWeekend ? 'var(--text-3)' : 'var(--text-2)',
+                        textTransform: 'capitalize',
+                      }}>
+                        {capDayShort}
+                      </span>
                       {isToday && (
                         <span style={{
-                          fontSize: 9,
-                          fontWeight: 800,
+                          fontSize: 8,
+                          fontWeight: 900,
                           background: isTechnician ? '#0d9488' : '#0284c7',
                           color: '#fff',
-                          padding: '2px 6px',
-                          borderRadius: 8,
+                          padding: '1px 4px',
+                          borderRadius: 4,
+                          marginTop: 2,
                           textTransform: 'uppercase',
                         }}>
-                          Aujourd'hui
-                        </span>
-                      )}
-                      {isWeekend && !isToday && (
-                        <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)', background: 'var(--bg)', padding: '2px 5px', borderRadius: 6 }}>
-                          W-E
+                          Auj.
                         </span>
                       )}
                     </div>
@@ -1562,7 +1462,7 @@ function MonthView({ current, pe, ce, cl = [], isAdmin, medecins, techniciens, o
           {isAdmin && (
             <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
               <button className="btn btn-primary btn-sm" style={{ flex: 1, fontSize: 12, fontWeight: 700 }} onClick={() => setModal({ t: 'p', data: { date: selected, heure_debut: '', heure_fin: '' } })}>+ Visite / Prog.</button>
-              <button className="btn btn-outline btn-sm" style={{ flex: 1, fontSize: 12, fontWeight: 700 }} onClick={() => setModal({ t: 'e', data: { date_debut: selected + 'T08:30' } })}>+ Événement</button>
+              <button className="btn btn-outline btn-sm" style={{ flex: 1, fontSize: 12, fontWeight: 700 }} onClick={() => setModal({ t: 'e', data: { date_debut: selected ? `${selected}T08:00` : '' } })}>+ Événement</button>
             </div>
           )}
         </div>
@@ -1992,6 +1892,15 @@ export default function Planning({ toast }) {
   const totalFilteredCount = filteredPe.length + filteredCl.length + filteredCe.length;
   const hasActiveFilters = Boolean(filters.role || filters.entreprise || filters.search || filters.date);
 
+  const activeFilterSummary = useMemo(() => {
+    const parts = [];
+    if (filters.role) parts.push(`Rôle: ${filters.role === 'medecin' ? 'Médecins' : 'Techniciens'}`);
+    if (filters.entreprise) parts.push(`Entreprise: "${filters.entreprise}"`);
+    if (filters.search) parts.push(`Recherche: "${filters.search}"`);
+    if (filters.date) parts.push(`Date: ${fmtDisplay(filters.date)}`);
+    return parts.length > 0 ? parts.join(' | ') : '';
+  }, [filters]);
+
   function handleJumpToDate(dateVal) {
     if (!dateVal) return;
     const parsed = parseISO(dateVal);
@@ -2033,107 +1942,149 @@ export default function Planning({ toast }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <TodayBanner pe={pe} ce={ce} cl={cl} />
+      <div className="no-print">
+        <TodayBanner pe={pe} ce={ce} cl={cl} />
+      </div>
 
-      {/* Executive Header Banner */}
-      <div style={{
+
+      {/* ── UNIFIED COMPACT TOOLBAR (Single Sleek Bar) ── */}
+      <div className="planning-toolbar no-print" style={{
         background: 'var(--surface)',
-        borderRadius: 16,
-        padding: '16px 22px',
-        margin: '12px 16px 8px',
-        border: '1px solid var(--border)',
-        borderTop: '4px solid #0284c7',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+        borderBottom: '1px solid var(--border)',
+        padding: '8px 14px',
         display: 'flex',
-        justifyContent: 'space-between',
         alignItems: 'center',
+        justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: 14,
+        gap: 10,
         flexShrink: 0,
       }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
-            <span style={{
-              background: 'linear-gradient(135deg, #0284c7, #0369a1)',
-              color: '#fff',
-              fontSize: 11,
-              fontWeight: 800,
-              padding: '3px 10px',
-              borderRadius: 6,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-            }}>
-              📋 Planning Médical
-            </span>
-            <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600 }}>
-              GMT Ariana Santé au Travail
-            </span>
+        {/* Left: Navigation & Period */}
+        <div className="planning-toolbar-nav" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <button
+              className="btn btn-outline btn-sm"
+              style={{ padding: '4px 8px', fontWeight: 800, fontSize: 13, height: 28 }}
+              onClick={() => view === 'week' ? setWeekStart(w => subWeeks(w, 1)) : setMonthDate(d => subMonths(d, 1))}
+              title="Précédent"
+            >
+              ‹
+            </button>
+            <button
+              className="btn btn-outline btn-sm"
+              style={{ padding: '4px 10px', fontWeight: 700, fontSize: 11.5, height: 28 }}
+              onClick={() => {
+                setWeekStart(currentWeekStart);
+                setMonthDate(new Date());
+              }}
+            >
+              Aujourd'hui
+            </button>
+            <button
+              className="btn btn-outline btn-sm"
+              style={{ padding: '4px 8px', fontWeight: 800, fontSize: 13, height: 28 }}
+              onClick={() => view === 'week' ? setWeekStart(w => addWeeks(w, 1)) : setMonthDate(d => addMonths(d, 1))}
+              title="Suivant"
+            >
+              ›
+            </button>
           </div>
-          <h1 style={{ fontSize: 22, fontWeight: 900, margin: 0, color: 'var(--text)', letterSpacing: -0.5 }}>
-            {view === 'doctor_matrix' && `Planning Mensuel : Médecins & Jours — ${format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}`}
-            {view === 'week' && `Semaine ${isoWeekNum} : Du ${format(weekStart, 'd MMMM', { locale: fr })} au ${format(weekEnd, 'd MMMM yyyy', { locale: fr })}`}
-            {view === 'month' && format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}
-            {view === 'list' && 'Vue Liste Globale'}
+
+          <h1 style={{ fontSize: 14.5, fontWeight: 900, margin: 0, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>
+              {view === 'week' ? `Sem. ${isoWeekNum} : ${format(weekStart, 'd MMM', { locale: fr })} - ${format(weekEnd, 'd MMM yyyy', { locale: fr })}` : format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}
+            </span>
           </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
-            {view === 'week' && (
-              <>
-                {isCurrentWeek && (
-                  <span style={{ fontSize: 11, fontWeight: 800, background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: 10 }}>
-                    🟢 Semaine en cours
-                  </span>
-                )}
-                {isNextWeek && (
-                  <span style={{ fontSize: 11, fontWeight: 800, background: '#dbeafe', color: '#1d4ed8', padding: '2px 8px', borderRadius: 10 }}>
-                    🚀 Semaine prochaine
-                  </span>
-                )}
-                {!isCurrentWeek && !isNextWeek && weekDiff < 0 && (
-                  <span style={{ fontSize: 11, fontWeight: 700, background: 'var(--surface2)', color: 'var(--text-3)', padding: '2px 8px', borderRadius: 10 }}>
-                    ⏳ Semaine passée ({Math.abs(weekDiff)} sem. avant)
-                  </span>
-                )}
-                {!isCurrentWeek && !isNextWeek && weekDiff > 1 && (
-                  <span style={{ fontSize: 11, fontWeight: 700, background: '#f3e8ff', color: '#7e22ce', padding: '2px 8px', borderRadius: 10 }}>
-                    🔮 Dans {weekDiff} semaines
-                  </span>
-                )}
-              </>
-            )}
-            {view === 'doctor_matrix' && (
-              <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 600 }}>
-                📊 Matrice mensuelle : Médecins en colonnes × Jours du mois en lignes ({filterMonth(filteredPe).length + filterMonth(filteredCl).length} visites ce mois)
-              </span>
-            )}
-          </div>
+
+          <input
+            type="date"
+            className="input"
+            style={{ width: 'auto', fontSize: 11, padding: '2px 6px', height: 28, borderRadius: 6 }}
+            value={format(view === 'week' ? weekStart : monthDate, 'yyyy-MM-dd')}
+            onChange={e => handleJumpToDate(e.target.value)}
+            title="Aller à une date précise"
+          />
         </div>
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Creation buttons */}
+        {/* Center: View Switcher */}
+        <div className="planning-view-switcher" style={{ display: 'flex', gap: 2, background: 'var(--bg)', borderRadius: 8, padding: 2, border: '1px solid var(--border)', overflowX: 'auto', maxWidth: '100%' }}>
+          {[
+            ['week', '📅 Semaine'],
+            ['doctor_matrix', '📊 Grille Mois'],
+            ['month', '📆 Calendrier'],
+            ['list', '📋 Liste']
+          ].map(([v, l]) => (
+            <button
+              key={v}
+              className={`btn btn-sm ${view === v ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setView(v)}
+              style={{ padding: '3px 8px', fontSize: 11.5, fontWeight: 700 }}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {/* Right: Filters & Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <select
+            className="input"
+            style={{ width: 'auto', fontSize: 11.5, padding: '2px 6px', height: 28, borderRadius: 6, fontWeight: 600 }}
+            value={filters.role}
+            onChange={e => setFilters(f => ({ ...f, role: e.target.value }))}
+          >
+            <option value="">👥 Rôle (Tous)</option>
+            <option value="medecin">👨‍⚕️ Médecins</option>
+            <option value="technicien">🔧 Techniciens</option>
+          </select>
+
+          {ents.length > 0 && (
+            <select
+              className="input"
+              style={{ width: 'auto', maxWidth: 140, fontSize: 11.5, padding: '2px 6px', height: 28, borderRadius: 6 }}
+              value={filters.entreprise}
+              onChange={e => setFilters(f => ({ ...f, entreprise: e.target.value }))}
+            >
+              <option value="">🏢 Entreprise (Toutes)</option>
+              {ents.map(ent => <option key={ent.id} value={ent.nom}>{ent.nom}</option>)}
+            </select>
+          )}
+
+          <input
+            className="input"
+            type="text"
+            placeholder="🔍 Chercher..."
+            style={{ width: 110, fontSize: 11.5, padding: '2px 8px', height: 28, borderRadius: 6 }}
+            value={filters.search}
+            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+          />
+
+          {hasActiveFilters && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setFilters({ role: '', entreprise: '', search: '', date: '' })}
+              style={{ fontSize: 11, padding: '2px 6px', color: 'var(--danger)', fontWeight: 700 }}
+              title="Réinitialiser les filtres"
+            >
+              ✕ ({totalFilteredCount})
+            </button>
+          )}
+
           {isAdmin && (
-            <>
-              <button
-                className="btn btn-primary btn-sm"
-                style={{ fontWeight: 800, borderRadius: 8, padding: '7px 14px' }}
-                onClick={handleCreateForCurrentView}
-                title="Ajouter une visite médicale / programme"
-              >
-                + Programme
-              </button>
-              <button
-                className="btn btn-outline btn-sm"
-                style={{ fontWeight: 800, borderRadius: 8, padding: '7px 11px' }}
-                onClick={() => setModal({ t: 'e', data: { date_debut: format(weekStart, 'yyyy-MM-dd') + 'T08:30' } })}
-                title="Ajouter une réunion, formation ou événement"
-              >
-                + Événement
-              </button>
-            </>
+            <button
+              className="btn btn-primary btn-sm"
+              style={{ fontWeight: 800, borderRadius: 8, padding: '4px 10px', fontSize: 11.5, height: 28 }}
+              onClick={handleCreateForCurrentView}
+              title="Ajouter une visite médicale / programme"
+            >
+              + Programme
+            </button>
           )}
 
           {/* Export dropdown */}
           <ExportDropdown
-            label="Exporter / Imprimer"
+            label="Exporter & Imprimer"
+            buttonStyle={{ height: 28, padding: '4px 10px', fontSize: 11.5 }}
             onPrint={() => window.print()}
             onPDF={() => {
               import('../utils/exportUtils').then(({ exportMatrixToPDF }) => {
@@ -2223,7 +2174,7 @@ export default function Planning({ toast }) {
                   title: view === 'week'
                     ? `Planning Semaine ${isoWeekNum} (${format(weekStart, 'dd/MM/yyyy')} au ${format(weekEnd, 'dd/MM/yyyy')})`
                     : `Planning Mensuel : ${format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}`,
-                  subtitle: `GROUPEMENT DE MÉDECINE DU TRAVAIL DE L'ARIANA - Matrice ${isTechnician ? 'Techniciens' : 'Médecins'} & Jours`,
+                  subtitle: `GROUPEMENT DE MÉDECINE DU TRAVAIL DE L'ARIANA — Matrice ${isTechnician ? 'Techniciens' : 'Médecins'} & Jours` + (activeFilterSummary ? ` (Filtre: ${activeFilterSummary})` : ''),
                 });
               });
             }}
@@ -2257,177 +2208,13 @@ export default function Planning({ toast }) {
               });
             }}
           />
-
-          {/* View switcher */}
-          <div style={{ display: 'flex', gap: 2, background: 'var(--bg)', borderRadius: 8, padding: 3, border: '1px solid var(--border)' }}>
-            {[
-              ['week', '📅 Semaine'],
-              ['doctor_matrix', '📊 Grille Mois'],
-              ['month', '📆 Calendrier'],
-              ['list', '📋 Liste']
-            ].map(([v, l]) => (
-              <button
-                key={v}
-                className={`btn btn-sm ${view === v ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setView(v)}
-                style={{ padding: '4px 10px', fontSize: 12, fontWeight: 700 }}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Navigation Ribbon */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '8px 18px',
-        background: 'var(--surface)',
-        borderBottom: '1px solid var(--border)',
-        flexShrink: 0,
-        flexWrap: 'wrap',
-        gap: 10,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {view === 'week' ? (
-            <>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={() => setWeekStart(w => subWeeks(w, 1))}
-                style={{ fontWeight: 800, padding: '5px 12px', borderRadius: 8 }}
-                title="Semaine précédente"
-              >
-                ‹ Précédente
-              </button>
-
-              <button
-                className={`btn btn-sm ${isCurrentWeek ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setWeekStart(currentWeekStart)}
-                style={{ fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}
-              >
-                📅 Cette semaine
-              </button>
-
-              <button
-                className={`btn btn-sm ${isNextWeek ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setWeekStart(nextWeekStart)}
-                style={{ fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}
-                title="Passer à la semaine prochaine"
-              >
-                🚀 Semaine prochaine
-              </button>
-
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={() => setWeekStart(w => addWeeks(w, 1))}
-                style={{ fontWeight: 800, padding: '5px 12px', borderRadius: 8 }}
-                title="Semaine suivante"
-              >
-                Suivante ›
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={() => setMonthDate(d => subMonths(d, 1))}
-                style={{ fontWeight: 800, padding: '5px 12px', borderRadius: 8 }}
-              >
-                ‹ Mois préc.
-              </button>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={() => setMonthDate(new Date())}
-                style={{ fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}
-              >
-                Ce mois-ci
-              </button>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={() => setMonthDate(d => addMonths(d, 1))}
-                style={{ fontWeight: 800, padding: '5px 12px', borderRadius: 8 }}
-              >
-                Mois suiv. ›
-              </button>
-            </>
-          )}
-
-          {/* Date Picker Jump */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8, borderLeft: '1px solid var(--border)', paddingLeft: 10 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600 }}>Aller à :</span>
-            <input
-              type="date"
-              className="input"
-              style={{ width: 'auto', fontSize: 12, padding: '3px 8px', height: 30, borderRadius: 6 }}
-              value={format(view === 'week' ? weekStart : monthDate, 'yyyy-MM-dd')}
-              onChange={e => handleJumpToDate(e.target.value)}
-              title="Sélectionner une date pour y naviguer directement"
-            />
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select
-            className="input"
-            style={{ width: 'auto', fontSize: 12, padding: '3px 8px', height: 30, borderRadius: 6, fontWeight: 600 }}
-            value={filters.role}
-            onChange={e => setFilters(f => ({ ...f, role: e.target.value }))}
-          >
-            <option value="">👥 Tous les intervenants</option>
-            <option value="medecin">👨‍⚕️ Médecins</option>
-            <option value="technicien">🔧 Techniciens</option>
-          </select>
-
-          {ents.length > 0 ? (
-            <select
-              className="input"
-              style={{ width: 'auto', fontSize: 12, padding: '3px 8px', height: 30, borderRadius: 6 }}
-              value={filters.entreprise}
-              onChange={e => setFilters(f => ({ ...f, entreprise: e.target.value }))}
-            >
-              <option value="">🏢 Entreprises (Toutes)</option>
-              {ents.map(ent => <option key={ent.id} value={ent.nom}>{ent.nom}</option>)}
-            </select>
-          ) : (
-            <input
-              className="input"
-              type="text"
-              placeholder="🏢 Entreprise..."
-              style={{ width: 130, fontSize: 12, padding: '3px 8px', height: 30, borderRadius: 6 }}
-              value={filters.entreprise}
-              onChange={e => setFilters(f => ({ ...f, entreprise: e.target.value }))}
-            />
-          )}
-
-          <input
-            className="input"
-            type="text"
-            placeholder="🔍 Chercher..."
-            style={{ width: 140, fontSize: 12, padding: '3px 8px', height: 30, borderRadius: 6 }}
-            value={filters.search}
-            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-          />
-
-          {hasActiveFilters && (
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setFilters({ role: '', entreprise: '', search: '', date: '' })}
-              style={{ fontSize: 11, padding: '3px 6px', color: 'var(--danger)', fontWeight: 700 }}
-              title="Réinitialiser les filtres"
-            >
-              ✕ Effacer ({totalFilteredCount})
-            </button>
-          )}
         </div>
       </div>
 
       {/* Content View */}
       {view === 'doctor_matrix' && (
         <DoctorMatrixView
+          view={view}
           days={eachDayOfInterval({ start: startOfMonth(monthDate), end: endOfMonth(monthDate) })}
           periodLabel={format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}
           periodSubtitle="Jours du mois"
@@ -2438,6 +2225,7 @@ export default function Planning({ toast }) {
           techniciens={tec}
           isAdmin={isAdmin}
           defaultRole={filters.role || 'medecin'}
+          activeFilterSummary={activeFilterSummary}
           onRefresh={() => setTick(t => t + 1)}
           toast={toast}
           onSelectDetail={item => setDetailItem(item)}
@@ -2446,6 +2234,7 @@ export default function Planning({ toast }) {
 
       {view === 'week' && (
         <DoctorMatrixView
+          view={view}
           days={eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) })}
           periodLabel={`Semaine ${isoWeekNum} : Du ${format(weekStart, 'd MMMM', { locale: fr })} au ${format(weekEnd, 'd MMMM yyyy', { locale: fr })}`}
           periodSubtitle="Jours de la semaine"
@@ -2456,6 +2245,7 @@ export default function Planning({ toast }) {
           techniciens={tec}
           isAdmin={isAdmin}
           defaultRole={filters.role || 'medecin'}
+          activeFilterSummary={activeFilterSummary}
           onRefresh={() => setTick(t => t + 1)}
           toast={toast}
           onSelectDetail={item => setDetailItem(item)}

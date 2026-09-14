@@ -133,6 +133,20 @@ export function exportToPDF(data, columns, title = 'Planning GMT Ariana') {
   doc.save(`${title.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
+function sanitizeForPDF(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/🚗/g, '[Clino] ')
+    .replace(/👨‍⚕️|👨‍⚕/g, '[Dr.] ')
+    .replace(/🔧/g, '[Tech.] ')
+    .replace(/📋|📅|⏰|📍|💬|🏢|🔍|🏷️|✉️|📱/g, '')
+    .replace(/•/g, '-')
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '')
+    .replace(/[^\x20-\x7E\xA0-\xFF\n\r\t]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function exportMatrixToPDF({
   days,
   doctorsList,
@@ -175,7 +189,7 @@ export function exportMatrixToPDF({
   doc.setFontSize(8);
   doc.setTextColor(186, 230, 253);
   doc.text(
-    subtitle || (isTechnician ? 'Planning Technique Opérationnel - Techniciens & Jours de travail' : 'Planning Médical Opérationnel - Médecins & Jours de travail'),
+    sanitizeForPDF(subtitle || (isTechnician ? 'Planning Technique Opérationnel - Techniciens & Jours de travail' : 'Planning Médical Opérationnel - Médecins & Jours de travail')),
     14,
     15
   );
@@ -188,16 +202,16 @@ export function exportMatrixToPDF({
   doc.setFontSize(7.5);
   doc.setTextColor(226, 232, 240);
   doc.text(`Date d'édition : ${dateStr} à ${timeStr}`, pageWidth - 14, 8, { align: 'right' });
-  doc.text(`${title}`, pageWidth - 14, 15, { align: 'right' });
+  doc.text(sanitizeForPDF(title), pageWidth - 14, 15, { align: 'right' });
 
   // Columns: Jours / Dates + Staff names
   const allStaffColumns = activeStaff.map(d => {
     if (isTechnician) {
       const name = d.nom ? (d.prenom ? `${d.prenom} ${d.nom}` : d.nom) : 'Technicien';
-      return name.toUpperCase();
+      return sanitizeForPDF(name.toUpperCase());
     }
     const name = d.nom ? (d.prenom ? `Dr. ${d.prenom} ${d.nom}` : (d.nom.startsWith('Dr.') ? d.nom : `Dr. ${d.nom}`)) : 'Dr.';
-    return name.toUpperCase();
+    return sanitizeForPDF(name.toUpperCase());
   });
   if (hasUnassigned) {
     allStaffColumns.push(isTechnician ? 'SANS TECHNICIEN' : 'AUTRE / NON ASSIGNÉ');
@@ -225,21 +239,21 @@ export function exportMatrixToPDF({
       const cellLines = [];
       pEvents.forEach(p => {
         const time = p.heure_debut ? `${p.heure_debut}${p.heure_fin ? '-' + p.heure_fin : ''}` : '';
-        const clinoTag = (p.is_clino || p.clino_id) ? '[🚗 Clino] ' : '';
+        const clinoTag = (p.is_clino || p.clino_id) ? '[Clino] ' : '';
         const titlePart = p.titre || 'Visite';
         const locPart = p.adresse ? ` (${p.adresse})` : '';
         const counterpartPart = isTechnician
-          ? (p.medecin_nom ? ` [👨‍⚕️ ${p.medecin_nom}]` : '')
-          : (p.technicien_nom ? ` [🔧 ${p.technicien_nom}]` : '');
-        cellLines.push(`• ${time ? time + ' ' : ''}${clinoTag}${titlePart}${locPart}${counterpartPart}`);
+          ? (p.medecin_nom ? ` [Dr. ${p.medecin_nom}]` : '')
+          : (p.technicien_nom ? ` [Tech. ${p.technicien_nom}]` : '');
+        cellLines.push(sanitizeForPDF(`- ${time ? time + ' ' : ''}${clinoTag}${titlePart}${locPart}${counterpartPart}`));
       });
       clEvents.forEach(c => {
         const time = c.heure ? String(c.heure).slice(0, 5) : '';
         const addr = c.adresse || 'Tournée Clino';
         const counterpart = isTechnician
-          ? ((c.medecin_full || c.medecin_nom) ? ` [👨‍⚕️ ${c.medecin_full || c.medecin_nom}]` : '')
-          : ((c.technicien_full || c.technicien_nom) ? ` [🔧 ${c.technicien_full || c.technicien_nom}]` : '');
-        cellLines.push(`• [🚗 Clino] ${time ? time + ' ' : ''}${addr}${counterpart}`);
+          ? ((c.medecin_full || c.medecin_nom) ? ` [Dr. ${c.medecin_full || c.medecin_nom}]` : '')
+          : ((c.technicien_full || c.technicien_nom) ? ` [Tech. ${c.technicien_full || c.technicien_nom}]` : '');
+        cellLines.push(sanitizeForPDF(`- [Clino] ${time ? time + ' ' : ''}${addr}${counterpart}`));
       });
       rowCells.push(cellLines.join('\n') || '-');
     });
@@ -247,8 +261,8 @@ export function exportMatrixToPDF({
     if (hasUnassigned) {
       const { pEvents = [], clEvents = [] } = eventGetter(null, dayKey);
       const cellLines = [];
-      pEvents.forEach(p => cellLines.push(`• ${p.heure_debut ? p.heure_debut + ' ' : ''}${p.titre || 'Visite'}`));
-      clEvents.forEach(c => cellLines.push(`• [🚗 Clino] ${c.adresse || 'Tournée'}`));
+      pEvents.forEach(p => cellLines.push(sanitizeForPDF(`- ${p.heure_debut ? p.heure_debut + ' ' : ''}${p.titre || 'Visite'}`)));
+      clEvents.forEach(c => cellLines.push(sanitizeForPDF(`- [Clino] ${c.adresse || 'Tournée'}`)));
       rowCells.push(cellLines.join('\n') || '-');
     }
 

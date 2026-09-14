@@ -6,6 +6,7 @@ import { useAuth }   from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AddressAutocomplete from '../components/AddressAutocomplete';
+import EnterpriseAutocomplete from '../components/EnterpriseAutocomplete';
 import NavigationSelector from '../components/NavigationSelector';
 import SignaturePadModal from '../components/SignaturePadModal';
 import ExportDropdown from '../components/ExportDropdown';
@@ -37,7 +38,6 @@ function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
     commentaire: init.commentaire || '',
   });
   const [allEnts, setAllEnts] = useState([]);
-  const [selectedEntId, setSelectedEntId] = useState('');
   const [saving, setSaving] = useState(false);
   const s = (k, v) => setF(p => ({ ...p, [k]: v }));
 
@@ -46,19 +46,6 @@ function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
       ?.then?.(r => setAllEnts(r?.data || []))
       ?.catch?.(() => {});
   }, []);
-
-  function handleSelectEntreprise(entId) {
-    setSelectedEntId(entId);
-    if (!entId) return;
-    const ent = allEnts.find(e => String(e.id) === String(entId));
-    if (ent) {
-      setF(prev => ({
-        ...prev,
-        titre: ent.nom || prev.titre,
-        adresse: ent.adresse || prev.adresse,
-      }));
-    }
-  }
 
   async function save() {
     if (!f.date || !f.heure || !f.adresse) return;
@@ -89,56 +76,20 @@ function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
           <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* Sélection rapide depuis les Entreprises conventionnées */}
-          <div style={{
-            background: 'var(--surface2)',
-            padding: '10px 14px',
-            borderRadius: 10,
-            border: '1px solid var(--border)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <label style={{ fontWeight: 700, fontSize: 12.5, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
-                <span>🏢</span>
-                <span>Entreprise conventionnée (Remplissage rapide)</span>
-              </label>
-              {allEnts.length > 0 && (
-                <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600 }}>
-                  {allEnts.length} entreprise(s)
-                </span>
-              )}
-            </div>
-            <select
-              className="input"
-              style={{ fontSize: 12.5, height: 36, fontWeight: 600 }}
-              value={selectedEntId}
-              onChange={e => handleSelectEntreprise(e.target.value)}
-            >
-              <option value="">— Choisir une entreprise pour pré-remplir le nom et l'adresse —</option>
-              {allEnts.map(ent => (
-                <option key={ent.id} value={ent.id}>
-                  {ent.code ? `[${ent.code}] ` : ''}{ent.nom}{ent.secteur ? ` • ${ent.secteur}` : ''}{ent.adresse ? ` (${ent.adresse})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
+          {/* Entreprise conventionnée / Titre de mission avec autocomplétion directe */}
           <div className="form-group">
             <label style={{ fontWeight: 600 }}>Nom de l'Entreprise / Titre de la Mission *</label>
-            <input
-              className="input"
-              list="clino-entreprises-list"
-              placeholder="Ex: Société Biorad, Carrefour, Tournée Clino Mobile..."
+            <EnterpriseAutocomplete
               value={f.titre}
-              onChange={e => s('titre', e.target.value)}
-              style={{ fontWeight: 600 }}
+              entreprises={allEnts}
+              placeholder="Tapez le nom de l'entreprise conventionnée..."
+              onChange={val => s('titre', val)}
+              onSelect={ent => {
+                s('titre', ent.nom);
+                if (ent.adresse) s('adresse', ent.adresse);
+              }}
+              required
             />
-            <datalist id="clino-entreprises-list">
-              {allEnts.map(ent => (
-                <option key={ent.id} value={ent.nom}>
-                  {ent.code ? `[${ent.code}] ` : ''}{ent.secteur || ent.adresse || ''}
-                </option>
-              ))}
-            </datalist>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

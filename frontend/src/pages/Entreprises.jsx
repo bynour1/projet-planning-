@@ -833,14 +833,6 @@ function QuickBilanModal({ entreprise, onSave, onClose }) {
     </div>
   );
 }
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ padding: '8px 22px' }}>
-            {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : '💾 Enregistrer les chiffres'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Modal for adding an avis ──────────────────────────────────
 function AvisModal({ entreprise, editAvis, onSave, onClose }) {

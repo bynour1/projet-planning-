@@ -42,7 +42,7 @@ router.get('/', authenticate, async (req, res) => {
 // POST /api/clino  (Admin only)
 router.post('/', authenticate, authorize('administrateur'), async (req, res) => {
   const { date, heure, adresse, medecin_id, technicien_id, commentaire, planning_id, titre } = req.body;
-  if (!date || !heure || !adresse) return res.status(400).json({ message: 'Date, heure et adresse requis' });
+  if (!date || !adresse) return res.status(400).json({ message: 'Date et adresse requises' });
 
   try {
     let medecin_nom = null;
@@ -70,7 +70,7 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
 
     const [result] = await db.query(
       'INSERT INTO clino_mobile (date,heure,adresse,medecin_id,technicien_id,medecin_nom,technicien_nom,commentaire,planning_id) VALUES (?,?,?,?,?,?,?,?,?)',
-      [date, heure, adresse, medecin_id||null, technicien_id||null, medecin_nom, technicien_nom, commentaire||null, finalPlanningId]
+      [date, heure || null, adresse, medecin_id||null, technicien_id||null, medecin_nom, technicien_nom, commentaire||null, finalPlanningId]
     );
 
     if (finalPlanningId) {
@@ -120,19 +120,19 @@ router.put('/:id', authenticate, authorize('administrateur'), async (req, res) =
 
     await db.query(
       'UPDATE clino_mobile SET date=?,heure=?,adresse=?,medecin_id=?,technicien_id=?,medecin_nom=?,technicien_nom=?,commentaire=? WHERE id=?',
-      [date, heure, adresse, medecin_id||null, technicien_id||null, medecin_nom, technicien_nom, commentaire||null, req.params.id]
+      [date, heure || null, adresse, medecin_id||null, technicien_id||null, medecin_nom, technicien_nom, commentaire||null, req.params.id]
     );
 
     // If linked to a planning_event, update it too
     if (titre) {
       await db.query(
         'UPDATE planning_events SET titre=?, date=?, heure_debut=?, adresse=?, medecin_id=?, technicien_id=? WHERE clino_id=?',
-        [titre, date, heure, adresse, medecin_id||null, technicien_id||null, req.params.id]
+        [titre, date, heure || null, adresse, medecin_id||null, technicien_id||null, req.params.id]
       );
     } else {
       await db.query(
         'UPDATE planning_events SET date=?, heure_debut=?, adresse=?, medecin_id=?, technicien_id=? WHERE clino_id=?',
-        [date, heure, adresse, medecin_id||null, technicien_id||null, req.params.id]
+        [date, heure || null, adresse, medecin_id||null, technicien_id||null, req.params.id]
       );
     }
 

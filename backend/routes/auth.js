@@ -332,30 +332,33 @@ router.post('/force-change-password', authenticate, async (req, res) => {
 
 // POST /api/auth/forgot-password (public)
 router.post('/forgot-password', async (req, res) => {
-  const { email } = req.body;
-  if (!email || !String(email).trim()) {
-    return res.status(400).json({ message: 'E-mail ou numéro de téléphone requis' });
+  const { email, identifier, method = 'email' } = req.body;
+  const input = String(identifier || email || '').trim();
+
+  if (!input) {
+    return res.status(400).json({ message: 'Veuillez saisir votre email ou votre numéro de téléphone' });
   }
 
   try {
-    const rawInput = String(email).trim();
-    const cleanPhone = rawInput.replace(/[^\d]/g, '');
+    const cleanPhone = input.replace(/[^\d]/g, '');
 
     const [rows] = await db.query(
       `SELECT * FROM users WHERE email = ? 
        OR telephone = ? 
        OR telephone = ? 
        OR REPLACE(REPLACE(telephone, ' ', ''), '+216', '') = ?`,
-      [rawInput, rawInput, `+216 ${rawInput}`, cleanPhone ? cleanPhone.slice(-8) : '___nomatch___']
+      [input, input, `+216 ${input}`, cleanPhone ? cleanPhone.slice(-8) : '___nomatch___']
     );
 
     const user = rows[0];
+    const isPhone = method === 'phone' || (!input.includes('@') && cleanPhone.length >= 6);
 
-    // Response message for user (same whether account exists or not for security)
-    const successMsg = 'Si cette adresse ou ce numéro correspond à un compte actif, un lien de réinitialisation vous a été envoyé.';
+    const successMsg = isPhone
+      ? 'Si ce numéro de téléphone correspond à un compte actif, un code / lien de réinitialisation vous a été envoyé par SMS.'
+      : 'Si cette adresse email correspond à un compte actif, un lien de réinitialisation vous a été envoyé par email.';
 
     if (!user) {
-      return res.json({ message: successMsg });
+      return res.json({ message: successMsg, method: isPhone ? 'phone' : 'email' });
     }
 
     // Generate secure token (valid 1 hour)
@@ -366,11 +369,15 @@ router.post('/forgot-password', async (req, res) => {
       [user.email, token]
     );
 
-    // Send Reset Email + SMS
-    await sendPasswordReset(user.email, user.nom, user.prenom, token, user.telephone);
+    // Send based on user's choice:
+    const targetEmail = !isPhone ? user.email : null;
+    const targetPhone = isPhone ? user.telephone : null;
+
+    await sendPasswordReset(targetEmail, user.nom, user.prenom, token, targetPhone);
 
     res.json({
       message: successMsg,
+      method: isPhone ? 'phone' : 'email',
     });
   } catch (err) {
     console.error('[forgot-password] Erreur:', err);

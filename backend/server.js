@@ -180,6 +180,9 @@ process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
 });
 
+// ─── Ensure schema nullability ──────────────────────────────
+db.query('ALTER TABLE clino_mobile MODIFY COLUMN heure TIME NULL DEFAULT NULL').catch(() => {});
+
 // ─── Start Reminders ──────────────────────────────────────────
 require('./cron/reminders')(db);
 

@@ -350,12 +350,14 @@ export default function Dashboard({ toast }) {
                         {ev.medecin_nom && ` · 👨‍⚕️ ${ev.medecin_nom}`}
                       </div>
                     </div>
-                    <span style={{
-                      fontSize: 11, fontWeight: 800, background: '#dcfce7', color: '#15803d',
-                      padding: '2px 8px', borderRadius: 6, whiteSpace: 'nowrap'
-                    }}>
-                      ⏰ {ev.heure_debut || '08:30'}
-                    </span>
+                    {ev.heure_debut && (
+                      <span style={{
+                        fontSize: 11, fontWeight: 800, background: '#dcfce7', color: '#15803d',
+                        padding: '2px 8px', borderRadius: 6, whiteSpace: 'nowrap'
+                      }}>
+                        ⏰ {ev.heure_debut.slice(0, 5)}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
