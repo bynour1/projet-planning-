@@ -60,7 +60,7 @@ describe('Clino Mobile page', () => {
     setup();
     await waitFor(() => screen.getByText(/Programme jour/i));
     await userEvent.click(screen.getByText(/Programme jour/i));
-    expect(screen.getByText(/Sélectionner une date/i)).toBeInTheDocument();
+    expect(screen.getByText(/tournée.*au programme/i)).toBeInTheDocument();
   });
 
   it('filters by search', async () => {

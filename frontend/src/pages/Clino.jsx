@@ -41,9 +41,10 @@ function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
   const s = (k, v) => setF(p => ({ ...p, [k]: v }));
 
   useEffect(() => {
-    axios.get('/api/entreprises')
-      ?.then?.(r => setAllEnts(r?.data || []))
-      ?.catch?.(() => {});
+    Promise.resolve()
+      .then(() => axios.get('/api/entreprises'))
+      .then(r => setAllEnts(r?.data || []))
+      .catch(() => {});
   }, []);
 
   async function save() {

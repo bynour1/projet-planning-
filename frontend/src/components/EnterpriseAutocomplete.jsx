@@ -7,7 +7,8 @@ let cachedPromise = null;
 function fetchEntreprises() {
   if (cachedEntreprises) return Promise.resolve(cachedEntreprises);
   if (cachedPromise) return cachedPromise;
-  cachedPromise = axios.get('/api/entreprises')
+  cachedPromise = Promise.resolve()
+    .then(() => axios.get('/api/entreprises'))
     .then(r => {
       cachedEntreprises = r?.data || [];
       return cachedEntreprises;

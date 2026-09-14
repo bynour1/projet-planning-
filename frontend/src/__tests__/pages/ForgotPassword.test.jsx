@@ -17,20 +17,17 @@ describe('ForgotPassword page', () => {
   it('renders correctly', () => {
     render(<ForgotPassword toast={mockToast} />);
     expect(screen.getByText(/Mot de passe oublié/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/vous@exemple.com/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Envoyer le lien/i })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/medecin@gmt-ariana.tn/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Recevoir le lien par Email/i })).toBeInTheDocument();
   });
 
   it('shows error if email is empty', async () => {
     render(<ForgotPassword toast={mockToast} />);
-    // On doit forcer l'action car le bouton submit est désactivé si vide
-    const input = screen.getByPlaceholderText(/vous@exemple.com/i);
-    // On va simuler un envoi direct du formulaire car html validation peut bloquer
-    const form = screen.getByRole('button', { name: /Envoyer le lien/i }).closest('form');
+    const form = screen.getByRole('button', { name: /Recevoir le lien par Email/i }).closest('form');
     fireEvent.submit(form);
 
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith('Veuillez entrer votre email', 'error');
+      expect(mockToast).toHaveBeenCalledWith('Veuillez entrer votre adresse email', 'error');
     });
   });
 
@@ -38,12 +35,16 @@ describe('ForgotPassword page', () => {
     axios.post.mockResolvedValueOnce({ data: { message: 'Email envoyé' } });
     render(<ForgotPassword toast={mockToast} />);
 
-    await userEvent.type(screen.getByPlaceholderText(/vous@exemple.com/i), 'test@example.com');
-    fireEvent.click(screen.getByRole('button', { name: /Envoyer le lien/i }));
+    await userEvent.type(screen.getByPlaceholderText(/medecin@gmt-ariana.tn/i), 'test@example.com');
+    fireEvent.click(screen.getByRole('button', { name: /Recevoir le lien par Email/i }));
 
     await waitFor(() => {
-      expect(axios.post).toHaveBeenCalledWith('/api/auth/forgot-password', { email: 'test@example.com' });
-      expect(screen.getByText(/Si cet email correspond à un compte/i)).toBeInTheDocument();
+      expect(axios.post).toHaveBeenCalledWith('/api/auth/forgot-password', {
+        identifier: 'test@example.com',
+        email: 'test@example.com',
+        method: 'email',
+      });
+      expect(screen.getByText(/Si cette adresse email correspond à un compte/i)).toBeInTheDocument();
     });
   });
 
@@ -51,8 +52,8 @@ describe('ForgotPassword page', () => {
     axios.post.mockRejectedValueOnce({ response: { data: { message: 'Erreur serveur' } } });
     render(<ForgotPassword toast={mockToast} />);
 
-    await userEvent.type(screen.getByPlaceholderText(/vous@exemple.com/i), 'test@example.com');
-    fireEvent.click(screen.getByRole('button', { name: /Envoyer le lien/i }));
+    await userEvent.type(screen.getByPlaceholderText(/medecin@gmt-ariana.tn/i), 'test@example.com');
+    fireEvent.click(screen.getByRole('button', { name: /Recevoir le lien par Email/i }));
 
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith('Erreur serveur', 'error');

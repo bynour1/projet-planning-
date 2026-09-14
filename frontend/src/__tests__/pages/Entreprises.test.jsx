@@ -158,7 +158,7 @@ describe('Entreprises page — détail & avis', () => {
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
     await userEvent.click(screen.getAllByText('Voir détails →')[0]);
     await waitFor(() => {
-      expect(screen.getByText('Avis & Remarques')).toBeInTheDocument();
+      expect(screen.getByText(/Avis & Remarques/i)).toBeInTheDocument();
       expect(screen.getByText(/Convention de Médecine du Travail/)).toBeInTheDocument();
     });
   });
@@ -169,6 +169,8 @@ describe('Entreprises page — détail & avis', () => {
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
     await userEvent.click(screen.getAllByText('Voir détails →')[0]);
+    await waitFor(() => screen.getByText(/Avis & Remarques/i));
+    await userEvent.click(screen.getByText(/Avis & Remarques/i));
     await waitFor(() => {
       expect(screen.getByText('Excellent service, très professionnel')).toBeInTheDocument();
       expect(screen.getByText('Parking difficile le matin')).toBeInTheDocument();
@@ -181,6 +183,8 @@ describe('Entreprises page — détail & avis', () => {
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
     await userEvent.click(screen.getAllByText('Voir détails →')[0]);
+    await waitFor(() => screen.getByText(/Avis & Remarques/i));
+    await userEvent.click(screen.getByText(/Avis & Remarques/i));
     await waitFor(() => expect(screen.getByText('➕ Donner mon avis')).toBeInTheDocument());
   });
 
@@ -190,6 +194,8 @@ describe('Entreprises page — détail & avis', () => {
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
     await userEvent.click(screen.getAllByText('Voir détails →')[0]);
+    await waitFor(() => screen.getByText(/Avis & Remarques/i));
+    await userEvent.click(screen.getByText(/Avis & Remarques/i));
     await waitFor(() => screen.getByText('➕ Donner mon avis'));
     await userEvent.click(screen.getByText('➕ Donner mon avis'));
     expect(screen.getByText('➕ Partager votre avis')).toBeInTheDocument();
@@ -201,6 +207,8 @@ describe('Entreprises page — détail & avis', () => {
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
     await userEvent.click(screen.getAllByText('Voir détails →')[0]);
+    await waitFor(() => screen.getByText(/Avis & Remarques/i));
+    await userEvent.click(screen.getByText(/Avis & Remarques/i));
     await waitFor(() => screen.getByText('➕ Donner mon avis'));
     await userEvent.click(screen.getByText('➕ Donner mon avis'));
     expect(screen.getByRole('button', { name: /Publier/ })).toBeDisabled();
@@ -212,9 +220,11 @@ describe('Entreprises page — détail & avis', () => {
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
     await userEvent.click(screen.getAllByText('Voir détails →')[0]);
+    await waitFor(() => screen.getByText(/Avis & Remarques/i));
+    await userEvent.click(screen.getByText(/Avis & Remarques/i));
     await waitFor(() => screen.getByText('➕ Donner mon avis'));
     await userEvent.click(screen.getByText('➕ Donner mon avis'));
-    expect(screen.getByText(/💬 Avis/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^💬 Avis$/ })).toBeInTheDocument();
     expect(screen.getByText(/⚠️ Remarque/)).toBeInTheDocument();
     expect(screen.getByText(/💡 Suggestion/)).toBeInTheDocument();
   });
@@ -227,6 +237,8 @@ describe('Entreprises page — détail & avis', () => {
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
     await userEvent.click(screen.getAllByText('Voir détails →')[0]);
+    await waitFor(() => screen.getByText(/Avis & Remarques/i));
+    await userEvent.click(screen.getByText(/Avis & Remarques/i));
     await waitFor(() => screen.getByText('➕ Donner mon avis'));
     await userEvent.click(screen.getByText('➕ Donner mon avis'));
     await userEvent.type(screen.getByPlaceholderText(/Partagez/), 'Très bonne clinique!');

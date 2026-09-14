@@ -1158,8 +1158,8 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
   useEffect(() => {
     loadAvis();
     loadVisites();
-    axios.get('/api/users/by-role/medecin').then((r) => setMedecins(r.data || [])).catch(() => {});
-    axios.get('/api/users/by-role/technicien').then((r) => setTechniciens(r.data || [])).catch(() => {});
+    Promise.resolve().then(() => axios.get('/api/users/by-role/medecin')).then((r) => setMedecins(r?.data || [])).catch(() => {});
+    Promise.resolve().then(() => axios.get('/api/users/by-role/technicien')).then((r) => setTechniciens(r?.data || [])).catch(() => {});
   }, [entreprise.id]);
 
   async function loadAvis() {
