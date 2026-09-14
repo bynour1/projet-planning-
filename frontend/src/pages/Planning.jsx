@@ -1276,10 +1276,18 @@ function DoctorMatrixView({
   const [mobileMode, setMobileMode] = useState(() => (isSmallScreen ? 'cards' : 'matrix'));
   const [selectedMobileDay, setSelectedMobileDay] = useState(() => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const dayKeys = days.map(d => typeof d === 'string' ? d : format(d, 'yyyy-MM-dd'));
+    const dayKeys = (days || []).map(d => typeof d === 'string' ? d : format(d, 'yyyy-MM-dd'));
     return dayKeys.includes(todayStr) ? todayStr : (dayKeys[0] || todayStr);
   });
   const [mobileTab, setMobileTab] = useState('selected_day'); // 'selected_day' | 'all_days'
+
+  useEffect(() => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const dayKeys = (days || []).map(d => typeof d === 'string' ? d : format(d, 'yyyy-MM-dd'));
+    if (dayKeys.length > 0 && !dayKeys.includes(selectedMobileDay)) {
+      setSelectedMobileDay(dayKeys.includes(todayStr) ? todayStr : dayKeys[0]);
+    }
+  }, [days]);
 
   // Extract all events for a given day across all staff
   const getDayAllEvents = (dayKey) => {
@@ -1365,7 +1373,7 @@ function DoctorMatrixView({
               const dStr = typeof d === 'string' ? d : format(d, 'yyyy-MM-dd');
               const dObj = typeof d === 'string' ? parseISO(d) : d;
               const isSel = selectedMobileDay === dStr;
-              const isTod = isToday(dObj);
+              const isTod = isTodayFn(dObj);
               const dayEvs = getDayAllEvents(dStr);
               const count = dayEvs.length;
               const dayName = format(dObj, 'EEE', { locale: fr });

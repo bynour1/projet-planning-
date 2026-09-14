@@ -90,32 +90,34 @@ function AppShell() {
 
         <Sidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
         <div className="main-area">
-          <Suspense fallback={<div className="loading-center" style={{ height: '60vh' }}><div className="spinner" style={{ width: 32, height: 32 }} /></div>}>
-            <Routes>
-              {isChauffeur ? (
-                <>
-                  <Route path="/planning" element={<Planning toast={addToast}/>}/>
-                  <Route path="/clino"    element={<Clino    toast={addToast}/>}/>
-                  <Route path="/settings" element={<Settings toast={addToast}/>}/>
-                  <Route path="*"         element={<Navigate to="/planning" replace/>}/>
-                </>
-              ) : (
-                <>
-                  <Route path="/"             element={<Navigate to="/dashboard" replace/>}/>
-                  <Route path="/dashboard"    element={<Dashboard    toast={addToast}/>}/>
-                  <Route path="/planning"     element={<Planning     toast={addToast}/>}/>
-                  <Route path="/calendar"     element={<Calendar     toast={addToast}/>}/>
-                  <Route path="/schedule"     element={<Schedule     toast={addToast}/>}/>
-                  <Route path="/clino"        element={<Clino        toast={addToast}/>}/>
-                  <Route path="/chat"         element={<Chat         toast={addToast}/>}/>
-                  <Route path="/entreprises"  element={<Entreprises  toast={addToast}/>}/>
-                  <Route path="/users"        element={<Users        toast={addToast}/>}/>
-                  <Route path="/settings"     element={<Settings     toast={addToast}/>}/>
-                  <Route path="*"             element={<Navigate to="/dashboard" replace/>}/>
-                </>
-              )}
-            </Routes>
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<div className="loading-center" style={{ height: '60vh' }}><div className="spinner" style={{ width: 32, height: 32 }} /></div>}>
+              <Routes>
+                {isChauffeur ? (
+                  <>
+                    <Route path="/planning" element={<Planning toast={addToast}/>}/>
+                    <Route path="/clino"    element={<Clino    toast={addToast}/>}/>
+                    <Route path="/settings" element={<Settings toast={addToast}/>}/>
+                    <Route path="*"         element={<Navigate to="/planning" replace/>}/>
+                  </>
+                ) : (
+                  <>
+                    <Route path="/"             element={<Navigate to="/dashboard" replace/>}/>
+                    <Route path="/dashboard"    element={<Dashboard    toast={addToast}/>}/>
+                    <Route path="/planning"     element={<Planning     toast={addToast}/>}/>
+                    <Route path="/calendar"     element={<Calendar     toast={addToast}/>}/>
+                    <Route path="/schedule"     element={<Schedule     toast={addToast}/>}/>
+                    <Route path="/clino"        element={<Clino        toast={addToast}/>}/>
+                    <Route path="/chat"         element={<Chat         toast={addToast}/>}/>
+                    <Route path="/entreprises"  element={<Entreprises  toast={addToast}/>}/>
+                    <Route path="/users"        element={<Users        toast={addToast}/>}/>
+                    <Route path="/settings"     element={<Settings     toast={addToast}/>}/>
+                    <Route path="*"             element={<Navigate to="/dashboard" replace/>}/>
+                  </>
+                )}
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </div>
       </div>
     </SocketProvider>
