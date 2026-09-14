@@ -55,7 +55,17 @@
   --shadow-lg: 0 10px 30px rgba(0,0,0,.5);
 }
 
-html, body, #root { height: 100%; font-family: var(--font); color: var(--text); background: var(--bg); }
+html, body, #root {
+  height: 100%;
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
+  touch-action: manipulation;
+}
+
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
 
 /* ── Scrollbar ──────────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 6px; height: 6px; }

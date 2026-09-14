@@ -61,12 +61,32 @@ export default defineConfig({
       'date-fns',
       'date-fns/locale',
       'socket.io-client',
-      'xlsx',
-      '@fullcalendar/react',
-      '@fullcalendar/daygrid',
-      '@fullcalendar/timegrid',
-      '@fullcalendar/interaction',
     ],
+  },
+  build: {
+    target: 'es2020',
+    cssCodeSplit: true,
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('xlsx') || id.includes('docx') || id.includes('jspdf') || id.includes('html2canvas')) {
+              return 'vendor-export';
+            }
+            if (id.includes('@fullcalendar')) {
+              return 'vendor-calendar';
+            }
+            if (id.includes('leaflet')) {
+              return 'vendor-leaflet';
+            }
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+              return 'vendor-react';
+            }
+          }
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',
