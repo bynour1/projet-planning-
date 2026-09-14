@@ -61,6 +61,12 @@ html, body, #root {
   color: var(--text);
   background: var(--bg);
   touch-action: manipulation;
+  -webkit-overflow-scrolling: touch;
+}
+
+.page-content, .table-wrap, .print-matrix-wrapper {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 button, a, input, select, textarea {
@@ -667,6 +673,20 @@ tbody tr:hover { background: var(--surface2); }
   }
   .print-matrix-table td {
     padding: 4px 6px !important;
+  }
+}
+
+/* Touch & Mobile Performance Optimizations */
+@media (hover: none), (max-width: 768px) {
+  .print-matrix-table tr,
+  .print-matrix-table td,
+  .print-matrix-table th {
+    transition: none !important;
+  }
+  .table-wrap table tr,
+  .table-wrap table td,
+  .table-wrap table th {
+    transition: none !important;
   }
 }
 

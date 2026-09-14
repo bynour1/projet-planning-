@@ -1148,87 +1148,92 @@ function DoctorMatrixView({
     });
   }, [pe, cl, ce, isTechnician]);
 
-  function getStaffEvents(staffMember, dayKey) {
-    if (isTechnician) {
-      const tecId = staffMember ? String(staffMember.id) : null;
-      const tecName = staffMember ? `${staffMember.prenom || ''} ${staffMember.nom || ''}`.toLowerCase().trim() : null;
+  const eventsIndex = useMemo(() => {
+    const map = new Map();
+    const add = (day, staffKey, type, ev) => {
+      if (!day) return;
+      const k = `${day}_${staffKey}`;
+      let slot = map.get(k);
+      if (!slot) {
+        slot = { pEvents: [], clEvents: [], cEvents: [] };
+        map.set(k, slot);
+      }
+      if (type === 'p') slot.pEvents.push(ev);
+      else if (type === 'cl') slot.clEvents.push(ev);
+      else if (type === 'c') slot.cEvents.push(ev);
+    };
 
-      const pEvents = pe.filter(e => {
-        if (e.date !== dayKey) return false;
-        if (tecId && e.technicien_id && String(e.technicien_id) === tecId) return true;
-        if (tecName && e.technicien_nom && e.technicien_nom.toLowerCase().includes(tecName)) return true;
-        if (!staffMember && !e.technicien_id && (!e.technicien_nom || e.technicien_nom === '—' || e.technicien_nom === '-')) return true;
-        return false;
-      });
-
-      const clEvents = cl.filter(e => {
-        if (e.date !== dayKey) return false;
-        if (tecId && e.technicien_id && String(e.technicien_id) === tecId) return true;
-        if (tecName && (e.technicien_nom || e.technicien_full) && (e.technicien_nom || e.technicien_full).toLowerCase().includes(tecName)) return true;
-        if (!staffMember && !e.technicien_id && !e.technicien_nom && !e.technicien_full) return true;
-        return false;
-      });
-
-      const cEvents = ce.filter(e => {
-        const eDate = (e.date_debut || '').slice(0, 10);
-        if (eDate !== dayKey) return false;
-        if (tecId) {
-          if (e.technicien_id && String(e.technicien_id) === tecId) return true;
-          if (Array.isArray(e.participants) && e.participants.some(p => String(p.id) === tecId)) return true;
+    pe.forEach(ev => {
+      const d = toRaw(ev.date);
+      if (isTechnician) {
+        const key = ev.technicien_id ? String(ev.technicien_id) : (ev.technicien_nom ? `name_${ev.technicien_nom.toLowerCase().trim()}` : 'unassigned');
+        add(d, key, 'p', ev);
+        if (!ev.technicien_id && (!ev.technicien_nom || ev.technicien_nom === '—' || ev.technicien_nom === '-')) {
+          add(d, 'unassigned', 'p', ev);
         }
-        if (tecName) {
-          if (e.technicien_nom && e.technicien_nom.toLowerCase().includes(tecName)) return true;
-          if (Array.isArray(e.participants) && e.participants.some(p => `${p.prenom || ''} ${p.nom || ''}`.toLowerCase().includes(tecName))) return true;
+      } else {
+        const key = ev.medecin_id ? String(ev.medecin_id) : (ev.medecin_nom ? `name_${ev.medecin_nom.toLowerCase().trim()}` : 'unassigned');
+        add(d, key, 'p', ev);
+        if (!ev.medecin_id && (!ev.medecin_nom || ev.medecin_nom === '—' || ev.medecin_nom === '-')) {
+          add(d, 'unassigned', 'p', ev);
         }
-        if (!staffMember) {
-          const hasTec = Boolean(e.technicien_id || (e.technicien_nom && e.technicien_nom !== '—' && e.technicien_nom !== '-') || (Array.isArray(e.participants) && e.participants.some(p => p.role === 'technicien')));
-          if (!hasTec) return true;
+      }
+    });
+
+    cl.forEach(ev => {
+      const d = toRaw(ev.date);
+      if (isTechnician) {
+        const key = ev.technicien_id ? String(ev.technicien_id) : ((ev.technicien_nom || ev.technicien_full) ? `name_${(ev.technicien_nom || ev.technicien_full).toLowerCase().trim()}` : 'unassigned');
+        add(d, key, 'cl', ev);
+        if (!ev.technicien_id && !ev.technicien_nom && !ev.technicien_full) {
+          add(d, 'unassigned', 'cl', ev);
         }
-        return false;
-      });
-
-      return { pEvents, clEvents, cEvents };
-    } else {
-      const docId = staffMember ? String(staffMember.id) : null;
-      const docName = staffMember ? `${staffMember.prenom || ''} ${staffMember.nom || ''}`.toLowerCase().trim() : null;
-
-      const pEvents = pe.filter(e => {
-        if (e.date !== dayKey) return false;
-        if (docId && e.medecin_id && String(e.medecin_id) === docId) return true;
-        if (docName && e.medecin_nom && e.medecin_nom.toLowerCase().includes(docName)) return true;
-        if (!staffMember && !e.medecin_id && (!e.medecin_nom || e.medecin_nom === '—' || e.medecin_nom === '-')) return true;
-        return false;
-      });
-
-      const clEvents = cl.filter(e => {
-        if (e.date !== dayKey) return false;
-        if (docId && e.medecin_id && String(e.medecin_id) === docId) return true;
-        if (docName && (e.medecin_nom || e.medecin_full) && (e.medecin_nom || e.medecin_full).toLowerCase().includes(docName)) return true;
-        if (!staffMember && !e.medecin_id && !e.medecin_nom && !e.medecin_full) return true;
-        return false;
-      });
-
-      const cEvents = ce.filter(e => {
-        const eDate = (e.date_debut || '').slice(0, 10);
-        if (eDate !== dayKey) return false;
-        if (docId) {
-          if (e.medecin_id && String(e.medecin_id) === docId) return true;
-          if (Array.isArray(e.participants) && e.participants.some(p => String(p.id) === docId)) return true;
+      } else {
+        const key = ev.medecin_id ? String(ev.medecin_id) : ((ev.medecin_nom || ev.medecin_full) ? `name_${(ev.medecin_nom || ev.medecin_full).toLowerCase().trim()}` : 'unassigned');
+        add(d, key, 'cl', ev);
+        if (!ev.medecin_id && !ev.medecin_nom && !ev.medecin_full) {
+          add(d, 'unassigned', 'cl', ev);
         }
-        if (docName) {
-          if (e.medecin_nom && e.medecin_nom.toLowerCase().includes(docName)) return true;
-          if (Array.isArray(e.participants) && e.participants.some(p => `${p.prenom || ''} ${p.nom || ''}`.toLowerCase().includes(docName))) return true;
-        }
-        if (!staffMember) {
-          const hasDoc = Boolean(e.medecin_id || (e.medecin_nom && e.medecin_nom !== '—' && e.medecin_nom !== '-') || (Array.isArray(e.participants) && e.participants.some(p => p.role === 'medecin')));
-          if (!hasDoc) return true;
-        }
-        return false;
-      });
+      }
+    });
 
-      return { pEvents, clEvents, cEvents };
+    ce.forEach(ev => {
+      const d = (ev.date_debut || '').slice(0, 10);
+      if (Array.isArray(ev.participants) && ev.participants.length > 0) {
+        ev.participants.forEach(p => {
+          if ((isTechnician && p.role === 'technicien') || (!isTechnician && p.role === 'medecin')) {
+            add(d, String(p.id), 'c', ev);
+          }
+        });
+      } else {
+        const sId = isTechnician ? ev.technicien_id : ev.medecin_id;
+        const sNom = isTechnician ? ev.technicien_nom : ev.medecin_nom;
+        const key = sId ? String(sId) : (sNom ? `name_${sNom.toLowerCase().trim()}` : 'unassigned');
+        add(d, key, 'c', ev);
+      }
+    });
+
+    return map;
+  }, [pe, cl, ce, isTechnician]);
+
+  const EMPTY_SLOT = useMemo(() => Object.freeze({ pEvents: [], clEvents: [], cEvents: [] }), []);
+
+  const getStaffEvents = useCallback((staffMember, dayKey) => {
+    if (!staffMember) {
+      return eventsIndex.get(`${dayKey}_unassigned`) || EMPTY_SLOT;
     }
-  }
+    const staffId = String(staffMember.id);
+    const byId = eventsIndex.get(`${dayKey}_${staffId}`);
+    if (byId) return byId;
+
+    const staffName = `${staffMember.prenom || ''} ${staffMember.nom || ''}`.toLowerCase().trim();
+    if (staffName) {
+      const byName = eventsIndex.get(`${dayKey}_name_${staffName}`);
+      if (byName) return byName;
+    }
+
+    return EMPTY_SLOT;
+  }, [eventsIndex, EMPTY_SLOT]);
 
   const staffStats = useMemo(() => {
     const stats = {};
