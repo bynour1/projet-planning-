@@ -8,7 +8,6 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import EnterpriseAutocomplete from '../components/EnterpriseAutocomplete';
 import NavigationSelector from '../components/NavigationSelector';
-import SignaturePadModal from '../components/SignaturePadModal';
 import ExportDropdown from '../components/ExportDropdown';
 
 function fmtDisplayWithDay(dateStr) {
@@ -142,137 +141,173 @@ function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
   );
 }
 
+function formatSafeDateTitle(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const [y, m, d] = String(dateStr).slice(0, 10).split('-').map(Number);
+    const dt = new Date(y, (m || 1) - 1, d || 1);
+    const dayName = dt.toLocaleDateString('fr-FR', { weekday: 'long' });
+    const cap = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+    return `${cap} ${dt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+function shiftDate(currDateStr, deltaDays) {
+  try {
+    const [y, m, d] = currDateStr.split('-').map(Number);
+    const date = new Date(y, (m || 1) - 1, d || 1);
+    date.setDate(date.getDate() + deltaDays);
+    const yStr = date.getFullYear();
+    const mStr = String(date.getMonth() + 1).padStart(2, '0');
+    const dStr = String(date.getDate()).padStart(2, '0');
+    return `${yStr}-${mStr}-${dStr}`;
+  } catch {
+    return currDateStr;
+  }
+}
+
 /* ── Daily Program Panel ─────────────────────────────────────── */
-function DailyProgram({ selectedDate, clinoItems, planningItems, isAdmin, onAddClino, setSigModal }) {
+function DailyProgram({ selectedDate, clinoItems, isAdmin, onAddClino, onEditClino, onDeleteClino }) {
   const dayClino = clinoItems.filter(c => String(c.date || '').slice(0, 10) === selectedDate)
     .sort((a, b) => (a.heure || '').localeCompare(b.heure || ''));
-  const linkedClinoIds = new Set(clinoItems.map(c => String(c.id)));
-  const linkedPlanningIds = new Set(clinoItems.filter(c => c.planning_id).map(c => String(c.planning_id)));
 
-  const dayPlanning = planningItems.filter(p => {
-    if (String(p.date || '').slice(0, 10) !== selectedDate) return false;
-    if (p.clino_id && linkedClinoIds.has(String(p.clino_id))) return false;
-    if (linkedPlanningIds.has(String(p.id))) return false;
-    return true;
-  }).sort((a, b) => (a.heure_debut || '').localeCompare(b.heure_debut || ''));
-
-  const total = dayClino.length + dayPlanning.length;
-
-  // Build merged timeline
-  const timeline = [
-    ...dayPlanning.map(p => ({ time: p.heure_debut ? String(p.heure_debut).slice(0, 5) : '', type: 'planning', data: p })),
-    ...dayClino.map(c => ({ time: c.heure ? String(c.heure).slice(0, 5) : '', type: 'clino', data: c })),
-  ].sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+  const total = dayClino.length;
 
   return (
-    <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+    <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
       {/* Header */}
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'linear-gradient(135deg,#0ea5e9,#0284c7)', color: '#fff' }}>
-        <div style={{ fontWeight: 700, fontSize: 14 }}>
-          📅 Programme du {format(parseISO(selectedDate), 'd MMMM yyyy', { locale: fr })}
+      <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', background: 'linear-gradient(135deg, #0f172a, #0369a1)', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: 0.3 }}>
+            📅 {formatSafeDateTitle(selectedDate)}
+          </div>
+          <div style={{ fontSize: 12, color: '#bae6fd', marginTop: 2 }}>
+            {total} tournée{total > 1 ? 's' : ''} Clino Mobile au programme
+          </div>
         </div>
-        <div style={{ fontSize: 12, opacity: .85, marginTop: 2 }}>{total} programme(s)</div>
+        {isAdmin && (
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={onAddClino}
+            style={{ background: '#ffffff', color: '#0f172a', fontWeight: 800, fontSize: 11.5, borderRadius: 8, padding: '5px 12px' }}
+          >
+            + Nouvelle tournée
+          </button>
+        )}
       </div>
 
       {/* Timeline */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
-        {timeline.length === 0 ? (
-          <div style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 13, padding: '30px 10px' }}>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
-            Aucun programme ce jour
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        {dayClino.length === 0 ? (
+          <div style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 13, padding: '40px 10px' }}>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>🚗</div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-2)' }}>Aucune mission Clino ce jour</div>
+            <p style={{ margin: '6px 0 16px', color: 'var(--text-3)', fontSize: 12 }}>Aucune mission Clino Mobile enregistrée pour le {formatSafeDateTitle(selectedDate)}.</p>
+            {isAdmin && (
+              <button className="btn btn-outline btn-sm" onClick={onAddClino} style={{ fontWeight: 700 }}>
+                + Planifier une tournée
+              </button>
+            )}
           </div>
         ) : (
           <div style={{ position: 'relative' }}>
             {/* Vertical line */}
             <div style={{ position: 'absolute', left: 28, top: 0, bottom: 0, width: 2, background: 'var(--border)' }} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingLeft: 2 }}>
-              {timeline.map((item, i) => {
-                const isC = item.type === 'clino';
-                const displayName = item.data.entreprise_nom || item.data.planning_titre || item.data.titre || (isC ? 'Mission Clino Mobile' : 'Programme Médical');
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingLeft: 2 }}>
+              {dayClino.map(c => {
+                const displayName = c.entreprise_nom || c.planning_titre || c.titre || 'Mission Clino Mobile';
+                const docName = c.medecin_full || c.medecin_nom;
+                const tecName = c.technicien_full || c.technicien_nom;
+                const timeStr = c.heure ? String(c.heure).slice(0, 5) : '—';
+
                 return (
-                  <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <div key={c.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                     {/* Time bubble */}
                     <div style={{
-                      width: 52, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center',
-                      justifyContent: 'center', fontSize: 11, fontWeight: 800, flexShrink: 0,
-                      background: isC ? '#e0f2fe' : '#dcfce7',
-                      color: isC ? '#0284c7' : '#059669',
-                      border: `2px solid ${isC ? '#0ea5e9' : '#22c55e'}`,
+                      width: 54, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center',
+                      justifyContent: 'center', fontSize: 11.5, fontWeight: 900, flexShrink: 0,
+                      background: '#e0f2fe',
+                      color: '#0369a1',
+                      border: '2px solid #0284c7',
                       zIndex: 1,
                     }}>
-                      {item.time || '—'}
+                      {timeStr}
                     </div>
                     {/* Card */}
                     <div style={{
-                      flex: 1, padding: '10px 12px', borderRadius: 10,
-                      background: isC ? '#f0f9ff' : '#f0fdf4',
-                      border: `1px solid ${isC ? '#bae6fd' : '#bbf7d0'}`,
+                      flex: 1, padding: '12px 14px', borderRadius: 10,
+                      background: '#f0f9ff',
+                      border: '1px solid #bae6fd',
+                      borderLeft: '4px solid #0284c7',
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <div style={{ fontWeight: 700, fontSize: 12, color: isC ? '#0284c7' : '#059669' }}>
-                          {isC ? '🚗 Clino Mobile' : '📋 Planning'}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
+                        <div style={{ fontWeight: 800, fontSize: 12, color: '#0284c7', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span>🚗 Clino Mobile</span>
                         </div>
-                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                          {item.data.adresse && (
-                            <NavigationSelector addr={item.data.adresse} compact />
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          {c.adresse && (
+                            <NavigationSelector addr={c.adresse} compact />
                           )}
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            style={{ padding: '2px 6px', fontSize: 11, color: isC ? '#0284c7' : '#059669', fontWeight: 600 }}
-                            title="Valider & Signer sur site"
-                            onClick={() => setSigModal?.({
-                              id: item.data.id,
-                              titre: displayName,
-                              adresse: item.data.adresse,
-                              medecin_nom: item.data.medecin_full || item.data.medecin_nom,
-                              technicien_nom: item.data.technicien_full || item.data.technicien_nom,
-                              date: selectedDate
-                            })}
-                          >
-                            ✍️ Signer
-                          </button>
+                          {isAdmin && (
+                            <>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ padding: '2px 6px', fontSize: 11 }}
+                                title="Modifier"
+                                onClick={() => onEditClino?.(c)}
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ padding: '2px 6px', fontSize: 11, color: 'var(--danger)' }}
+                                title="Supprimer"
+                                onClick={() => onDeleteClino?.(c.id)}
+                              >
+                                🗑️
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
-                      {isC ? (
-                        <>
-                          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>
-                            {displayName}
-                          </div>
-                          {item.data.adresse && (
-                            <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>
-                              📍 {item.data.adresse}
-                            </div>
-                          )}
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-                            {item.data.medecin_full && (
-                              <span style={{ fontSize: 11, color: 'var(--text-2)', background: 'rgba(2, 132, 199, 0.1)', padding: '2px 6px', borderRadius: 4 }}>
-                                👨‍⚕️ {item.data.medecin_full}
-                              </span>
-                            )}
-                            {(item.data.technicien_full || item.data.technicien_nom) && (
-                              <span style={{ fontSize: 11, color: 'var(--text-2)', background: 'rgba(5, 150, 105, 0.1)', padding: '2px 6px', borderRadius: 4 }}>
-                                🔧 {item.data.technicien_full || item.data.technicien_nom}
-                              </span>
-                            )}
-                            {!item.data.medecin_full && !item.data.technicien_full && !item.data.technicien_nom && (
-                              <span style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic' }}>
-                                Sans intervenant assigné
-                              </span>
-                            )}
-                          </div>
-                          {item.data.commentaire && <div style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic', marginTop: 4 }}>{item.data.commentaire}</div>}
-                        </>
-                      ) : (
-                        <>
-                          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>{displayName}</div>
-                          {item.data.adresse && <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>📍 {item.data.adresse}</div>}
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-                            {item.data.medecin_nom && <span style={{ fontSize: 11, color: 'var(--text-2)' }}>👨‍⚕️ {item.data.medecin_nom}</span>}
-                            {item.data.technicien_nom && <span style={{ fontSize: 11, color: 'var(--text-2)' }}>🔧 {item.data.technicien_nom}</span>}
-                          </div>
-                          {item.data.heure_fin && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>→ {item.data.heure_fin}</div>}
-                        </>
+
+                      <div style={{ fontSize: 13.5, fontWeight: 900, color: '#0f172a' }}>
+                        {displayName}
+                      </div>
+
+                      {c.adresse && (
+                        <div style={{ fontSize: 12, color: '#0369a1', marginTop: 3 }}>
+                          📍 {c.adresse}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                        {docName && (
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#0369a1', background: 'rgba(2, 132, 199, 0.1)', padding: '2px 8px', borderRadius: 6 }}>
+                            👨‍⚕️ {docName.startsWith('Dr.') ? docName : `Dr. ${docName}`}
+                          </span>
+                        )}
+                        {tecName && (
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#059669', background: 'rgba(5, 150, 105, 0.1)', padding: '2px 8px', borderRadius: 6 }}>
+                            🔧 {tecName}
+                          </span>
+                        )}
+                        {!docName && !tecName && (
+                          <span style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic' }}>
+                            Sans intervenant assigné
+                          </span>
+                        )}
+                      </div>
+
+                      {c.commentaire && (
+                        <div style={{ fontSize: 11.5, color: '#475569', fontStyle: 'italic', background: 'rgba(0,0,0,0.03)', padding: '4px 8px', borderRadius: 6, marginTop: 6 }}>
+                          💬 {c.commentaire}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -282,13 +317,6 @@ function DailyProgram({ selectedDate, clinoItems, planningItems, isAdmin, onAddC
           </div>
         )}
       </div>
-      {isAdmin && (
-        <div style={{ padding: 12, borderTop: '1px solid var(--border)' }}>
-          <button className="btn btn-primary btn-sm" style={{ width: '100%' }} onClick={onAddClino}>
-            + Ajouter au programme
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -304,7 +332,6 @@ export default function Clino({ toast }) {
   const [medecins,    setMedecins]    = useState([]);
   const [techniciens, setTechniciens] = useState([]);
   const [modal,       setModal]       = useState(null);
-  const [sigModal,    setSigModal]    = useState(null);
   const [confirm,     setConfirm]     = useState(null);
   const [filters,     setFilters]     = useState({ role: '', search: '', date: '' });
   const [loading,     setLoading]     = useState(true);
@@ -371,10 +398,9 @@ export default function Clino({ toast }) {
 
   const hasActiveFilters = Boolean(filters.role || filters.search || filters.date);
 
-  const allDates = [...new Set([
-    ...items.map(i => i.date ? String(i.date).slice(0, 10) : null),
-    ...planning.map(p => p.date ? String(p.date).slice(0, 10) : null),
-  ])].filter(Boolean).sort().reverse();
+  const allDates = [...new Set(
+    items.map(i => i.date ? String(i.date).slice(0, 10) : null)
+  )].filter(Boolean).sort().reverse();
 
   const exportClinoItems = filtered.map(it => ({
     ...it,
@@ -439,8 +465,7 @@ export default function Clino({ toast }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Export dropdown */}
           <ExportDropdown
-            label="Exporter / Imprimer"
-            onPrint={() => window.print()}
+            label="Exporter"
             onPDF={() => {
               import('../utils/exportUtils').then(({ exportToPDF }) => {
                 exportToPDF(exportClinoItems, [
@@ -478,9 +503,6 @@ export default function Clino({ toast }) {
                   { header: 'Commentaires / Notes', key: 'commentaire' },
                 ], 'Tournees Clino Mobile GMT Ariana');
               });
-            }}
-            onICS={() => {
-              import('../utils/exportUtils').then(({ exportToICS }) => exportToICS(exportClinoItems));
             }}
           />
 
@@ -585,22 +607,6 @@ export default function Clino({ toast }) {
                             {it.adresse && (
                               <NavigationSelector addr={it.adresse} compact />
                             )}
-                            <button
-                              type="button"
-                              className="btn btn-ghost btn-sm"
-                              style={{ padding: '3px 8px', fontSize: 11, color: '#059669', fontWeight: 600 }}
-                              title="Valider & Signer sur site"
-                              onClick={() => setSigModal({
-                                id: it.id,
-                                titre: displayName,
-                                adresse: it.adresse,
-                                medecin_nom: it.medecin_full || it.medecin_nom,
-                                technicien_nom: it.technicien_full || it.technicien_nom,
-                                date: it.date
-                              })}
-                            >
-                              ✍️ Signer
-                            </button>
                             {isAdmin && (
                               <>
                                 <button className="btn btn-outline btn-sm" style={{ padding: '3px 7px' }} onClick={() => setModal(it)}>✏️</button>
@@ -649,37 +655,84 @@ export default function Clino({ toast }) {
 
           {activeTab === 'programme' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>Sélectionner une date :</label>
-                <input className="input" type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-                  style={{ width: 'auto', padding: '5px 10px', height: 34 }} />
-              </div>
-              {/* Date quick-select pills */}
-              {allDates.length > 0 && (
-                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
-                  {allDates.slice(0, 14).map(d => {
-                    const count = items.filter(i => String(i.date || '').slice(0, 10) === d).length + planning.filter(p => String(p.date || '').slice(0, 10) === d).length;
-                    const isToday = d === format(new Date(), 'yyyy-MM-dd');
-                    return (
-                      <button key={d} onClick={() => setSelectedDate(d)}
-                        className={`btn btn-sm ${selectedDate === d ? 'btn-primary' : 'btn-outline'}`}
-                        style={{ fontSize: 12, flexShrink: 0, whiteSpace: 'nowrap' }}>
-                        {isToday ? 'Aujourd\'hui' : format(parseISO(d), 'dd/MM', { locale: fr })}
-                        {count > 0 && <span style={{ marginLeft: 4, background: 'rgba(255,255,255,.3)', borderRadius: 10, padding: '0 5px', fontSize: 10 }}>{count}</span>}
-                      </button>
-                    );
-                  })}
+              {/* Day Navigation Bar */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+                flexWrap: 'wrap',
+                background: 'var(--surface)',
+                padding: '10px 14px',
+                borderRadius: 12,
+                border: '1px solid var(--border)',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      style={{ padding: '4px 10px', fontWeight: 800, fontSize: 13, height: 32 }}
+                      onClick={() => setSelectedDate(d => shiftDate(d, -1))}
+                      title="Jour précédent"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      style={{ padding: '4px 12px', fontWeight: 700, fontSize: 12, height: 32 }}
+                      onClick={() => setSelectedDate(format(new Date(), 'yyyy-MM-dd'))}
+                    >
+                      Aujourd'hui
+                    </button>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      style={{ padding: '4px 10px', fontWeight: 800, fontSize: 13, height: 32 }}
+                      onClick={() => setSelectedDate(d => shiftDate(d, 1))}
+                      title="Jour suivant"
+                    >
+                      ›
+                    </button>
+                  </div>
+                  <input
+                    className="input"
+                    type="date"
+                    value={selectedDate}
+                    onChange={e => setSelectedDate(e.target.value)}
+                    style={{ width: 'auto', padding: '4px 8px', height: 32, fontSize: 12, borderRadius: 8 }}
+                  />
                 </div>
-              )}
+
+                {/* Date quick-select pills */}
+                {allDates.length > 0 && (
+                  <div style={{ display: 'flex', gap: 5, overflowX: 'auto', maxWidth: '100%', padding: '2px 0' }}>
+                    {allDates.slice(0, 10).map(d => {
+                      const count = items.filter(i => String(i.date || '').slice(0, 10) === d).length;
+                      const isToday = d === format(new Date(), 'yyyy-MM-dd');
+                      return (
+                        <button
+                          key={d}
+                          onClick={() => setSelectedDate(d)}
+                          className={`btn btn-sm ${selectedDate === d ? 'btn-primary' : 'btn-ghost'}`}
+                          style={{ fontSize: 11.5, padding: '3px 8px', height: 28, flexShrink: 0, whiteSpace: 'nowrap', borderRadius: 6 }}
+                        >
+                          {isToday ? 'Auj.' : d.slice(8, 10) + '/' + d.slice(5, 7)}
+                          {count > 0 && <span style={{ marginLeft: 4, opacity: 0.85, fontWeight: 800 }}>({count})</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
               {/* Daily program full width */}
               <DailyProgram
                 selectedDate={selectedDate}
                 clinoItems={filtered}
-                planningItems={planning}
                 isAdmin={isAdmin}
                 onAddClino={() => setModal({ date: selectedDate })}
-                setSigModal={setSigModal}
+                onEditClino={item => setModal(item)}
+                onDeleteClino={id => setConfirm(id)}
               />
             </div>
           )}
@@ -693,14 +746,6 @@ export default function Clino({ toast }) {
           techniciens={techniciens}
           onSave={() => { setModal(null); load(); toast('Enregistré', 'success'); }}
           onClose={() => setModal(null)}
-        />
-      )}
-      {sigModal && (
-        <SignaturePadModal
-          event={sigModal}
-          onClose={() => setSigModal(null)}
-          onSave={() => { setSigModal(null); load(); }}
-          toast={toast}
         />
       )}
       {confirm && (

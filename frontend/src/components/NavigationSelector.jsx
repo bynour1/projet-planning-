@@ -27,7 +27,7 @@ export default function NavigationSelector({ addr, style = {}, compact = false }
     <div style={{ position: 'relative', display: 'inline-block', ...style }} onClick={e => e.stopPropagation()}>
       <button
         type="button"
-        className="nav-selector-btn"
+        className="nav-selector-btn no-print"
         onClick={() => setOpen(!open)}
         title="Ouvrir dans Google Maps / Waze / GPS"
         style={{
@@ -59,6 +59,11 @@ export default function NavigationSelector({ addr, style = {}, compact = false }
         </span>
         <span style={{ fontSize: 9, opacity: 0.7 }}>▼</span>
       </button>
+
+      {/* Version texte nette et propre pour l'impression papier */}
+      <span className="nav-selector-print-text" style={{ display: 'none' }}>
+        📍 {cleanAddr}
+      </span>
 
       {open && (
         <>

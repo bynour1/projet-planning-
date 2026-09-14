@@ -85,36 +85,6 @@ export default function ExportDropdown({
             animation: 'fadeIn 0.12s ease-out',
           }}
         >
-          {onPrint && (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => {
-                setOpen(false);
-                onPrint();
-              }}
-              style={{
-                width: '100%',
-                justifyContent: 'flex-start',
-                padding: '8px 12px',
-                borderRadius: 8,
-                fontSize: 12,
-                fontWeight: 700,
-                color: 'var(--text)',
-                textAlign: 'left',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-              }}
-            >
-              <span style={{ fontSize: 15 }}>🖨️</span>
-              <div style={{ flex: 1 }}>
-                <div>Imprimer</div>
-                <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500 }}>Format officiel A4 Paysage</div>
-              </div>
-            </button>
-          )}
-
           {onPDF && (
             <button
               type="button"
@@ -140,7 +110,7 @@ export default function ExportDropdown({
               <span style={{ fontSize: 15 }}>📕</span>
               <div style={{ flex: 1 }}>
                 <div>Document PDF (.pdf)</div>
-                <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500 }}>Tableau structuré officiel</div>
+                <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500 }}>Format officiel A4 Paysage</div>
               </div>
             </button>
           )}
@@ -201,36 +171,6 @@ export default function ExportDropdown({
               <div style={{ flex: 1 }}>
                 <div>Document Word (.doc)</div>
                 <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500 }}>Rapport éditable</div>
-              </div>
-            </button>
-          )}
-
-          {onICS && (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => {
-                setOpen(false);
-                onICS();
-              }}
-              style={{
-                width: '100%',
-                justifyContent: 'flex-start',
-                padding: '8px 12px',
-                borderRadius: 8,
-                fontSize: 12,
-                fontWeight: 700,
-                color: '#7e22ce',
-                textAlign: 'left',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-              }}
-            >
-              <span style={{ fontSize: 15 }}>📅</span>
-              <div style={{ flex: 1 }}>
-                <div>Calendrier iCal (.ics)</div>
-                <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500 }}>Outlook / Google Calendar</div>
               </div>
             </button>
           )}

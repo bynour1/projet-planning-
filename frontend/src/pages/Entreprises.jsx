@@ -1614,8 +1614,7 @@ export default function Entreprises({ toast }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Menu d'exportation unifié */}
           <ExportDropdown
-            label="Exporter / Imprimer"
-            onPrint={() => window.print()}
+            label="Exporter"
             onPDF={handleExportPDF}
             onExcel={handleExportExcel}
             onWord={handleExportWord}

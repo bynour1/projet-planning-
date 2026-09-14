@@ -596,23 +596,27 @@ function DoctorMatrixView({
   const doctorsList = useMemo(() => {
     const list = [...medecins];
     const seenIds = new Set(list.map(m => String(m.id)));
-    const seenNames = new Set(list.map(m => `${m.prenom || ''} ${m.nom || ''}`.toLowerCase().trim()));
+    const seenNames = new Set(list.map(m => `${m.prenom || ''} ${m.nom || ''}`.toLowerCase().replace(/^dr\.?\s*/i, '').trim()));
 
     [...pe, ...cl].forEach(item => {
+      const rawName = item.medecin_nom || item.medecin_full;
+      const cleanNom = rawName ? rawName.replace(/^dr\.?\s*/i, '').trim() : '';
+      const norm = cleanNom.toLowerCase();
+
       if (item.medecin_id && !seenIds.has(String(item.medecin_id))) {
         seenIds.add(String(item.medecin_id));
+        if (norm) seenNames.add(norm);
         list.push({
           id: item.medecin_id,
-          nom: item.medecin_nom || item.medecin_full || 'Médecin',
+          nom: cleanNom || 'Médecin',
           prenom: '',
         });
-      } else if (item.medecin_nom && item.medecin_nom !== '—' && item.medecin_nom !== '-') {
-        const norm = item.medecin_nom.toLowerCase().trim();
+      } else if (cleanNom && cleanNom !== '—' && cleanNom !== '-') {
         if (!seenNames.has(norm)) {
           seenNames.add(norm);
           list.push({
             id: 'nom_' + norm,
-            nom: item.medecin_nom,
+            nom: cleanNom,
             prenom: '',
             isVirtual: true,
           });
@@ -756,77 +760,36 @@ function DoctorMatrixView({
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)', padding: '10px 14px' }}>
-      {/* Hidden Print Header only displayed on paper / PDF print */}
-      <div className="print-only" style={{ display: 'none', marginBottom: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `2px solid ${isTechnician ? '#0d9488' : '#0284c7'}`, paddingBottom: 6 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: '#0f172a' }}>GROUPEMENT DE MÉDECINE DU TRAVAIL DE L'ARIANA</h2>
-            <div style={{ fontSize: 12, fontWeight: 800, color: isTechnician ? '#0d9488' : '#0284c7', marginTop: 2 }}>
-              Planning {isTechnician ? 'Technique (Techniciens & Clino Mobile)' : 'Médical (Médecins)'} : {periodLabel} {periodSubtitle ? `(${periodSubtitle})` : ''}
-            </div>
-            {activeFilterSummary && (
-              <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginTop: 2 }}>
-                🔍 {activeFilterSummary}
-              </div>
-            )}
-          </div>
-          <div style={{ textAlign: 'right', fontSize: 9, color: '#64748b' }}>
-            Document Officiel · Édition du {format(new Date(), 'dd/MM/yyyy HH:mm')}
-          </div>
-        </div>
-      </div>
-
-      {/* Top Controls Bar within Matrix (Role Toggle) */}
-      <div className="no-print" style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-        gap: 10,
+      {/* Sleek Navy Print Header matching PDF and Word */}
+      <div className="print-only print-header-banner" style={{
+        background: '#0f172a',
+        color: '#ffffff',
+        padding: '8px 12px',
+        borderRadius: '4px',
+        borderBottom: `3px solid ${isTechnician ? '#0d9488' : '#0284c7'}`,
+        marginBottom: 6,
       }}>
-        {/* Role Toggle */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          background: 'var(--surface)',
-          padding: '3px 4px',
-          borderRadius: 10,
-          border: '1px solid var(--border)',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-        }}>
-          <button
-            type="button"
-            className={`btn btn-sm ${!isTechnician ? 'btn-primary' : 'btn-ghost'}`}
-            style={{
-              fontSize: 12,
-              fontWeight: 800,
-              padding: '4px 12px',
-              borderRadius: 8,
-              background: !isTechnician ? 'linear-gradient(135deg, #0284c7, #0369a1)' : 'transparent',
-            }}
-            onClick={() => setStaffRole('medecin')}
-          >
-            👨‍⚕️ Vue Médecins ({doctorsList.length})
-          </button>
-          <button
-            type="button"
-            className={`btn btn-sm ${isTechnician ? 'btn-primary' : 'btn-ghost'}`}
-            style={{
-              fontSize: 12,
-              fontWeight: 800,
-              padding: '4px 12px',
-              borderRadius: 8,
-              background: isTechnician ? 'linear-gradient(135deg, #0d9488, #059669)' : 'transparent',
-            }}
-            onClick={() => setStaffRole('technicien')}
-          >
-            🔧 Vue Techniciens ({techniciansList.length})
-          </button>
+        <div className="print-header-inner" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="print-header-left">
+            <div className="print-header-brand" style={{ fontSize: 11.5, fontWeight: 900, color: '#ffffff', letterSpacing: 0.5 }}>
+              GROUPEMENT DE MÉDECINE DU TRAVAIL DE L'ARIANA
+            </div>
+            <div className="print-header-sub" style={{ fontSize: 8.5, fontWeight: 600, color: isTechnician ? '#99f6e4' : '#bae6fd', marginTop: 2 }}>
+              {isTechnician ? 'Planning Technique Opérationnel — Techniciens & Jours' : 'Planning Médical Opérationnel — Médecins & Jours'}
+            </div>
+          </div>
+          <div className="print-header-right" style={{ textAlign: 'right' }}>
+            <div className="print-header-date" style={{ fontSize: 7.5, color: '#e2e8f0' }}>
+              Édité le {format(new Date(), 'dd/MM/yyyy à HH:mm')}
+            </div>
+            <div className="print-header-period" style={{ fontSize: 8.5, fontWeight: 800, color: '#ffffff', marginTop: 2 }}>
+              {periodLabel} {activeFilterSummary ? `(${activeFilterSummary})` : ''}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div style={{
+      <div className="print-matrix-wrapper" style={{
         flex: 1,
         overflow: 'auto',
         borderRadius: 14,
@@ -869,10 +832,17 @@ function DoctorMatrixView({
 
               {activeStaffList.map((staff) => {
                 const count = staffStats[staff.id] || 0;
-                const initials = staff.prenom ? `${staff.prenom.charAt(0)}${staff.nom.charAt(0)}` : (staff.nom?.charAt(0) || (isTechnician ? 'T' : 'D'));
+                const cleanDocNom = (staff.nom || '').replace(/^dr\.?\s*/i, '').trim();
+                const cleanDocPrenom = (staff.prenom || '').replace(/^dr\.?\s*/i, '').trim();
+                const fullDocName = (cleanDocPrenom && cleanDocNom.toLowerCase().startsWith(cleanDocPrenom.toLowerCase()))
+                  ? cleanDocNom
+                  : [cleanDocPrenom, cleanDocNom].filter(Boolean).join(' ');
+                const initials = cleanDocPrenom
+                  ? `${cleanDocPrenom.charAt(0)}${cleanDocNom.charAt(0)}`
+                  : (cleanDocNom.charAt(0) || (isTechnician ? 'T' : 'D'));
                 const displayName = isTechnician
-                  ? (staff.prenom ? `${staff.prenom} ${staff.nom}` : staff.nom)
-                  : (staff.nom?.startsWith('Dr.') ? staff.nom : `Dr. ${staff.prenom ? `${staff.prenom} ` : ''}${staff.nom}`);
+                  ? ([staff.prenom, staff.nom].filter(Boolean).join(' ') || 'Technicien')
+                  : (fullDocName ? `Dr. ${fullDocName}` : 'Dr.');
 
                 return (
                   <th
@@ -890,7 +860,7 @@ function DoctorMatrixView({
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{
+                      <div className="no-print" style={{
                         width: 30,
                         height: 30,
                         borderRadius: '50%',
@@ -908,17 +878,16 @@ function DoctorMatrixView({
                         {initials}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{
+                        <div className="matrix-staff-name" style={{
                           fontSize: 12.5,
                           fontWeight: 800,
                           color: 'var(--text)',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
+                          whiteSpace: 'normal',
+                          lineHeight: 1.2,
                         }}>
                           {displayName}
                         </div>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: count > 0 ? (isTechnician ? '#0f766e' : '#0369a1') : 'var(--text-3)' }}>
+                        <div className="matrix-staff-count" style={{ fontSize: 10, fontWeight: 700, color: count > 0 ? (isTechnician ? '#0f766e' : '#0369a1') : 'var(--text-3)', marginTop: 2 }}>
                           {count} {isTechnician ? `mission${count > 1 ? 's' : ''}` : `visite${count > 1 ? 's' : ''}`}
                         </div>
                       </div>
@@ -1125,7 +1094,7 @@ function DoctorMatrixView({
                                 )}
 
                                 {isAdmin && (
-                                  <div style={{ display: 'flex', gap: 4, marginTop: 6, alignItems: 'center', justifyContent: 'flex-end', paddingTop: 4, borderTop: '1px solid #e0f2fe' }}>
+                                  <div className="no-print" style={{ display: 'flex', gap: 4, marginTop: 6, alignItems: 'center', justifyContent: 'flex-end', paddingTop: 4, borderTop: '1px solid #e0f2fe' }}>
                                     <button
                                       className="btn btn-ghost btn-sm"
                                       style={{ padding: '1px 5px', fontSize: 10, color: 'var(--text-2)' }}
@@ -1187,7 +1156,7 @@ function DoctorMatrixView({
                                 <div style={{ marginTop: 3 }}><MapLink addr={ev.adresse} style={{ fontSize: 10 }} /></div>
                               )}
                               {isAdmin && (
-                                <div style={{ display: 'flex', gap: 4, marginTop: 4, justifyContent: 'flex-end', borderTop: '1px solid #d1fae5', paddingTop: 2 }}>
+                                <div className="no-print" style={{ display: 'flex', gap: 4, marginTop: 4, justifyContent: 'flex-end', borderTop: '1px solid #d1fae5', paddingTop: 2 }}>
                                   <button
                                     className="btn btn-ghost btn-sm"
                                     style={{ padding: '1px 5px', fontSize: 10, color: 'var(--danger)' }}
@@ -1202,7 +1171,7 @@ function DoctorMatrixView({
 
                           {isAdmin && (
                             <button
-                              className="btn btn-ghost btn-sm"
+                              className="btn btn-ghost btn-sm no-print"
                               style={{
                                 opacity: totalCellEvents === 0 ? 0.4 : 0.7,
                                 fontSize: 10,
@@ -1742,7 +1711,7 @@ export default function Planning({ toast }) {
     axios.get('/api/entreprises').then(r => setEnts(r.data || [])).catch(() => {});
   }, []);
 
-  const weekEnd = addDays(weekStart, 6);
+  const weekEnd = addDays(weekStart, 4); // Lundi à Vendredi (5 jours ouvrables)
   const currentWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const nextWeekStart = addWeeks(currentWeekStart, 1);
 
@@ -1938,6 +1907,100 @@ export default function Planning({ toast }) {
     }
   }
 
+  const getMatrixExportConfig = () => {
+    const isTechnician = filters.role === 'technicien';
+    const daysInterval = view === 'week'
+      ? eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 4) })
+      : eachDayOfInterval({ start: startOfMonth(monthDate), end: endOfMonth(monthDate) });
+    
+    const curPe = view === 'week' ? filterWeek(filteredPe) : filterMonth(filteredPe);
+    const curCl = view === 'week' ? filterWeek(filteredCl) : filterMonth(filteredCl);
+
+    const rawList = isTechnician ? [...tec] : [...med];
+    const seenIds = new Set(rawList.map(m => String(m.id)));
+    const seenNames = new Set(rawList.map(m => `${m.prenom || ''} ${m.nom || ''}`.toLowerCase().replace(/^dr\.?\s*/i, '').trim()));
+
+    [...curPe, ...curCl].forEach(item => {
+      const staffId = isTechnician ? item.technicien_id : item.medecin_id;
+      const rawStaffNom = isTechnician ? (item.technicien_nom || item.technicien_full) : (item.medecin_nom || item.medecin_full);
+      const cleanNom = rawStaffNom ? rawStaffNom.replace(/^dr\.?\s*/i, '').trim() : '';
+      const norm = cleanNom.toLowerCase();
+
+      if (staffId && !seenIds.has(String(staffId))) {
+        seenIds.add(String(staffId));
+        if (norm) seenNames.add(norm);
+        rawList.push({
+          id: staffId,
+          nom: cleanNom || (isTechnician ? 'Technicien' : 'Médecin'),
+          prenom: '',
+        });
+      } else if (cleanNom && cleanNom !== '—' && cleanNom !== '-') {
+        if (!seenNames.has(norm)) {
+          seenNames.add(norm);
+          rawList.push({
+            id: 'nom_' + norm,
+            nom: cleanNom,
+            prenom: '',
+            isVirtual: true,
+          });
+        }
+      }
+    });
+
+    const getStaffEvs = (staff, dayKey) => {
+      const sId = staff ? String(staff.id) : null;
+      const sName = staff ? `${staff.prenom || ''} ${staff.nom || ''}`.toLowerCase().trim() : null;
+
+      if (isTechnician) {
+        const pEvents = curPe.filter(e => {
+          if (e.date !== dayKey) return false;
+          if (sId && e.technicien_id && String(e.technicien_id) === sId) return true;
+          if (sName && e.technicien_nom && e.technicien_nom.toLowerCase().includes(sName)) return true;
+          if (!staff && !e.technicien_id && (!e.technicien_nom || e.technicien_nom === '—' || e.technicien_nom === '-')) return true;
+          return false;
+        });
+        const clEvents = curCl.filter(e => {
+          if (e.date !== dayKey) return false;
+          if (sId && e.technicien_id && String(e.technicien_id) === sId) return true;
+          if (sName && (e.technicien_nom || e.technicien_full) && (e.technicien_nom || e.technicien_full).toLowerCase().includes(sName)) return true;
+          if (!staff && !e.technicien_id && !e.technicien_nom && !e.technicien_full) return true;
+          return false;
+        });
+        return { pEvents, clEvents };
+      } else {
+        const pEvents = curPe.filter(e => {
+          if (e.date !== dayKey) return false;
+          if (sId && e.medecin_id && String(e.medecin_id) === sId) return true;
+          if (sName && e.medecin_nom && e.medecin_nom.toLowerCase().includes(sName)) return true;
+          if (!staff && !e.medecin_id && (!e.medecin_nom || e.medecin_nom === '—' || e.medecin_nom === '-')) return true;
+          return false;
+        });
+        const clEvents = curCl.filter(e => {
+          if (e.date !== dayKey) return false;
+          if (sId && e.medecin_id && String(e.medecin_id) === sId) return true;
+          if (sName && (e.medecin_nom || e.medecin_full) && (e.medecin_nom || e.medecin_full).toLowerCase().includes(sName)) return true;
+          if (!staff && !e.medecin_id && !e.medecin_nom && !e.medecin_full) return true;
+          return false;
+        });
+        return { pEvents, clEvents };
+      }
+    };
+
+    return {
+      days: daysInterval,
+      staffList: rawList,
+      staffRole: isTechnician ? 'technicien' : 'medecin',
+      hasUnassigned: isTechnician
+        ? curPe.some(e => !e.technicien_id) || curCl.some(e => !e.technicien_id)
+        : curPe.some(e => !e.medecin_id) || curCl.some(e => !e.medecin_id),
+      getStaffEvents: getStaffEvs,
+      title: view === 'week'
+        ? `Planning Semaine ${isoWeekNum} (${format(weekStart, 'dd/MM/yyyy')} au ${format(weekEnd, 'dd/MM/yyyy')})`
+        : `Planning Mensuel : ${format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}`,
+      subtitle: activeFilterSummary ? `Filtre: ${activeFilterSummary}` : '',
+    };
+  };
+
   if (loading) return <div className="loading-center"><div className="spinner" /></div>;
 
   return (
@@ -2083,128 +2146,24 @@ export default function Planning({ toast }) {
 
           {/* Export dropdown */}
           <ExportDropdown
-            label="Exporter & Imprimer"
+            label="Exporter"
             buttonStyle={{ height: 28, padding: '4px 10px', fontSize: 11.5 }}
-            onPrint={() => window.print()}
             onPDF={() => {
               import('../utils/exportUtils').then(({ exportMatrixToPDF }) => {
-                const isTechnician = filters.role === 'technicien';
-                const daysInterval = view === 'week'
-                  ? eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) })
-                  : eachDayOfInterval({ start: startOfMonth(monthDate), end: endOfMonth(monthDate) });
-                
-                const curPe = view === 'week' ? filterWeek(filteredPe) : filterMonth(filteredPe);
-                const curCl = view === 'week' ? filterWeek(filteredCl) : filterMonth(filteredCl);
-
-                const rawList = isTechnician ? [...tec] : [...med];
-                const seenIds = new Set(rawList.map(m => String(m.id)));
-                const seenNames = new Set(rawList.map(m => `${m.prenom || ''} ${m.nom || ''}`.toLowerCase().trim()));
-
-                [...curPe, ...curCl].forEach(item => {
-                  const staffId = isTechnician ? item.technicien_id : item.medecin_id;
-                  const staffNom = isTechnician ? (item.technicien_nom || item.technicien_full) : (item.medecin_nom || item.medecin_full);
-                  if (staffId && !seenIds.has(String(staffId))) {
-                    seenIds.add(String(staffId));
-                    rawList.push({
-                      id: staffId,
-                      nom: staffNom || (isTechnician ? 'Technicien' : 'Médecin'),
-                      prenom: '',
-                    });
-                  } else if (staffNom && staffNom !== '—' && staffNom !== '-') {
-                    const norm = staffNom.toLowerCase().trim();
-                    if (!seenNames.has(norm)) {
-                      seenNames.add(norm);
-                      rawList.push({
-                        id: 'nom_' + norm,
-                        nom: staffNom,
-                        prenom: '',
-                        isVirtual: true,
-                      });
-                    }
-                  }
-                });
-
-                const getStaffEvs = (staff, dayKey) => {
-                  const sId = staff ? String(staff.id) : null;
-                  const sName = staff ? `${staff.prenom || ''} ${staff.nom || ''}`.toLowerCase().trim() : null;
-
-                  if (isTechnician) {
-                    const pEvents = curPe.filter(e => {
-                      if (e.date !== dayKey) return false;
-                      if (sId && e.technicien_id && String(e.technicien_id) === sId) return true;
-                      if (sName && e.technicien_nom && e.technicien_nom.toLowerCase().includes(sName)) return true;
-                      if (!staff && !e.technicien_id && (!e.technicien_nom || e.technicien_nom === '—' || e.technicien_nom === '-')) return true;
-                      return false;
-                    });
-                    const clEvents = curCl.filter(e => {
-                      if (e.date !== dayKey) return false;
-                      if (sId && e.technicien_id && String(e.technicien_id) === sId) return true;
-                      if (sName && (e.technicien_nom || e.technicien_full) && (e.technicien_nom || e.technicien_full).toLowerCase().includes(sName)) return true;
-                      if (!staff && !e.technicien_id && !e.technicien_nom && !e.technicien_full) return true;
-                      return false;
-                    });
-                    return { pEvents, clEvents };
-                  } else {
-                    const pEvents = curPe.filter(e => {
-                      if (e.date !== dayKey) return false;
-                      if (sId && e.medecin_id && String(e.medecin_id) === sId) return true;
-                      if (sName && e.medecin_nom && e.medecin_nom.toLowerCase().includes(sName)) return true;
-                      if (!staff && !e.medecin_id && (!e.medecin_nom || e.medecin_nom === '—' || e.medecin_nom === '-')) return true;
-                      return false;
-                    });
-                    const clEvents = curCl.filter(e => {
-                      if (e.date !== dayKey) return false;
-                      if (sId && e.medecin_id && String(e.medecin_id) === sId) return true;
-                      if (sName && (e.medecin_nom || e.medecin_full) && (e.medecin_nom || e.medecin_full).toLowerCase().includes(sName)) return true;
-                      if (!staff && !e.medecin_id && !e.medecin_nom && !e.medecin_full) return true;
-                      return false;
-                    });
-                    return { pEvents, clEvents };
-                  }
-                };
-
-                exportMatrixToPDF({
-                  days: daysInterval,
-                  staffList: rawList,
-                  staffRole: isTechnician ? 'technicien' : 'medecin',
-                  hasUnassigned: isTechnician
-                    ? curPe.some(e => !e.technicien_id) || curCl.some(e => !e.technicien_id)
-                    : curPe.some(e => !e.medecin_id) || curCl.some(e => !e.medecin_id),
-                  getStaffEvents: getStaffEvs,
-                  title: view === 'week'
-                    ? `Planning Semaine ${isoWeekNum} (${format(weekStart, 'dd/MM/yyyy')} au ${format(weekEnd, 'dd/MM/yyyy')})`
-                    : `Planning Mensuel : ${format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase()}`,
-                  subtitle: `GROUPEMENT DE MÉDECINE DU TRAVAIL DE L'ARIANA — Matrice ${isTechnician ? 'Techniciens' : 'Médecins'} & Jours` + (activeFilterSummary ? ` (Filtre: ${activeFilterSummary})` : ''),
-                });
+                const config = getMatrixExportConfig();
+                exportMatrixToPDF(config);
               });
             }}
             onExcel={() => {
-              import('../utils/exportUtils').then(({ exportToExcel }) => {
-                exportToExcel(exportItems, [
-                  { header: 'Type', key: 'type_label' },
-                  { header: 'Date', key: 'date_display' },
-                  { header: 'Heure début', key: 'heure_debut' },
-                  { header: 'Heure fin', key: 'heure_fin' },
-                  { header: 'Titre', key: 'titre' },
-                  { header: 'Médecin', key: 'medecin_nom' },
-                  { header: 'Technicien', key: 'technicien_nom' },
-                  { header: 'Adresse / Lieu', key: 'adresse' },
-                  { header: 'Commentaires', key: 'commentaire' },
-                ], 'Planning_GMT_Ariana');
+              import('../utils/exportUtils').then(({ exportMatrixToExcel }) => {
+                const config = getMatrixExportConfig();
+                exportMatrixToExcel(config);
               });
             }}
             onWord={() => {
-              import('../utils/exportUtils').then(({ exportToWord }) => {
-                exportToWord(exportItems, [
-                  { header: 'Type', key: 'type_label' },
-                  { header: 'Date', key: 'date_display' },
-                  { header: 'Horaire', key: 'heure_display' },
-                  { header: 'Titre / Sujet', key: 'titre' },
-                  { header: 'Médecin', key: 'medecin_nom' },
-                  { header: 'Technicien', key: 'technicien_nom' },
-                  { header: 'Adresse / Lieu', key: 'adresse' },
-                  { header: 'Notes', key: 'commentaire' },
-                ], 'Planning Medical GMT Ariana');
+              import('../utils/exportUtils').then(({ exportMatrixToWord }) => {
+                const config = getMatrixExportConfig();
+                exportMatrixToWord(config);
               });
             }}
           />
@@ -2235,9 +2194,9 @@ export default function Planning({ toast }) {
       {view === 'week' && (
         <DoctorMatrixView
           view={view}
-          days={eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) })}
+          days={eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 4) })}
           periodLabel={`Semaine ${isoWeekNum} : Du ${format(weekStart, 'd MMMM', { locale: fr })} au ${format(weekEnd, 'd MMMM yyyy', { locale: fr })}`}
-          periodSubtitle="Jours de la semaine"
+          periodSubtitle="Lundi au Vendredi"
           pe={filterWeek(filteredPe)}
           ce={filterWeek(filteredCe)}
           cl={filterWeek(filteredCl)}

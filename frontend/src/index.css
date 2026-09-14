@@ -570,11 +570,21 @@ tbody tr:hover { background: var(--surface2); }
   }
 }
 
+/* ── Print Base & Helpers ───────────────────────────────────── */
+.print-only {
+  display: none !important;
+}
+
 /* ── Print Styles ────────────────────────────────────────────── */
+@page {
+  size: landscape;
+  margin: 5mm 8mm;
+}
+
 @media print {
   @page {
-    size: A4 landscape;
-    margin: 8mm 8mm;
+    size: A4 landscape !important;
+    margin: 5mm 8mm !important;
   }
 
   *, *::before, *::after {
@@ -584,7 +594,17 @@ tbody tr:hover { background: var(--surface2); }
     print-color-adjust: exact !important;
   }
 
-  html, body, #root, .layout, .main-area, .page-content {
+  html, body {
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  #root, #root > div, .layout, .main-area, .page-content,
+  .print-matrix-wrapper, div[style*="overflow"], div[style*="height: 100%"], div[style*="height:100%"] {
     background: #ffffff !important;
     color: #000000 !important;
     height: auto !important;
@@ -598,13 +618,6 @@ tbody tr:hover { background: var(--surface2); }
     padding: 0 !important;
   }
 
-  div[style*="overflow"], div[style*="height: 100%"], div[style*="height:100%"] {
-    height: auto !important;
-    max-height: none !important;
-    overflow: visible !important;
-    position: static !important;
-  }
-
   .sidebar, .mobile-topbar, .navbar, .chat-sidebar-panel, .floating-ai-btn, .modal-overlay,
   .btn, .input, select, .no-print, nav, header, .toast-container, button {
     display: none !important;
@@ -612,6 +625,22 @@ tbody tr:hover { background: var(--surface2); }
 
   .print-only {
     display: block !important;
+    visibility: visible !important;
+  }
+
+  .print-header-banner {
+    display: block !important;
+    visibility: visible !important;
+    margin-bottom: 6px !important;
+    width: 100% !important;
+    background: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-header-banner * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* Matrix Table Styling for Print */
@@ -619,11 +648,12 @@ tbody tr:hover { background: var(--surface2); }
     width: 100% !important;
     min-width: 0 !important;
     max-width: 100% !important;
-    table-layout: auto !important;
+    table-layout: fixed !important;
     border-collapse: collapse !important;
     page-break-inside: auto;
-    font-size: 8pt !important;
-    margin-top: 6px !important;
+    font-size: 8.5pt !important;
+    margin-top: 4px !important;
+    color: #000000 !important;
   }
 
   .print-matrix-table thead {
@@ -637,10 +667,10 @@ tbody tr:hover { background: var(--surface2); }
 
   .print-matrix-table th, 
   .print-matrix-table td {
-    border: 1px solid #94a3b8 !important;
-    color: #0f172a !important;
+    border: 1.2px solid #334155 !important;
+    color: #000000 !important;
     background: #ffffff !important;
-    padding: 4px 6px !important;
+    padding: 5px 6px !important;
     position: static !important;
     box-shadow: none !important;
     overflow: visible !important;
@@ -651,32 +681,99 @@ tbody tr:hover { background: var(--surface2); }
 
   .print-matrix-table thead tr th {
     background: #f1f5f9 !important;
-    font-weight: 800 !important;
     color: #0f172a !important;
-    font-size: 8.5pt !important;
+    font-weight: 800 !important;
+    font-size: 9.5pt !important;
     text-align: center !important;
+    padding: 6px 4px !important;
+    border: 1.2px solid #334155 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-matrix-table thead tr th div,
+  .print-matrix-table thead tr th span,
+  .print-matrix-table thead tr th .matrix-staff-name {
+    color: #0f172a !important;
+    font-weight: 800 !important;
+    font-size: 9.5pt !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+
+  .print-matrix-table thead tr th .matrix-staff-count {
+    display: none !important;
   }
 
   .print-matrix-table td:first-child,
   .print-matrix-table th:first-child {
-    background: #f8fafc !important;
+    background: #e2e8f0 !important;
+    font-weight: 900 !important;
+    color: #000000 !important;
+    width: 95px !important;
+    min-width: 90px !important;
+    max-width: 105px !important;
+    text-align: center !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-matrix-table td:first-child span,
+  .print-matrix-table td:first-child div {
+    color: #000000 !important;
     font-weight: 800 !important;
-    width: 105px !important;
-    min-width: 95px !important;
-    max-width: 120px !important;
-    text-align: left !important;
+    background: transparent !important;
   }
 
   /* Card events inside cells during print */
   .print-matrix-table td div[style*="background"] {
-    background: #f8fafc !important;
-    border: 1px solid #cbd5e1 !important;
-    border-left: 3px solid #0284c7 !important;
-    margin-bottom: 3px !important;
-    padding: 2px 4px !important;
+    background: #ffffff !important;
+    border: 1.2px solid #475569 !important;
+    border-left: 4px solid #0284c7 !important;
+    margin-bottom: 4px !important;
+    padding: 4px 6px !important;
     border-radius: 4px !important;
-    font-size: 7.5pt !important;
-    line-height: 1.25 !important;
+    font-size: 8.5pt !important;
+    line-height: 1.35 !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-matrix-table td div[style*="background"] span,
+  .print-matrix-table td div[style*="background"] div,
+  .print-matrix-table td div[style*="background"] a {
+    color: #000000 !important;
+    font-size: 8.5pt !important;
+  }
+
+  .print-matrix-table td div[style*="background"] div[style*="fontWeight: 800"],
+  .print-matrix-table td div[style*="background"] div[style*="font-weight: 800"],
+  .print-matrix-table td div[style*="background"] div[style*="font-weight:800"] {
+    font-size: 9.5pt !important;
+    font-weight: 900 !important;
+    color: #000000 !important;
+  }
+
+  .nav-selector-print-text {
+    display: block !important;
+    font-size: 8.5pt !important;
+    font-weight: 700 !important;
+    color: #000000 !important;
+    margin-top: 2px !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+
+  .print-matrix-wrapper {
+    overflow: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
   }
 }
 
