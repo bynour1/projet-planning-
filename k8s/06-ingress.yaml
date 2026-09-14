@@ -45,6 +45,14 @@ spec:
                 name: backend-service
                 port:
                   number: 8083
+          # Uploads (avatars, documents, chat attachments)
+          - path:     /uploads
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 8083
           # Frontend (catch-all)
           - path:     /
             pathType: Prefix
