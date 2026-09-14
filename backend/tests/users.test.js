@@ -20,13 +20,13 @@ const app     = require('../app');
 const db      = require('../config/db');
 
 function makeToken(role = 'administrateur', id = 1) {
-  return jwt.sign({ id, email: 'admin@planning.com', role, nom: 'Admin', prenom: 'Sys' }, process.env.JWT_SECRET, { expiresIn: '1h' });
+  return jwt.sign({ id, email: 'admin.test@gmt-ariana.tn', role, nom: 'Admin', prenom: 'Sys' }, process.env.JWT_SECRET, { expiresIn: '1h' });
 }
 
 const adminToken  = makeToken('administrateur', 1);
 const medecinToken = makeToken('medecin', 2);
 
-const USER_ROW = { id: 2, nom: 'Benali', prenom: 'Sophie', email: 'sophie@planning.com', role: 'medecin', is_active: 1, created_at: new Date() };
+const USER_ROW = { id: 2, nom: 'Docteur', prenom: 'Test', email: 'doctor.test@gmt-ariana.tn', role: 'medecin', is_active: 1, created_at: new Date() };
 
 beforeEach(() => {
   jest.clearAllMocks();

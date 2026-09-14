@@ -18,8 +18,7 @@
 # Terminal 1 — Backend
 cd backend
 npm install
-cp .env.example .env     # remplir les valeurs
-node seed.js             # créer admin@planning.com / Admin123!
+cp .env.example .env     # configurer la base de données et les clés
 npm run dev              # port 8083
 
 # Terminal 2 — Frontend
@@ -233,23 +232,11 @@ npm run test:coverage      # avec rapport HTML dans coverage/
 
 ---
 
-## 🔑 Comptes par défaut
+## 🔒 Gestion des Comptes et Sécurité
 
-| Email | Mot de passe | Rôle |
-|-------|-------------|------|
-| admin@planning.com | Admin123! | Administrateur |
-| sophie.benali@planning.com | Medecin123! | Médecin |
-| karim.mansouri@planning.com | Medecin123! | Médecin |
-| youssef.hamdi@planning.com | Tech123! | Technicien |
+Les comptes utilisateurs (Administrateurs, Médecins, Techniciens) sont gérés directement par l'Administrateur depuis le panneau d'administration de l'application ou via des variables d'environnement sécurisées.
 
-```bash
-# Créer les comptes
-cd backend && node seed.js
-# ou dans Docker
-docker compose exec backend node seed.js
-# ou dans Kubernetes
-kubectl exec -it deployment/backend -n planning-medical -- node seed.js
-```
+Aucun identifiant par défaut n'est stocké dans le code source. Lors de la première initialisation, créez votre compte administrateur avec un mot de passe fort via l'interface ou les commandes d'administration.
 
 ---
 

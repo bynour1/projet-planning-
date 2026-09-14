@@ -12,10 +12,10 @@ const jwt     = require('jsonwebtoken');
 const app     = require('../app');
 const db      = require('../config/db');
 
-const HASH = bcrypt.hashSync('Admin123!', 10);
+const HASH = bcrypt.hashSync('TestAuthSecretPass123!', 10);
 
 const ADMIN = {
-  id: 1, nom: 'Admin', prenom: 'Système', email: 'admin@planning.com',
+  id: 1, nom: 'Admin', prenom: 'Système', email: 'admin.test@gmt-ariana.tn',
   password: HASH, role: 'administrateur', is_active: 1, first_login: 0,
 };
 
@@ -54,7 +54,7 @@ describe('POST /api/auth/login', () => {
 
   it('returns 403 if account inactive', async () => {
     db.query.mockResolvedValueOnce([[{ ...ADMIN, is_active: 0 }]]);
-    const res = await request(app).post('/api/auth/login').send({ email: ADMIN.email, password: 'Admin123!' });
+    const res = await request(app).post('/api/auth/login').send({ email: ADMIN.email, password: 'TestAuthSecretPass123!' });
     expect(res.status).toBe(403);
     expect(res.body.message).toMatch(/activé/i);
   });
@@ -67,7 +67,7 @@ describe('POST /api/auth/login', () => {
 
   it('returns token on valid login', async () => {
     db.query.mockResolvedValueOnce([[ADMIN]]);
-    const res = await request(app).post('/api/auth/login').send({ email: ADMIN.email, password: 'Admin123!' });
+    const res = await request(app).post('/api/auth/login').send({ email: ADMIN.email, password: 'TestAuthSecretPass123!' });
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('token');
     expect(res.body.user.role).toBe('administrateur');
@@ -76,7 +76,7 @@ describe('POST /api/auth/login', () => {
 
   it('returns first_login flag correctly', async () => {
     db.query.mockResolvedValueOnce([[{ ...ADMIN, first_login: 1 }]]);
-    const res = await request(app).post('/api/auth/login').send({ email: ADMIN.email, password: 'Admin123!' });
+    const res = await request(app).post('/api/auth/login').send({ email: ADMIN.email, password: 'TestAuthSecretPass123!' });
     expect(res.status).toBe(200);
     expect(res.body.user.first_login).toBe(true);
   });
@@ -90,10 +90,10 @@ describe('GET /api/auth/me', () => {
   });
 
   it('returns user data with valid token', async () => {
-    db.query.mockResolvedValueOnce([[{ id:1, nom:'Admin', prenom:'Système', email:'admin@planning.com', role:'administrateur', first_login:0 }]]);
+    db.query.mockResolvedValueOnce([[{ id:1, nom:'Admin', prenom:'Système', email:'admin.test@gmt-ariana.tn', role:'administrateur', first_login:0 }]]);
     const res = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${makeToken()}`);
     expect(res.status).toBe(200);
-    expect(res.body.email).toBe('admin@planning.com');
+    expect(res.body.email).toBe('admin.test@gmt-ariana.tn');
   });
 
   it('returns 404 if user deleted between login and request', async () => {
@@ -117,7 +117,7 @@ describe('POST /api/auth/change-password', () => {
     const res = await request(app)
       .post('/api/auth/change-password')
       .set('Authorization', `Bearer ${makeToken()}`)
-      .send({ current_password: 'Admin123!', new_password: 'abc' });
+      .send({ current_password: 'TestAuthSecretPass123!', new_password: 'abc' });
     expect(res.status).toBe(400);
   });
 
@@ -136,7 +136,7 @@ describe('POST /api/auth/change-password', () => {
     const res = await request(app)
       .post('/api/auth/change-password')
       .set('Authorization', `Bearer ${makeToken()}`)
-      .send({ current_password: 'Admin123!', new_password: 'NewPass123' });
+      .send({ current_password: 'TestAuthSecretPass123!', new_password: 'NewPass123' });
     expect(res.status).toBe(200);
     expect(res.body.message).toMatch(/mis à jour/i);
   });
