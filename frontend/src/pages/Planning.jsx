@@ -1244,6 +1244,30 @@ function DoctorMatrixView({
     return stats;
   }, [activeStaffList, days, pe, cl, ce, isTechnician]);
 
+  const displayedStaffList = useMemo(() => {
+    if (!activeFilterSummary) return activeStaffList;
+    const withEvents = activeStaffList.filter(staff => (staffStats[staff.id] || 0) > 0);
+    return withEvents.length > 0 ? withEvents : activeStaffList;
+  }, [activeStaffList, staffStats, activeFilterSummary]);
+
+  const displayedDays = useMemo(() => {
+    if (!activeFilterSummary) return days;
+    const withEvents = days.filter(dayObj => {
+      const dayKey = typeof dayObj === 'string' ? dayObj : format(dayObj, 'yyyy-MM-dd');
+      const hasStaffEv = displayedStaffList.some(staff => {
+        const { pEvents, clEvents, cEvents } = getStaffEvents(staff, dayKey);
+        return (pEvents.length + clEvents.length + (cEvents ? cEvents.length : 0)) > 0;
+      });
+      if (hasStaffEv) return true;
+      if (hasUnassignedEvents) {
+        const { pEvents, clEvents, cEvents } = getStaffEvents(null, dayKey);
+        return (pEvents.length + clEvents.length + (cEvents ? cEvents.length : 0)) > 0;
+      }
+      return false;
+    });
+    return withEvents.length > 0 ? withEvents : days;
+  }, [days, displayedStaffList, getStaffEvents, hasUnassignedEvents, activeFilterSummary]);
+
   async function del(item) {
     try {
       const type = item._t || item.t;
@@ -1263,8 +1287,8 @@ function DoctorMatrixView({
   const handleExportPDF = () => {
     import('../utils/exportUtils').then(({ exportMatrixToPDF }) => {
       exportMatrixToPDF({
-        days,
-        staffList: activeStaffList,
+        days: displayedDays,
+        staffList: displayedStaffList,
         staffRole,
         hasUnassigned: hasUnassignedEvents,
         getStaffEvents,
@@ -1312,6 +1336,25 @@ function DoctorMatrixView({
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)', padding: '8px 10px' }}>
+      {/* ── Active Filter Bar ── */}
+      {activeFilterSummary && (
+        <div style={{
+          marginBottom: 6,
+          padding: '5px 12px',
+          background: 'rgba(2, 132, 199, 0.08)',
+          border: '1px solid rgba(2, 132, 199, 0.25)',
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: 11.5,
+          fontWeight: 700,
+          color: 'var(--primary-dk, #0369a1)',
+        }}>
+          <span>🔍 {activeFilterSummary} — Affichage de <strong>{displayedDays.length} jour(s)</strong> et <strong>{displayedStaffList.length} {isTechnician ? 'technicien(s)' : 'médecin(s)'}</strong></span>
+        </div>
+      )}
+
       {/* ── MATRIX TABLE (Exact PC Version - Smooth Multi-directional Scrolling) ── */}
       <div className="print-matrix-wrapper" style={{
         flex: 1,
@@ -1328,7 +1371,7 @@ function DoctorMatrixView({
           borderCollapse: 'separate',
           borderSpacing: 0,
           textAlign: 'left',
-          minWidth: Math.max(600, 80 + (activeStaffList.length + (hasUnassignedEvents ? 1 : 0)) * 180),
+          minWidth: Math.max(600, 80 + (displayedStaffList.length + (hasUnassignedEvents ? 1 : 0)) * 180),
         }}>
           {/* ── TOP HEADER : NOMS DES MÉDECINS OU TECHNICIENS ── */}
           <thead>
@@ -1356,7 +1399,7 @@ function DoctorMatrixView({
                 </div>
               </th>
 
-              {activeStaffList.map((staff) => {
+              {displayedStaffList.map((staff) => {
                 const count = staffStats[staff.id] || 0;
                 const cleanDocNom = (staff.nom || '').replace(/^dr\.?\s*/i, '').trim();
                 const cleanDocPrenom = (staff.prenom || '').replace(/^dr\.?\s*/i, '').trim();
@@ -1461,7 +1504,7 @@ function DoctorMatrixView({
 
           {/* ── ROWS : LES JOURS ── */}
           <tbody>
-            {days.map(dayObj => {
+            {displayedDays.map(dayObj => {
               const day = typeof dayObj === 'string' ? parseISO(dayObj) : dayObj;
               const dayKey = format(day, 'yyyy-MM-dd');
               const isToday = isTodayFn(day);
@@ -1537,7 +1580,7 @@ function DoctorMatrixView({
                   </td>
 
                   {/* Staff Cells */}
-                  {activeStaffList.map(staff => {
+                  {displayedStaffList.map(staff => {
                     const { pEvents, clEvents, cEvents } = getStaffEvents(staff, dayKey);
                     const totalCellEvents = pEvents.length + clEvents.length + (cEvents ? cEvents.length : 0);
 
@@ -2400,15 +2443,27 @@ export default function Planning({ toast }) {
     }
     if (filters.entreprise) {
       const q = filters.entreprise.toLowerCase();
-      const match = (e.titre || '').toLowerCase().includes(q) || (e.adresse || '').toLowerCase().includes(q);
+      const match = (e.titre || '').toLowerCase().includes(q) ||
+                    (e.entreprise_nom || '').toLowerCase().includes(q) ||
+                    (e.adresse || '').toLowerCase().includes(q);
       if (!match) return false;
     }
     if (filters.search) {
-      const s = filters.search.toLowerCase();
+      const s = filters.search.toLowerCase().trim();
+      const dateRaw = toRaw(e.date);
+      const dateFmt = fmtDisplay(e.date).toLowerCase();
+      const dateFmtDay = fmtDisplayWithDay(e.date).toLowerCase();
       const match = (e.titre || '').toLowerCase().includes(s) ||
+                    (e.entreprise_nom || '').toLowerCase().includes(s) ||
                     (e.adresse || '').toLowerCase().includes(s) ||
                     (e.medecin_nom || '').toLowerCase().includes(s) ||
-                    (e.technicien_nom || '').toLowerCase().includes(s);
+                    (e.technicien_nom || '').toLowerCase().includes(s) ||
+                    (e.heure_debut || '').toLowerCase().includes(s) ||
+                    (e.heure_fin || '').toLowerCase().includes(s) ||
+                    (e.commentaire || '').toLowerCase().includes(s) ||
+                    dateRaw.includes(s) ||
+                    dateFmt.includes(s) ||
+                    dateFmtDay.includes(s);
       if (!match) return false;
     }
     return true;
@@ -2434,7 +2489,10 @@ export default function Planning({ toast }) {
       if (!match) return false;
     }
     if (filters.search) {
-      const s = filters.search.toLowerCase();
+      const s = filters.search.toLowerCase().trim();
+      const dateRaw = toRaw(e.date);
+      const dateFmt = fmtDisplay(e.date).toLowerCase();
+      const dateFmtDay = fmtDisplayWithDay(e.date).toLowerCase();
       const match = (e.adresse || '').toLowerCase().includes(s) ||
                     (e.titre || '').toLowerCase().includes(s) ||
                     (e.entreprise_nom || '').toLowerCase().includes(s) ||
@@ -2443,7 +2501,11 @@ export default function Planning({ toast }) {
                     (e.medecin_full || '').toLowerCase().includes(s) ||
                     (e.technicien_nom || '').toLowerCase().includes(s) ||
                     (e.technicien_full || '').toLowerCase().includes(s) ||
-                    (e.commentaire || '').toLowerCase().includes(s);
+                    (e.heure ? String(e.heure).toLowerCase() : '').includes(s) ||
+                    (e.commentaire || '').toLowerCase().includes(s) ||
+                    dateRaw.includes(s) ||
+                    dateFmt.includes(s) ||
+                    dateFmtDay.includes(s);
       if (!match) return false;
     }
     return true;
@@ -2458,8 +2520,21 @@ export default function Planning({ toast }) {
       if (!match) return false;
     }
     if (filters.search) {
-      const s = filters.search.toLowerCase();
-      const match = (e.titre || '').toLowerCase().includes(s) || (e.lieu || '').toLowerCase().includes(s) || (e.description || '').toLowerCase().includes(s);
+      const s = filters.search.toLowerCase().trim();
+      const dateRaw = toRaw(e.date_debut?.slice(0, 10));
+      const dateFmt = fmtDisplay(e.date_debut?.slice(0, 10)).toLowerCase();
+      const dateFmtDay = fmtDisplayWithDay(e.date_debut?.slice(0, 10)).toLowerCase();
+      const partNames = Array.isArray(e.participants) ? e.participants.map(p => `${p.prenom || ''} ${p.nom || ''}`.toLowerCase()).join(' ') : '';
+      const match = (e.titre || '').toLowerCase().includes(s) ||
+                    (e.lieu || '').toLowerCase().includes(s) ||
+                    (e.description || '').toLowerCase().includes(s) ||
+                    (e.type || '').toLowerCase().includes(s) ||
+                    (e.date_debut || '').includes(s) ||
+                    (e.date_fin || '').includes(s) ||
+                    dateRaw.includes(s) ||
+                    dateFmt.includes(s) ||
+                    dateFmtDay.includes(s) ||
+                    partNames.includes(s);
       if (!match) return false;
     }
     return true;
@@ -2641,9 +2716,36 @@ export default function Planning({ toast }) {
       }
     };
 
+    const activeRawList = activeFilterSummary
+      ? rawList.filter(staff => {
+          return daysInterval.some(d => {
+            const dayKey = format(d, 'yyyy-MM-dd');
+            const { pEvents, clEvents } = getStaffEvs(staff, dayKey);
+            return (pEvents.length + clEvents.length) > 0;
+          });
+        })
+      : rawList;
+
+    const finalRawList = activeRawList.length > 0 ? activeRawList : rawList;
+
+    const activeDays = activeFilterSummary
+      ? daysInterval.filter(d => {
+          const dayKey = format(d, 'yyyy-MM-dd');
+          const hasStaffEv = finalRawList.some(staff => {
+            const { pEvents, clEvents } = getStaffEvs(staff, dayKey);
+            return (pEvents.length + clEvents.length) > 0;
+          });
+          if (hasStaffEv) return true;
+          const { pEvents, clEvents } = getStaffEvs(null, dayKey);
+          return (pEvents.length + clEvents.length) > 0;
+        })
+      : daysInterval;
+
+    const finalDays = activeDays.length > 0 ? activeDays : daysInterval;
+
     return {
-      days: daysInterval,
-      staffList: rawList,
+      days: finalDays,
+      staffList: finalRawList,
       staffRole: isTechnician ? 'technicien' : 'medecin',
       hasUnassigned: isTechnician
         ? curPe.some(e => !e.technicien_id) || curCl.some(e => !e.technicien_id)
