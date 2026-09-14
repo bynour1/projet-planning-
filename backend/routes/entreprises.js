@@ -36,6 +36,137 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
+// Helper: Récupération de l'historique complet des visites médicales et de l'effectif examiné
+async function getVisitesForEntreprise(entrepriseId, entrepriseNom) {
+  let explicitVisites = [];
+  try {
+    const [rows] = await db.query(`
+      SELECT ev.*,
+        CONCAT(u.prenom, ' ', u.nom) AS medecin_full,
+        CONCAT(t.prenom, ' ', t.nom) AS technicien_full
+      FROM entreprise_visites ev
+      LEFT JOIN users u ON u.id = ev.medecin_id
+      LEFT JOIN users t ON t.id = ev.technicien_id
+      WHERE ev.entreprise_id = ?
+      ORDER BY ev.date DESC, ev.heure DESC
+    `, [entrepriseId]);
+    explicitVisites = rows || [];
+  } catch (e) {
+    console.error('Error fetching entreprise_visites:', e.message);
+  }
+
+  let planningVisites = [];
+  try {
+    const [pRows] = await db.query(`
+      SELECT pe.id AS planning_id, pe.date, pe.heure_debut AS heure,
+        pe.medecin_id, pe.technicien_id, pe.commentaire, pe.statut, pe.is_clino, pe.clino_id,
+        pe.nb_examines,
+        CONCAT(u.prenom, ' ', u.nom) AS medecin_full,
+        CONCAT(t.prenom, ' ', t.nom) AS technicien_full
+      FROM planning_events pe
+      LEFT JOIN users u ON u.id = pe.medecin_id
+      LEFT JOIN users t ON t.id = pe.technicien_id
+      WHERE pe.entreprise_id = ? OR LOWER(TRIM(pe.titre)) = LOWER(TRIM(?))
+      ORDER BY pe.date DESC, pe.heure_debut DESC
+    `, [entrepriseId, entrepriseNom || '']);
+    planningVisites = pRows || [];
+  } catch (e) {
+    console.error('Error fetching planning_events for entreprise:', e.message);
+  }
+
+  let clinoVisites = [];
+  try {
+    const [cRows] = await db.query(`
+      SELECT cm.id AS clino_id, cm.date, cm.heure,
+        cm.medecin_id, cm.technicien_id, cm.commentaire,
+        cm.planning_id, cm.nb_examines,
+        CONCAT(u.prenom, ' ', u.nom) AS medecin_full,
+        CONCAT(t.prenom, ' ', t.nom) AS technicien_full,
+        pe.titre AS entreprise_nom
+      FROM clino_mobile cm
+      LEFT JOIN users u ON u.id = cm.medecin_id
+      LEFT JOIN users t ON t.id = cm.technicien_id
+      LEFT JOIN planning_events pe ON pe.id = cm.planning_id
+      WHERE cm.entreprise_id = ? OR LOWER(TRIM(pe.titre)) = LOWER(TRIM(?))
+      ORDER BY cm.date DESC, cm.heure DESC
+    `, [entrepriseId, entrepriseNom || '']);
+    clinoVisites = cRows || [];
+  } catch (e) {
+    console.error('Error fetching clino_mobile for entreprise:', e.message);
+  }
+
+  const linkedPlanningIds = new Set(explicitVisites.filter(v => v.planning_id).map(v => String(v.planning_id)));
+  const linkedClinoIds = new Set(explicitVisites.filter(v => v.clino_id).map(v => String(v.clino_id)));
+
+  const all = [...explicitVisites.map(v => ({
+    id: 'ev_' + v.id,
+    source: 'visite',
+    visite_id: v.id,
+    date: String(v.date || '').slice(0, 10),
+    heure: v.heure ? String(v.heure).slice(0, 5) : '',
+    medecin_id: v.medecin_id,
+    technicien_id: v.technicien_id,
+    medecin_nom: v.medecin_nom || v.medecin_full || '—',
+    technicien_nom: v.technicien_nom || v.technicien_full || '—',
+    type_visite: v.type_visite || 'Visite Médicale Périodique',
+    nb_examines: parseInt(v.nb_examines, 10) || 0,
+    nb_bilans: parseInt(v.nb_bilans, 10) || 0,
+    statut: v.statut || 'effectuee',
+    commentaire: v.commentaire || '',
+    planning_id: v.planning_id,
+    clino_id: v.clino_id,
+    created_at: v.created_at,
+  }))];
+
+  planningVisites.forEach(p => {
+    if (!linkedPlanningIds.has(String(p.planning_id))) {
+      all.push({
+        id: 'pe_' + p.planning_id,
+        source: 'planning',
+        planning_id: p.planning_id,
+        date: String(p.date || '').slice(0, 10),
+        heure: p.heure ? String(p.heure).slice(0, 5) : '',
+        medecin_id: p.medecin_id,
+        technicien_id: p.technicien_id,
+        medecin_nom: p.medecin_full || '—',
+        technicien_nom: p.technicien_full || '—',
+        type_visite: p.is_clino ? '🚗 Tournée Clino Mobile' : '📋 Visite Médicale / Planning',
+        nb_examines: parseInt(p.nb_examines, 10) || 0,
+        nb_bilans: 0,
+        statut: p.statut || 'planifiee',
+        commentaire: p.commentaire || '',
+        clino_id: p.clino_id,
+      });
+    }
+  });
+
+  clinoVisites.forEach(c => {
+    if (!linkedClinoIds.has(String(c.clino_id)) && (!c.planning_id || !linkedPlanningIds.has(String(c.planning_id)))) {
+      all.push({
+        id: 'cm_' + c.clino_id,
+        source: 'clino',
+        clino_id: c.clino_id,
+        date: String(c.date || '').slice(0, 10),
+        heure: c.heure ? String(c.heure).slice(0, 5) : '',
+        medecin_id: c.medecin_id,
+        technicien_id: c.technicien_id,
+        medecin_nom: c.medecin_full || '—',
+        technicien_nom: c.technicien_full || '—',
+        type_visite: '🚗 Clino Mobile sur site',
+        nb_examines: parseInt(c.nb_examines, 10) || 0,
+        nb_bilans: 0,
+        statut: 'effectuee',
+        commentaire: c.commentaire || '',
+        planning_id: c.planning_id,
+      });
+    }
+  });
+
+  all.sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.heure || '').localeCompare(a.heure || ''));
+
+  return all;
+}
+
 // GET /api/entreprises/:id
 router.get('/:id', authenticate, async (req, res) => {
   try {
@@ -63,13 +194,155 @@ router.get('/:id', authenticate, async (req, res) => {
       campagnes = [];
     }
 
+    const visites = await getVisitesForEntreprise(req.params.id, rows[0].nom);
+
     const entData = { ...rows[0] };
     if (!isAdmin) {
       delete entData.code;
     }
 
-    res.json({ ...entData, avis, campagnes });
+    res.json({ ...entData, avis, campagnes, visites });
   } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// GET /api/entreprises/:id/visites  — Historique complet des visites et de l'effectif vu
+router.get('/:id/visites', authenticate, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM entreprises WHERE id=?', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ message: 'Entreprise introuvable' });
+
+    const visites = await getVisitesForEntreprise(req.params.id, rows[0].nom);
+    const sumExamines = visites.reduce((acc, v) => acc + (parseInt(v.nb_examines, 10) || 0), 0);
+    const effTotal = parseInt(rows[0].effectif_total, 10) || 0;
+    const nbVisitesFaites = Math.max(parseInt(rows[0].nb_visites_faites, 10) || 0, sumExamines);
+
+    res.json({
+      entreprise_id: rows[0].id,
+      entreprise_nom: rows[0].nom,
+      effectif_total: effTotal,
+      nb_visites_faites: nbVisitesFaites,
+      nb_bilans_faits: rows[0].nb_bilans_faits || 0,
+      nb_bilans_manquants: rows[0].nb_bilans_manquants || 0,
+      visites,
+      total_visites: visites.length,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// POST /api/entreprises/:id/visites — Enregistrer une nouvelle visite médicale avec effectif examiné
+router.post('/:id/visites', authenticate, authorize('administrateur', 'medecin', 'technicien'), async (req, res) => {
+  const {
+    date, heure, medecin_id, technicien_id, medecin_nom, technicien_nom,
+    type_visite, nb_examines, nb_bilans, statut, commentaire, planning_id, clino_id
+  } = req.body;
+
+  if (!date) return res.status(400).json({ message: 'Date de la visite requise' });
+
+  try {
+    const [rows] = await db.query('SELECT * FROM entreprises WHERE id=?', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ message: 'Entreprise introuvable' });
+
+    let finalMedNom = medecin_nom || null;
+    if (medecin_id && !finalMedNom) {
+      const [u] = await db.query('SELECT CONCAT(prenom, " ", nom) AS fullname FROM users WHERE id=?', [medecin_id]);
+      finalMedNom = u[0]?.fullname || null;
+    }
+
+    let finalTecNom = technicien_nom || null;
+    if (technicien_id && !finalTecNom) {
+      const [t] = await db.query('SELECT CONCAT(prenom, " ", nom) AS fullname FROM users WHERE id=?', [technicien_id]);
+      finalTecNom = t[0]?.fullname || null;
+    }
+
+    const nbExamNum = Math.max(0, parseInt(nb_examines, 10) || 0);
+    const nbBilanNum = Math.max(0, parseInt(nb_bilans, 10) || 0);
+
+    const [result] = await db.query(
+      `INSERT INTO entreprise_visites (
+        entreprise_id, date, heure, medecin_id, technicien_id, medecin_nom, technicien_nom,
+        type_visite, nb_examines, nb_bilans, statut, commentaire, planning_id, clino_id, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        req.params.id,
+        date,
+        heure ? String(heure).slice(0, 5) : null,
+        medecin_id || null,
+        technicien_id || null,
+        finalMedNom,
+        finalTecNom,
+        type_visite || 'Visite Médicale Périodique',
+        nbExamNum,
+        nbBilanNum,
+        statut || 'effectuee',
+        commentaire || null,
+        planning_id || null,
+        clino_id || null,
+        req.user?.id || null,
+      ]
+    );
+
+    // Mettre à jour l'effectif examiné cumulé dans la table entreprises
+    const [sumRows] = await db.query(
+      'SELECT COALESCE(SUM(nb_examines), 0) AS total_vu, COALESCE(SUM(nb_bilans), 0) AS total_bilans FROM entreprise_visites WHERE entreprise_id=?',
+      [req.params.id]
+    );
+    const newTotalExam = sumRows[0]?.total_vu || nbExamNum;
+    const currentVisitesFaites = parseInt(rows[0].nb_visites_faites, 10) || 0;
+    const finalVisitesFaites = Math.max(currentVisitesFaites, newTotalExam);
+
+    await db.query(
+      `UPDATE entreprises SET
+        nb_visites_faites = ?,
+        date_derniere_visite = ?
+      WHERE id = ?`,
+      [finalVisitesFaites, date, req.params.id]
+    );
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('entreprises_refresh');
+      io.emit('planning_refresh');
+    }
+
+    res.status(201).json({
+      message: 'Visite enregistrée avec succès ✓',
+      id: result.insertId,
+      nb_examines: nbExamNum,
+      nb_visites_faites: finalVisitesFaites,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// DELETE /api/entreprises/:id/visites/:visiteId — Supprimer une visite de l'historique
+router.delete('/:id/visites/:visiteId', authenticate, authorize('administrateur', 'medecin'), async (req, res) => {
+  try {
+    await db.query('DELETE FROM entreprise_visites WHERE id=? AND entreprise_id=?', [req.params.visiteId, req.params.id]);
+
+    const [sumRows] = await db.query(
+      'SELECT COALESCE(SUM(nb_examines), 0) AS total_vu FROM entreprise_visites WHERE entreprise_id=?',
+      [req.params.id]
+    );
+    const newTotalExam = sumRows[0]?.total_vu || 0;
+
+    await db.query('UPDATE entreprises SET nb_visites_faites = ? WHERE id = ?', [newTotalExam, req.params.id]);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('entreprises_refresh');
+    }
+
+    res.json({ message: 'Visite supprimée avec succès' });
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });

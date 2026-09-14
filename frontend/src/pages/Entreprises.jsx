@@ -921,12 +921,235 @@ function AvisModal({ entreprise, editAvis, onSave, onClose }) {
   );
 }
 
+// ── Modal pour saisie d'une visite médicale avec effectif examiné ─────────
+function NouvelleVisiteModal({ entreprise, medecins = [], techniciens = [], onSave, onClose, toast }) {
+  const [f, setF] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    heure: '08:30',
+    medecin_id: '',
+    technicien_id: '',
+    type_visite: 'Visite Médicale Périodique',
+    nb_examines: 1,
+    nb_bilans: 0,
+    statut: 'effectuee',
+    commentaire: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const s = (k, v) => setF((p) => ({ ...p, [k]: v }));
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!f.date) {
+      toast?.('Date requise', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      await axios.post(`/api/entreprises/${entreprise.id}/visites`, {
+        ...f,
+        nb_examines: parseInt(f.nb_examines, 10) || 0,
+        nb_bilans: parseInt(f.nb_bilans, 10) || 0,
+      });
+      toast?.('Visite enregistrée ✓ — Effectif examiné mis à jour', 'success');
+      onSave?.();
+      onClose();
+    } catch (err) {
+      toast?.(err.response?.data?.message || 'Erreur lors de l\'enregistrement', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 520, borderRadius: 16 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header" style={{ paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: 'linear-gradient(135deg, #10b981, #059669)',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 18,
+                fontWeight: 900,
+              }}
+            >
+              🩺
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Enregistrer une visite médicale</h3>
+              <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{entreprise.nom}</div>
+            </div>
+          </div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '16px 20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label className="form-label" style={{ fontSize: 12, fontWeight: 700 }}>📅 Date de visite *</label>
+                <input
+                  type="date"
+                  className="input"
+                  required
+                  value={f.date}
+                  onChange={(e) => s('date', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="form-label" style={{ fontSize: 12, fontWeight: 700 }}>⏰ Heure</label>
+                <input
+                  type="time"
+                  className="input"
+                  value={f.heure}
+                  onChange={(e) => s('heure', e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label className="form-label" style={{ fontSize: 12, fontWeight: 700 }}>👨‍⚕️ Médecin assigné</label>
+                <select className="input" value={f.medecin_id} onChange={(e) => s('medecin_id', e.target.value)}>
+                  <option value="">Sélectionner un médecin</option>
+                  {medecins.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      Dr. {m.prenom} {m.nom}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="form-label" style={{ fontSize: 12, fontWeight: 700 }}>🔧 Technicien</label>
+                <select className="input" value={f.technicien_id} onChange={(e) => s('technicien_id', e.target.value)}>
+                  <option value="">Sélectionner un technicien</option>
+                  {techniciens.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.prenom} {t.nom}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 10 }}>
+              <div>
+                <label className="form-label" style={{ fontSize: 12, fontWeight: 700 }}>🏷️ Type de visite</label>
+                <select className="input" value={f.type_visite} onChange={(e) => s('type_visite', e.target.value)}>
+                  <option value="Visite Médicale Périodique">Visite Médicale Périodique</option>
+                  <option value="Visite d'Embauche">Visite d'Embauche</option>
+                  <option value="Visite de Reprise">Visite de Reprise</option>
+                  <option value="Tournée Clino Mobile">Tournée Clino Mobile</option>
+                  <option value="Visite sur Site / Usine">Visite sur Site / Usine</option>
+                  <option value="Visite Spontanée / Autre">Visite Spontanée / Autre</option>
+                </select>
+              </div>
+              <div>
+                <label className="form-label" style={{ fontSize: 12, fontWeight: 700 }}>📊 Statut</label>
+                <select className="input" value={f.statut} onChange={(e) => s('statut', e.target.value)}>
+                  <option value="effectuee">✅ Effectuée</option>
+                  <option value="en_cours">⏳ En cours</option>
+                  <option value="planifiee">📅 Planifiée</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Cadre Salariés examinés */}
+            <div
+              style={{
+                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(6, 182, 212, 0.05))',
+                border: '1.5px solid #10b981',
+                borderRadius: 12,
+                padding: '12px 16px',
+              }}
+            >
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label className="form-label" style={{ fontSize: 12.5, fontWeight: 800, color: '#065f46' }}>
+                    👥 Salariés examinés ce jour *
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="input"
+                    style={{ fontSize: 16, fontWeight: 800, color: '#065f46', borderColor: '#10b981' }}
+                    value={f.nb_examines}
+                    onChange={(e) => s('nb_examines', e.target.value)}
+                    placeholder="ex: 15"
+                  />
+                  <div style={{ fontSize: 10.5, color: '#047857', marginTop: 2 }}>
+                    Nombre de personnes examinées
+                  </div>
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: 12.5, fontWeight: 800, color: '#0369a1' }}>
+                    🧪 Bilans complémentaires
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="input"
+                    style={{ fontSize: 16, fontWeight: 800, color: '#0369a1' }}
+                    value={f.nb_bilans}
+                    onChange={(e) => s('nb_bilans', e.target.value)}
+                    placeholder="0"
+                  />
+                  <div style={{ fontSize: 10.5, color: '#0284c7', marginTop: 2 }}>
+                    Analyses & examens effectués
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="form-label" style={{ fontSize: 12, fontWeight: 700 }}>💬 Rapport / Observations</label>
+              <textarea
+                className="input"
+                rows={2}
+                value={f.commentaire}
+                onChange={(e) => s('commentaire', e.target.value)}
+                placeholder="Remarques médicales, aptitudes, observations particulières..."
+              />
+            </div>
+          </div>
+
+          <div className="modal-footer" style={{ borderTop: '1px solid var(--border)', padding: '12px 20px' }}>
+            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>
+              Annuler
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={saving}
+              style={{ fontWeight: 800, background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none' }}
+            >
+              {saving ? 'Enregistrement...' : '✓ Valider la visite & l\'effectif vu'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Entreprise detail panel ───────────────────────────────────
 function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifier, onReload, onDelete, toast }) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'administrateur';
   const currentYear = new Date().getFullYear();
   const [avis, setAvis] = useState([]);
+  const [visites, setVisites] = useState([]);
+  const [activeTab, setActiveTab] = useState('visites'); // 'visites' | 'avis' | 'campagnes'
+  const [showVisiteModal, setShowVisiteModal] = useState(false);
+  const [confirmDelVisite, setConfirmDelVisite] = useState(null);
+  const [medecins, setMedecins] = useState([]);
+  const [techniciens, setTechniciens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAvis, setShowAvis] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
@@ -934,6 +1157,9 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
 
   useEffect(() => {
     loadAvis();
+    loadVisites();
+    axios.get('/api/users/by-role/medecin').then((r) => setMedecins(r.data || [])).catch(() => {});
+    axios.get('/api/users/by-role/technicien').then((r) => setTechniciens(r.data || [])).catch(() => {});
   }, [entreprise.id]);
 
   async function loadAvis() {
@@ -947,12 +1173,33 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
     }
   }
 
+  async function loadVisites() {
+    try {
+      const { data } = await axios.get(`/api/entreprises/${entreprise.id}/visites`);
+      setVisites(data.visites || []);
+    } catch {
+      // fallback
+    }
+  }
+
   async function handleDeleteAvis(id) {
     try {
       await axios.delete(`/api/entreprises/${entreprise.id}/avis/${id}`);
       setConfirmDel(null);
       loadAvis();
       toast?.('Avis supprimé', 'success');
+    } catch {
+      toast?.('Erreur', 'error');
+    }
+  }
+
+  async function handleDeleteVisite(visiteId) {
+    try {
+      await axios.delete(`/api/entreprises/${entreprise.id}/visites/${visiteId}`);
+      setConfirmDelVisite(null);
+      loadVisites();
+      onReload?.();
+      toast?.('Visite supprimée', 'success');
     } catch {
       toast?.('Erreur', 'error');
     }
@@ -976,8 +1223,9 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
     }
   }
 
+  const sumExamines = visites.reduce((acc, v) => acc + (parseInt(v.nb_examines, 10) || 0), 0);
   const effectif = parseInt(entreprise.effectif_total, 10) || 0;
-  const faites = parseInt(entreprise.nb_visites_faites, 10) || 0;
+  const faites = Math.max(parseInt(entreprise.nb_visites_faites, 10) || 0, sumExamines);
   const aFaire = Math.max(0, effectif - faites);
   const taux = effectif > 0 ? Math.min(100, Math.round((faites / effectif) * 100)) : 0;
   const anneeCampagne = entreprise.annee_campagne || currentYear;
@@ -1046,11 +1294,19 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
               className="btn btn-primary btn-sm"
-              onClick={onPlanifier}
-              title="Planifier une visite médicale"
+              onClick={() => setShowVisiteModal(true)}
+              title="Enregistrer une visite médicale"
               style={{ fontWeight: 800, background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none' }}
             >
-              📅 Planifier une visite
+              🩺 + Enregistrer Visite
+            </button>
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={onPlanifier}
+              title="Planifier au planning général"
+              style={{ fontWeight: 700 }}
+            >
+              📅 Planifier au calendrier
             </button>
             {isAdmin && (
               <button className="btn btn-outline btn-sm" onClick={onQuickBilan} title="Calculateur rapide" style={{ fontWeight: 700 }}>
@@ -1200,25 +1456,6 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
           </div>
         </div>
 
-        {/* Historique des campagnes précédentes (si disponible) */}
-        {entreprise.campagnes && entreprise.campagnes.length > 0 && (
-          <div style={{ marginTop: 14, padding: '12px 16px', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)' }}>
-            <div style={{ fontWeight: 800, fontSize: 12.5, marginBottom: 8, color: 'var(--text)' }}>
-              📜 Historique des Campagnes Annuelles Clôturées :
-            </div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              {entreprise.campagnes.map((c) => (
-                <div key={c.id} style={{ padding: '6px 12px', background: 'var(--surface2)', borderRadius: 8, border: '1px solid var(--border)', fontSize: 11.5 }}>
-                  <strong>Année {c.annee} :</strong> {c.nb_visites_faites}/{c.effectif_total} examinés (
-                  <span style={{ color: Number(c.taux_realisation) >= 100 ? '#16a34a' : '#0284c7', fontWeight: 800 }}>
-                    {c.taux_realisation}%
-                  </span>)
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Contact info */}
         <div style={{ display: 'flex', gap: 16, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
           {entreprise.adresse && <NavigationSelector addr={entreprise.adresse} />}
@@ -1241,93 +1478,369 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
         )}
       </div>
 
-      {/* Avis section */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 17, fontWeight: 800 }}>
-            <span>Avis & Remarques</span>
-            <span style={{ fontSize: 13, color: 'var(--text-3)', fontWeight: 500, marginLeft: 8 }}>({avis.length})</span>
-          </h3>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowAvis('new')} style={{ fontWeight: 700 }}>
-            ➕ Donner mon avis
+      {/* Tabs Switcher */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 6,
+          borderBottom: '1px solid var(--border)',
+          padding: '0 24px',
+          background: 'var(--surface)',
+          flexShrink: 0,
+        }}
+      >
+        {[
+          ['visites', `🩺 Historique des Visites (${visites.length})`],
+          ['avis', `💬 Avis & Remarques (${avis.length})`],
+          ['campagnes', `📜 Campagnes (${entreprise.campagnes?.length || 0})`],
+        ].map(([tKey, label]) => (
+          <button
+            key={tKey}
+            type="button"
+            onClick={() => setActiveTab(tKey)}
+            style={{
+              padding: '12px 16px',
+              border: 'none',
+              background: 'none',
+              borderBottom: activeTab === tKey ? '3px solid var(--primary)' : '3px solid transparent',
+              fontWeight: activeTab === tKey ? 800 : 600,
+              color: activeTab === tKey ? 'var(--primary)' : 'var(--text-2)',
+              fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            {label}
           </button>
-        </div>
+        ))}
+      </div>
 
-        {loading && <div className="loading-center"><div className="spinner" /></div>}
-        {!loading && avis.length === 0 && (
-          <div className="empty-state">
-            <div className="empty-icon">💬</div>
-            <p style={{ fontWeight: 700 }}>Aucun avis pour l'instant.</p>
-            <p style={{ fontSize: 13, marginTop: 4 }}>Soyez le premier à partager une note ou observation !</p>
+      {/* Tab Content */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+        {/* TAB 1: HISTORIQUE DES VISITES & EFFECTIF EXAMINÉ */}
+        {activeTab === 'visites' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+              <div>
+                <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0 }}>
+                  Historique des Visites & Salariés Examinés
+                </h3>
+                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+                  Suivi chronologique des passages médicaux, tournées Clino et effectif vu sur site
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setShowVisiteModal(true)}
+                style={{ fontWeight: 800, background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', borderRadius: 8, padding: '6px 14px' }}
+              >
+                ➕ Enregistrer une visite (Effectif vu)
+              </button>
+            </div>
+
+            {visites.length === 0 ? (
+              <div className="empty-state" style={{ padding: '36px 16px' }}>
+                <div className="empty-icon">🩺</div>
+                <p style={{ fontWeight: 800, fontSize: 15 }}>Aucune visite enregistrée pour le moment</p>
+                <p style={{ fontSize: 12.5, color: 'var(--text-3)', margin: '4px 0 16px', maxWidth: 460 }}>
+                  Les visites programmées dans le Planning ou Clino Mobile apparaîtront ici. Vous pouvez également consigner manuellement une visite effectuée avec le nombre de salariés examinés.
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setShowVisiteModal(true)}
+                  style={{ fontWeight: 700 }}
+                >
+                  + Enregistrer le premier passage médical
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {visites.map((v) => {
+                  const isClino = v.type_visite?.toLowerCase().includes('clino') || v.source === 'clino';
+                  const dateFormatted = v.date ? new Date(v.date).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+                  const isExplicit = v.source === 'visite' && v.visite_id;
+
+                  return (
+                    <div
+                      key={v.id}
+                      style={{
+                        background: 'var(--surface)',
+                        borderRadius: 12,
+                        padding: '14px 18px',
+                        border: '1px solid var(--border)',
+                        borderLeft: `4px solid ${isClino ? '#0284c7' : '#10b981'}`,
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.02)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>
+                            📅 {dateFormatted}
+                          </span>
+                          {v.heure && (
+                            <span className="badge badge-blue" style={{ fontSize: 11 }}>
+                              ⏰ {v.heure}
+                            </span>
+                          )}
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: 6,
+                              background: isClino ? '#e0f2fe' : '#dcfce7',
+                              color: isClino ? '#0369a1' : '#15803d',
+                            }}
+                          >
+                            {v.type_visite || (isClino ? '🚗 Clino Mobile' : '📋 Visite Médicale')}
+                          </span>
+                          <span className={`badge ${v.statut === 'effectuee' ? 'badge-green' : 'badge-amber'}`} style={{ fontSize: 11 }}>
+                            {v.statut === 'effectuee' ? '✅ Effectuée' : '⏳ Planifiée'}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {/* Effectif badge highlight */}
+                          <div
+                            style={{
+                              background: 'linear-gradient(135deg, #10b981, #059669)',
+                              color: '#ffffff',
+                              padding: '4px 10px',
+                              borderRadius: 8,
+                              fontWeight: 900,
+                              fontSize: 12.5,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 5,
+                              boxShadow: '0 2px 6px rgba(16,185,129,0.3)',
+                            }}
+                          >
+                            <span>👥</span>
+                            <span>
+                              {v.nb_examines > 0
+                                ? `${v.nb_examines} salarié${v.nb_examines > 1 ? 's' : ''} examiné${v.nb_examines > 1 ? 's' : ''}`
+                                : 'Visite programmée'}
+                            </span>
+                          </div>
+                          {isExplicit && (isAdmin || user?.role === 'medecin') && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              style={{ padding: '2px 6px', color: 'var(--danger)', fontSize: 12 }}
+                              onClick={() => setConfirmDelVisite(v.visite_id)}
+                              title="Supprimer cette visite"
+                            >
+                              🗑
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Doctor and Technician row */}
+                      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {v.medecin_nom && v.medecin_nom !== '—' && (
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#0369a1', background: 'rgba(2,132,199,0.08)', padding: '2px 8px', borderRadius: 6 }}>
+                            👨‍⚕️ {v.medecin_nom.startsWith('Dr.') ? v.medecin_nom : `Dr. ${v.medecin_nom}`}
+                          </span>
+                        )}
+                        {v.technicien_nom && v.technicien_nom !== '—' && (
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#059669', background: 'rgba(5,150,105,0.08)', padding: '2px 8px', borderRadius: 6 }}>
+                            🔧 {v.technicien_nom}
+                          </span>
+                        )}
+                        {v.nb_bilans > 0 && (
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#0284c7' }}>
+                            🧪 {v.nb_bilans} bilan{v.nb_bilans > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+
+                      {v.commentaire && (
+                        <div style={{ fontSize: 12, color: 'var(--text-2)', background: 'var(--surface2)', padding: '6px 10px', borderRadius: 6, fontStyle: 'italic' }}>
+                          💬 {v.commentaire}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
-        {avis.map((a) => (
-          <div
-            key={a.id}
-            style={{
-              background: 'var(--surface)',
-              borderRadius: 14,
-              padding: '16px 20px',
-              marginBottom: 12,
-              borderLeft: `4px solid ${TYPE_COLORS[a.type_avis] || '#888'}`,
-              boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
-              border: '1px solid var(--border)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <div
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: '50%',
-                    background: 'var(--primary-lt)',
-                    color: 'var(--primary)',
-                    fontSize: 12,
-                    fontWeight: 800,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  {(a.user_prenom?.[0] || '').toUpperCase()}{(a.user_nom?.[0] || '').toUpperCase()}
+        {/* TAB 2: AVIS & REMARQUES */}
+        {activeTab === 'avis' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 17, fontWeight: 800 }}>
+                <span>Avis & Remarques</span>
+                <span style={{ fontSize: 13, color: 'var(--text-3)', fontWeight: 500, marginLeft: 8 }}>({avis.length})</span>
+              </h3>
+              <button className="btn btn-primary btn-sm" onClick={() => setShowAvis('new')} style={{ fontWeight: 700 }}>
+                ➕ Donner mon avis
+              </button>
+            </div>
+
+            {loading && <div className="loading-center"><div className="spinner" /></div>}
+            {!loading && avis.length === 0 && (
+              <div className="empty-state">
+                <div className="empty-icon">💬</div>
+                <p style={{ fontWeight: 700 }}>Aucun avis pour l'instant.</p>
+                <p style={{ fontSize: 13, marginTop: 4 }}>Soyez le premier à partager une note ou observation !</p>
+              </div>
+            )}
+
+            {avis.map((a) => (
+              <div
+                key={a.id}
+                style={{
+                  background: 'var(--surface)',
+                  borderRadius: 14,
+                  padding: '16px 20px',
+                  marginBottom: 12,
+                  borderLeft: `4px solid ${TYPE_COLORS[a.type_avis] || '#888'}`,
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <div
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: '50%',
+                        background: 'var(--primary-lt)',
+                        color: 'var(--primary)',
+                        fontSize: 12,
+                        fontWeight: 800,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {(a.user_prenom?.[0] || '').toUpperCase()}{(a.user_nom?.[0] || '').toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>{a.user_prenom} {a.user_nom}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)', textTransform: 'capitalize' }}>{a.user_role}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        padding: '3px 9px',
+                        borderRadius: 12,
+                        background: (TYPE_COLORS[a.type_avis] || '#888') + '22',
+                        color: TYPE_COLORS[a.type_avis] || '#888',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {TYPE_LABELS[a.type_avis] || a.type_avis}
+                    </span>
+                    {(a.user_id === user?.id || isAdmin) && (
+                      <>
+                        <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px' }} onClick={() => setShowAvis(a)}>✏️</button>
+                        <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px', color: 'var(--danger)' }} onClick={() => setConfirmDel(a.id)}>🗑</button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>{a.user_prenom} {a.user_nom}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-3)', textTransform: 'capitalize' }}>{a.user_role}</div>
+                {a.note > 0 && <div style={{ marginBottom: 6 }}><Stars value={a.note} size={14} /></div>}
+                <p style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.6, margin: 0 }}>{a.commentaire}</p>
+                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8 }}>
+                  {new Date(a.created_at).toLocaleString('fr-FR')}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <span
-                  style={{
-                    fontSize: 11,
-                    padding: '3px 9px',
-                    borderRadius: 12,
-                    background: (TYPE_COLORS[a.type_avis] || '#888') + '22',
-                    color: TYPE_COLORS[a.type_avis] || '#888',
-                    fontWeight: 700,
-                  }}
-                >
-                  {TYPE_LABELS[a.type_avis] || a.type_avis}
-                </span>
-                {(a.user_id === user?.id || isAdmin) && (
-                  <>
-                    <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px' }} onClick={() => setShowAvis(a)}>✏️</button>
-                    <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px', color: 'var(--danger)' }} onClick={() => setConfirmDel(a.id)}>🗑</button>
-                  </>
-                )}
-              </div>
-            </div>
-            {a.note > 0 && <div style={{ marginBottom: 6 }}><Stars value={a.note} size={14} /></div>}
-            <p style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.6, margin: 0 }}>{a.commentaire}</p>
-            <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8 }}>
-              {new Date(a.created_at).toLocaleString('fr-FR')}
-            </div>
+            ))}
           </div>
-        ))}
+        )}
+
+        {/* TAB 3: CAMPAGNES ANNUELLES */}
+        {activeTab === 'campagnes' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0 }}>
+                📜 Historique des Campagnes Annuelles
+              </h3>
+            </div>
+
+            {(!entreprise.campagnes || entreprise.campagnes.length === 0) ? (
+              <div className="empty-state">
+                <div className="empty-icon">📜</div>
+                <p style={{ fontWeight: 700 }}>Aucune ancienne campagne archivée</p>
+                <p style={{ fontSize: 13, marginTop: 4 }}>La campagne active actuelle est l'année {anneeCampagne}.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {entreprise.campagnes.map((c) => (
+                  <div
+                    key={c.id}
+                    style={{
+                      background: 'var(--surface)',
+                      borderRadius: 12,
+                      padding: '14px 18px',
+                      border: '1px solid var(--border)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 10,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)' }}>
+                        📅 Campagne Année {c.annee}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+                        Clôturée le : {c.date_cloture ? new Date(c.date_cloture).toLocaleDateString('fr-FR') : '—'}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 700 }}>
+                        👥 <strong>{c.nb_visites_faites}</strong> / {c.effectif_total} examinés
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                          padding: '3px 10px',
+                          borderRadius: 8,
+                          background: Number(c.taux_realisation) >= 100 ? '#dcfce7' : '#e0f2fe',
+                          color: Number(c.taux_realisation) >= 100 ? '#166534' : '#0369a1',
+                        }}
+                      >
+                        {c.taux_realisation}% réalisé
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Nouvelle Visite Modal */}
+      {showVisiteModal && (
+        <NouvelleVisiteModal
+          entreprise={entreprise}
+          medecins={medecins}
+          techniciens={techniciens}
+          onSave={() => {
+            loadVisites();
+            onReload?.();
+          }}
+          onClose={() => setShowVisiteModal(false)}
+          toast={toast}
+        />
+      )}
 
       {/* Avis modal */}
       {showAvis && (
@@ -1342,9 +1855,20 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
           onClose={() => setShowAvis(null)}
         />
       )}
+
+      {confirmDelVisite && (
+        <ConfirmDialog
+          title="Supprimer la visite ?"
+          message="Cette action déduira l'effectif examiné associé. Action irréversible."
+          danger
+          onConfirm={() => handleDeleteVisite(confirmDelVisite)}
+          onCancel={() => setConfirmDelVisite(null)}
+        />
+      )}
+
       {confirmDel && (
         <ConfirmDialog
-          title="Supprimer l'avis?"
+          title="Supprimer l'avis ?"
           message="Action irréversible."
           danger
           onConfirm={() => handleDeleteAvis(confirmDel)}
