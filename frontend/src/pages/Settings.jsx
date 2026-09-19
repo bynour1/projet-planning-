@@ -39,14 +39,20 @@ export default function Settings({ toast }) {
       return toast('Minimum 6 caractères', 'error');
     setSaving(true);
     try {
-      await axios.post('/api/auth/change-password', {
+      const { data } = await axios.post('/api/auth/change-password', {
         current_password: pwdForm.current_password,
         new_password:     pwdForm.new_password,
       });
-      toast('Mot de passe mis à jour !', 'success');
+      if (data?.token) {
+        try {
+          sessionStorage.setItem('pm_token', data.token);
+        } catch {}
+        axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+      }
+      toast(data?.message || 'Mot de passe mis à jour avec succès !', 'success');
       setPwdForm({ current_password: '', new_password: '', confirm: '' });
     } catch (err) {
-      toast(err.response?.data?.message || 'Erreur', 'error');
+      toast(err.response?.data?.message || 'Erreur lors de la modification', 'error');
     } finally {
       setSaving(false);
     }
@@ -461,6 +467,57 @@ export default function Settings({ toast }) {
             </div>
           </div>
         )}
+
+        {/* Notifications & Temps réel */}
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>🔔 Notifications & Temps Réel</h3>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 8,
+              background: currentNotifPerm === 'granted' ? '#dcfce7' : currentNotifPerm === 'denied' ? '#fee2e2' : '#fef9c3',
+              color: currentNotifPerm === 'granted' ? '#166534' : currentNotifPerm === 'denied' ? '#991b1b' : '#854d0e'
+            }}>
+              {currentNotifPerm === 'granted' ? '● Notifications Actives' : currentNotifPerm === 'denied' ? '● Bloquées' : '○ En attente'}
+            </span>
+          </div>
+
+          <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 14 }}>
+            Recevez instantanément les alertes sonores et visuelles lors de la création d'un planning, d'une tournée Clino ou d'un message dans le chat.
+          </p>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {currentNotifPerm !== 'granted' && (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={async () => {
+                  if (requestNotificationPermission) {
+                    const res = await requestNotificationPermission();
+                    setCurrentNotifPerm(res);
+                    if (res === 'granted') toast('🔔 Notifications système activées !', 'success');
+                    else toast('⚠️ Permission non accordée.', 'warning');
+                  }
+                }}
+              >
+                🔔 Activer les notifications
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => {
+                if (testNotification) {
+                  testNotification('🔔 Test Notification — GMT Ariana', 'Le système d\'alertes temps réel et sonore fonctionne parfaitement !');
+                } else {
+                  toast('🔔 Test notification : le carillon et le système d\'alerte sont opérationnels !', 'info');
+                }
+              }}
+            >
+              🔊 Tester le son & la notification
+            </button>
+          </div>
+        </div>
 
         {/* App info & Mises à jour */}
         <div className="card">

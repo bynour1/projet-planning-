@@ -96,7 +96,7 @@ export async function sendSystemNotification(title, body) {
 }
 
 export function SocketProvider({ children }) {
-  const { user, token } = useAuth();
+  const { user, token, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const socketRef  = useRef(null);
@@ -226,12 +226,20 @@ export function SocketProvider({ children }) {
       });
     });
 
+    // ── 5. DÉCONNEXION DE SÉCURITÉ (Mot de passe modifié sur un autre appareil) ──
+    socket.on('force_logout_user', (data) => {
+      if (user && user.id === data?.userId) {
+        toast('🔒 Votre mot de passe a été modifié. Cette session a été déconnectée par mesure de sécurité.', 'warning', 7000);
+        if (logout) logout();
+      }
+    });
+
     socketRef.current = socket;
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [token, user, navigate]);
+  }, [token, user, navigate, logout]);
 
   const emit = (event, data) => socketRef.current?.emit(event, data);
   const on   = (event, cb)  => { socketRef.current?.on(event, cb);  return () => socketRef.current?.off(event, cb); };

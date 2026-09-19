@@ -232,16 +232,23 @@ function FileMessage({ content, isMine }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════
-   RENDER MARKDOWN SIMPLE (pour réponses IA)
-═══════════════════════════════════════════════════════ */
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function MarkdownText({ text }) {
-  const lines = text.split('\n');
+  const lines = String(text || '').split('\n');
   return (
     <div style={{ lineHeight: 1.6 }}>
       {lines.map((line, i) => {
-        const bold = line.replace(/\*\*(.+?)\*\*/g, (_, m) => `<strong>${m}</strong>`);
-        if (line.startsWith('• ') || line.startsWith('- ')) {
+        const safe = escapeHtml(line);
+        const bold = safe.replace(/\*\*(.+?)\*\*/g, (_, m) => `<strong>${m}</strong>`);
+        if (safe.startsWith('• ') || safe.startsWith('- ')) {
           return (
             <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
               <span style={{ opacity: 0.6 }}>•</span>

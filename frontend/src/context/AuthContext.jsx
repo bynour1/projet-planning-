@@ -4,20 +4,32 @@ import axios from 'axios';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [token,   setToken]   = useState(() => localStorage.getItem('pm_token'));
+  // Clear any legacy permanent logins from localStorage
+  useEffect(() => {
+    try {
+      localStorage.removeItem('pm_token');
+      localStorage.removeItem('pm_user');
+    } catch {}
+  }, []);
+
+  const [token,   setToken]   = useState(() => {
+    try {
+      return sessionStorage.getItem('pm_token');
+    } catch {
+      return null;
+    }
+  });
+
   const [user,    setUser]    = useState(() => {
     try {
-      const saved = localStorage.getItem('pm_user');
+      const saved = sessionStorage.getItem('pm_user');
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
     }
   });
-  const [loading, setLoading] = useState(() => {
-    const savedToken = localStorage.getItem('pm_token');
-    const savedUser = localStorage.getItem('pm_user');
-    return !!(savedToken && !savedUser);
-  });
+
+  const [loading, setLoading] = useState(false);
 
   // Set axios default auth header and setup 401 interceptor
   useEffect(() => {
@@ -27,7 +39,9 @@ export function AuthProvider({ children }) {
     } else {
       delete axios.defaults.headers.common['Authorization'];
       setUser(null);
-      localStorage.removeItem('pm_user');
+      try {
+        sessionStorage.removeItem('pm_user');
+      } catch {}
       setLoading(false);
     }
 
@@ -55,7 +69,9 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await axios.get('/api/auth/me', { timeout: 8000 });
       setUser(data);
-      localStorage.setItem('pm_user', JSON.stringify(data));
+      try {
+        sessionStorage.setItem('pm_user', JSON.stringify(data));
+      } catch {}
     } catch {
       logout();
     } finally {
@@ -68,8 +84,10 @@ export function AuthProvider({ children }) {
     if (data.requires2FA) {
       return data;
     }
-    localStorage.setItem('pm_token', data.token);
-    localStorage.setItem('pm_user', JSON.stringify(data.user));
+    try {
+      sessionStorage.setItem('pm_token', data.token);
+      sessionStorage.setItem('pm_user', JSON.stringify(data.user));
+    } catch {}
     axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
     setToken(data.token);
     setUser(data.user);
@@ -78,8 +96,12 @@ export function AuthProvider({ children }) {
   }
 
   function logout() {
-    localStorage.removeItem('pm_token');
-    localStorage.removeItem('pm_user');
+    try {
+      sessionStorage.removeItem('pm_token');
+      sessionStorage.removeItem('pm_user');
+      localStorage.removeItem('pm_token');
+      localStorage.removeItem('pm_user');
+    } catch {}
     delete axios.defaults.headers.common['Authorization'];
     setToken(null);
     setUser(null);

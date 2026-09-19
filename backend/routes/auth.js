@@ -71,7 +71,7 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, nom: user.nom, prenom: user.prenom },
+      { id: user.id, email: user.email, role: user.role, nom: user.nom, prenom: user.prenom, token_version: user.token_version || 1 },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
@@ -112,7 +112,7 @@ router.post('/verify-2fa', async (req, res) => {
     await db.query('DELETE FROM codes WHERE id = ?', [codeRows[0].id]);
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, nom: user.nom, prenom: user.prenom },
+      { id: user.id, email: user.email, role: user.role, nom: user.nom, prenom: user.prenom, token_version: user.token_version || 1 },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
@@ -217,7 +217,7 @@ router.post('/biometric/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, nom: user.nom, prenom: user.prenom },
+      { id: user.id, email: user.email, role: user.role, nom: user.nom, prenom: user.prenom, token_version: user.token_version || 1 },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
@@ -299,15 +299,30 @@ router.post('/change-password', authenticate, async (req, res) => {
     return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères' });
 
   try {
-    const [rows] = await db.query('SELECT password FROM users WHERE id = ?', [req.user.id]);
+    const [rows] = await db.query('SELECT password, token_version FROM users WHERE id = ?', [req.user.id]);
     if (!rows[0]) return res.status(404).json({ message: 'Utilisateur introuvable' });
     const valid = await bcrypt.compare(current_password, rows[0].password);
     if (!valid)
       return res.status(401).json({ message: 'Mot de passe actuel incorrect' });
 
+    const newVersion = (rows[0].token_version || 1) + 1;
     const hash = await bcrypt.hash(new_password, 10);
-    await db.query('UPDATE users SET password = ?, first_login = 0 WHERE id = ?', [hash, req.user.id]);
-    res.json({ message: 'Mot de passe mis à jour avec succès' });
+    await db.query('UPDATE users SET password = ?, token_version = ?, first_login = 0 WHERE id = ?', [hash, newVersion, req.user.id]);
+
+    // Force disconnect all other devices/sockets in real time
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('force_logout_user', { userId: req.user.id });
+    }
+
+    // Generate new valid token for current device
+    const newToken = jwt.sign(
+      { id: req.user.id, email: req.user.email, role: req.user.role, nom: req.user.nom, prenom: req.user.prenom, token_version: newVersion },
+      process.env.JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    res.json({ message: 'Mot de passe mis à jour avec succès. Tous les autres appareils ont été déconnectés.', token: newToken });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });
   }
@@ -320,9 +335,23 @@ router.post('/force-change-password', authenticate, async (req, res) => {
     return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères' });
 
   try {
+    const [rows] = await db.query('SELECT token_version FROM users WHERE id = ?', [req.user.id]);
+    const newVersion = ((rows[0]?.token_version) || 1) + 1;
     const hash = await bcrypt.hash(new_password, 10);
-    await db.query('UPDATE users SET password = ?, first_login = 0 WHERE id = ?', [hash, req.user.id]);
-    res.json({ message: 'Mot de passe mis à jour avec succès' });
+    await db.query('UPDATE users SET password = ?, token_version = ?, first_login = 0 WHERE id = ?', [hash, newVersion, req.user.id]);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('force_logout_user', { userId: req.user.id });
+    }
+
+    const newToken = jwt.sign(
+      { id: req.user.id, email: req.user.email, role: req.user.role, nom: req.user.nom, prenom: req.user.prenom, token_version: newVersion },
+      process.env.JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    res.json({ message: 'Mot de passe mis à jour avec succès.', token: newToken });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });
   }
@@ -432,11 +461,23 @@ router.post('/reset-password', async (req, res) => {
     const email = rows[0].email;
     const hash = await bcrypt.hash(targetPassword, 10);
 
-    // Update password and activate user if first_login
-    await db.query('UPDATE users SET password = ?, first_login = 0, is_active = 1 WHERE email = ?', [hash, email]);
+    // Get user id and increment token_version
+    const [userRows] = await db.query('SELECT id, token_version FROM users WHERE email = ?', [email]);
+    const userId = userRows[0]?.id;
+    const newVersion = ((userRows[0]?.token_version) || 1) + 1;
+
+    // Update password, token_version, and activate user if first_login
+    await db.query('UPDATE users SET password = ?, token_version = ?, first_login = 0, is_active = 1 WHERE email = ?', [hash, newVersion, email]);
     await db.query('UPDATE password_resets SET used = 1 WHERE token = ?', [token]);
 
-    res.json({ message: 'Mot de passe réinitialisé avec succès ! Vous pouvez maintenant vous connecter.' });
+    if (userId) {
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('force_logout_user', { userId });
+      }
+    }
+
+    res.json({ message: 'Mot de passe réinitialisé avec succès ! Toutes les anciennes sessions ont été déconnectées. Vous pouvez maintenant vous connecter.' });
   } catch (err) {
     console.error('[POST /reset-password] Erreur:', err);
     res.status(500).json({ message: 'Erreur serveur' });

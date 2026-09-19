@@ -58,7 +58,8 @@ export default function Login({ toast }) {
         email: savedEmail,
       });
 
-      localStorage.setItem('pm_token', data.token);
+      sessionStorage.setItem('pm_token', data.token);
+      sessionStorage.setItem('pm_user', JSON.stringify(data.user));
       axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
       window.location.reload();
     } catch (err) {
@@ -166,7 +167,8 @@ export default function Login({ toast }) {
               setTwoFA(t=>({...t,loading:true}));
               try {
                 const {data} = await axios.post('/api/auth/verify-2fa', {userId:twoFA.userId, code:twoFA.code});
-                localStorage.setItem('pm_token', data.token);
+                sessionStorage.setItem('pm_token', data.token);
+                sessionStorage.setItem('pm_user', JSON.stringify(data.user));
                 axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
                 window.location.reload();
               } catch(err) {
