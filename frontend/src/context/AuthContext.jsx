@@ -4,20 +4,30 @@ import axios from 'axios';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user,    setUser]    = useState(null);
   const [token,   setToken]   = useState(() => localStorage.getItem('pm_token'));
-  const [loading, setLoading] = useState(true);
+  const [user,    setUser]    = useState(() => {
+    try {
+      const saved = localStorage.getItem('pm_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState(() => {
+    const savedToken = localStorage.getItem('pm_token');
+    const savedUser = localStorage.getItem('pm_user');
+    return !!(savedToken && !savedUser);
+  });
 
   // Set axios default auth header and setup 401 interceptor
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      if (!user) {
-        fetchMe();
-      }
+      fetchMe();
     } else {
       delete axios.defaults.headers.common['Authorization'];
       setUser(null);
+      localStorage.removeItem('pm_user');
       setLoading(false);
     }
 
@@ -43,8 +53,9 @@ export function AuthProvider({ children }) {
 
   async function fetchMe() {
     try {
-      const { data } = await axios.get('/api/auth/me');
+      const { data } = await axios.get('/api/auth/me', { timeout: 8000 });
       setUser(data);
+      localStorage.setItem('pm_user', JSON.stringify(data));
     } catch {
       logout();
     } finally {
@@ -58,17 +69,21 @@ export function AuthProvider({ children }) {
       return data;
     }
     localStorage.setItem('pm_token', data.token);
+    localStorage.setItem('pm_user', JSON.stringify(data.user));
     axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
     setToken(data.token);
     setUser(data.user);
+    setLoading(false);
     return data.user;
   }
 
   function logout() {
     localStorage.removeItem('pm_token');
+    localStorage.removeItem('pm_user');
     delete axios.defaults.headers.common['Authorization'];
     setToken(null);
     setUser(null);
+    setLoading(false);
   }
 
   async function refreshUser() {

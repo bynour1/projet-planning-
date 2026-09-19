@@ -1303,42 +1303,6 @@ function DoctorMatrixView({
     });
   };
 
-  const [isSmallScreen, setIsSmallScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
-
-  useEffect(() => {
-    const handleResize = () => setIsSmallScreen(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  const [mobileMode, setMobileMode] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'cards' : 'matrix'));
-  const [selectedMobileDay, setSelectedMobileDay] = useState(() => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const dayKeys = (days || []).map(d => typeof d === 'string' ? d : format(d, 'yyyy-MM-dd'));
-    return dayKeys.includes(todayStr) ? todayStr : (dayKeys[0] || todayStr);
-  });
-  const [mobileTab, setMobileTab] = useState('selected_day'); // 'selected_day' | 'all_days'
-
-  useEffect(() => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const dayKeys = (days || []).map(d => typeof d === 'string' ? d : format(d, 'yyyy-MM-dd'));
-    if (dayKeys.length > 0 && !dayKeys.includes(selectedMobileDay)) {
-      setSelectedMobileDay(dayKeys.includes(todayStr) ? todayStr : dayKeys[0]);
-    }
-  }, [days]);
-
-  // Extract all events for a given day across all staff
-  const getDayAllEvents = (dayKey) => {
-    const dayPe = pe.filter(e => toRaw(e.date) === dayKey);
-    const dayCl = cl.filter(e => toRaw(e.date) === dayKey);
-    const dayCe = ce.filter(e => (e.date_debut || '').slice(0, 10) === dayKey);
-    return [
-      ...dayPe.map(e => ({ ...e, _t: 'p', t: 'p' })),
-      ...dayCl.map(e => ({ ...e, _t: 'cl', t: 'cl', titre: e.entreprise_nom || e.planning_titre || e.titre || 'Mission Clino Mobile' })),
-      ...dayCe.map(e => ({ ...e, _t: 'e', t: 'e', date: e.date_debut?.slice(0, 10) })),
-    ];
-  };
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 10 }}>
       {/* ── Active Filter Bar ── */}
@@ -1362,10 +1326,12 @@ function DoctorMatrixView({
 
       {/* ── MATRIX TABLE (Exact PC Version - Smooth Multi-directional Scrolling) ── */}
       <div className="print-matrix-wrapper" style={{
-        flex: 1,
-        minHeight: 0,
-        overflow: 'auto',
+        width: '100%',
+        maxWidth: '100%',
+        overflowX: 'auto',
+        overflowY: 'visible',
         WebkitOverflowScrolling: 'touch',
+        touchAction: 'pan-x pan-y',
         borderRadius: 14,
         border: '1px solid var(--border)',
         background: 'var(--surface)',
@@ -2159,181 +2125,6 @@ function MonthView({ current, pe, ce, cl = [], isAdmin, medecins, techniciens, e
   );
 }
 
-/* ── 4. LIST view ────────────────────────────────────────────── */
-function ListView({ pe, ce, cl = [], isAdmin, medecins, techniciens, entreprises = [], onRefresh, toast, onSelectDetail }) {
-  const [modal, setModal] = useState(null);
-  const [confirm, setConfirm] = useState(null);
-  const all = [
-    ...pe.map(e => ({ ...e, _t: 'p', t: 'p' })),
-    ...ce.map(e => ({ ...e, _t: 'e', t: 'e', date: e.date_debut?.slice(0, 10) })),
-    ...cl.map(e => ({ ...e, _t: 'cl', t: 'cl', titre: e.entreprise_nom || e.planning_titre || e.titre || ('Mission Clino Mobile ' + (e.medecin_nom || '')) })),
-  ].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-
-  async function del(item) {
-    try {
-      const type = item._t || item.t;
-      if (type === 'p') await axios.delete(`/api/planning/${item.id}`);
-      else if (type === 'cl' || type === 'clino') await axios.delete(`/api/clino/${item.id}`);
-      else await axios.delete(`/api/events/${item.id}`);
-      onRefresh();
-      toast('Supprimé avec succès', 'success');
-    } catch (err) {
-      console.error(err);
-      toast('Erreur lors de la suppression', 'error');
-    } finally {
-      setConfirm(null);
-    }
-  }
-
-  return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-      {all.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-icon">📋</div>
-          <p>Aucun événement planifié</p>
-        </div>
-      ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Titre / Entreprise</th>
-                <th>Jour & Date</th>
-                <th>Horaire</th>
-                <th>Médecin / Lieu</th>
-                <th>Technicien / Adresse</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {all.map(ev => {
-                if (ev._t === 'p') {
-                  const isCl = Boolean(ev.is_clino || ev.clino_id);
-                  return (
-                    <tr key={'p' + ev.id} style={{ cursor: 'pointer' }} onClick={() => onSelectDetail?.(ev)}>
-                      <td>
-                        {isCl ? (
-                          <span className="badge badge-green" style={{ background: CLINO_COLOR.bg, color: CLINO_COLOR.text, border: `1px solid ${CLINO_COLOR.border}` }}>🚗 Clino Mobile</span>
-                        ) : (
-                          <span className="badge badge-blue">📋 Programme</span>
-                        )}
-                      </td>
-                      <td style={{ fontWeight: 700 }}>{ev.titre || '—'}</td>
-                      <td>{fmtDisplayWithDay(ev.date)}</td>
-                      <td>{ev.heure_debut ? `${ev.heure_debut}${ev.heure_fin ? ' → ' + ev.heure_fin : ''}` : '—'}</td>
-                      <td>{ev.medecin_nom ? `👨‍⚕️ ${ev.medecin_nom}` : '—'}</td>
-                      <td>
-                        {ev.technicien_nom ? `🔧 ${ev.technicien_nom}` : '—'}
-                        {ev.adresse && <MapLink addr={ev.adresse} style={{ fontSize: 11, display: 'block', marginTop: 2 }} />}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-                          {isAdmin && (
-                            <>
-                              <button className="btn btn-outline btn-sm" onClick={() => setModal({ t: 'p', data: ev })}>✏️</button>
-                              <button className="btn btn-danger btn-sm" onClick={() => setConfirm(ev)}>🗑</button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                }
-                if (ev._t === 'cl') {
-                  return (
-                    <tr key={'cl' + ev.id} style={{ cursor: 'pointer' }} onClick={() => onSelectDetail?.(ev)}>
-                      <td><span className="badge badge-green" style={{ background: CLINO_COLOR.bg, color: CLINO_COLOR.text, border: `1px solid ${CLINO_COLOR.border}` }}>🚗 Clino Mobile</span></td>
-                      <td style={{ fontWeight: 700 }}>{ev.entreprise_nom || ev.planning_titre || ev.titre || 'Mission Clino Mobile'}</td>
-                      <td>{fmtDisplayWithDay(ev.date)}</td>
-                      <td>{ev.heure ? String(ev.heure).slice(0, 5) : '—'}</td>
-                      <td>{ev.medecin_nom ? `👨‍⚕️ ${ev.medecin_nom}` : '—'}</td>
-                      <td>
-                        {ev.technicien_nom ? `🔧 ${ev.technicien_nom}` : '—'}
-                        {ev.adresse && <MapLink addr={ev.adresse} style={{ fontSize: 11, display: 'block', marginTop: 2 }} />}
-                        {ev.commentaire && <small style={{ color: 'var(--text-3)' }}>{ev.commentaire}</small>}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-                          {isAdmin && <button className="btn btn-danger btn-sm" onClick={() => setConfirm(ev)}>🗑</button>}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                }
-                const c = TYPE_COLORS[ev.type] || TYPE_COLORS.autre;
-                const isCl = Boolean(ev.is_clino || ev.clino_id);
-                return (
-                  <tr key={'e' + ev.id} style={{ cursor: 'pointer' }} onClick={() => onSelectDetail?.(ev)}>
-                    <td>
-                      {isCl ? (
-                        <span className="badge badge-green" style={{ background: CLINO_COLOR.bg, color: CLINO_COLOR.text, border: `1px solid ${CLINO_COLOR.border}` }}>🚗 Clino Mobile</span>
-                      ) : (
-                        <span className="badge" style={{ background: c.bg, color: c.text }}>📅 {ev.type}</span>
-                      )}
-                    </td>
-                    <td style={{ fontWeight: 700 }}>{ev.titre}</td>
-                    <td>{fmtDisplayWithDay(ev.date_debut?.slice(0, 10))}</td>
-                    <td>{ev.date_debut ? format(parseISO(ev.date_debut), 'HH:mm', { locale: fr }) : '—'}</td>
-                    <td>
-                      {ev.medecin_nom ? `👨‍⚕️ ${ev.medecin_nom}` : '—'}
-                      {ev.lieu && <MapLink addr={ev.lieu} style={{ fontSize: 11, display: 'block', marginTop: 2 }} />}
-                    </td>
-                    <td>{ev.technicien_nom ? `🔧 ${ev.technicien_nom}` : '—'}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-                        {isAdmin && (
-                          <>
-                            <button className="btn btn-outline btn-sm" onClick={() => setModal({ t: 'e', data: ev })}>✏️</button>
-                            <button className="btn btn-danger btn-sm" onClick={() => setConfirm(ev)}>🗑</button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {modal?.t === 'p' && (
-        <PlanningModal
-          event={modal.data}
-          medecins={medecins}
-          techniciens={techniciens}
-          entreprises={entreprises}
-          defaultDate={modal.data?.date}
-          onSave={() => { setModal(null); onRefresh(); toast('Enregistré avec succès ✓', 'success'); }}
-          onClose={() => setModal(null)}
-          toast={toast}
-        />
-      )}
-      {modal?.t === 'e' && (
-        <EventModal
-          event={modal.data}
-          medecins={medecins}
-          techniciens={techniciens}
-          entreprises={entreprises}
-          defaultDate={modal.data?.date_debut?.slice(0, 10)}
-          onSave={() => { setModal(null); onRefresh(); toast('Enregistré avec succès ✓', 'success'); }}
-          onClose={() => setModal(null)}
-          toast={toast}
-        />
-      )}
-      {confirm && (
-        <ConfirmDialog
-          title="Supprimer?"
-          message={confirm.titre ? `Supprimer "${confirm.titre}" ? Action irréversible.` : 'Action irréversible.'}
-          danger
-          onConfirm={() => del(confirm)}
-          onCancel={() => setConfirm(null)}
-        />
-      )}
-    </div>
-  );
-}
-
 /* ── MAIN COMPONENT ──────────────────────────────────────────── */
 export default function Planning({ toast }) {
   const { user } = useAuth();
@@ -2837,7 +2628,6 @@ export default function Planning({ toast }) {
             ['week', '📅 Semaine'],
             ['doctor_matrix', '📊 Grille Mois'],
             ['month', '📆 Calendrier'],
-            ['list', '📋 Liste']
           ].map(([v, l]) => (
             <button
               key={v}
@@ -2987,21 +2777,6 @@ export default function Planning({ toast }) {
       {view === 'month' && (
         <MonthView
           current={monthDate}
-          pe={filteredPe}
-          ce={filteredCe}
-          cl={filteredCl}
-          isAdmin={isAdmin}
-          medecins={med}
-          techniciens={tec}
-          entreprises={ents}
-          onRefresh={() => setTick(t => t + 1)}
-          toast={toast}
-          onSelectDetail={item => setDetailItem(item)}
-        />
-      )}
-
-      {view === 'list' && (
-        <ListView
           pe={filteredPe}
           ce={filteredCe}
           cl={filteredCl}

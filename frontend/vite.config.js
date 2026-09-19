@@ -12,6 +12,41 @@ export default defineConfig({
         enabled: false,
       },
       includeAssets: ['icon-192.png', 'icon-512.png', 'logo-gmt.png'],
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        cleanupOutdatedCaches: true,
+        navigateFallback: 'index.html',
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'gstatic-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          }
+        ]
+      },
       manifest: {
         id: '/',
         name: 'GMT Ariana — Planning Médical',
@@ -101,6 +136,26 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,
+    port: 5173,
+    allowedHosts: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8083',
+        changeOrigin: true,
+      },
+      '/uploads': {
+        target: 'http://localhost:8083',
+        changeOrigin: true,
+      },
+      '/socket.io': {
+        target: 'http://localhost:8083',
+        changeOrigin: true,
+        ws: true,
+      },
+    },
+  },
+  preview: {
     host: true,
     port: 5173,
     allowedHosts: true,

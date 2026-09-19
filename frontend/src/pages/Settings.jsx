@@ -144,23 +144,6 @@ export default function Settings({ toast }) {
         gap: 16
       }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <span style={{
-              background: 'linear-gradient(135deg, #0284c7, #0369a1)',
-              color: '#fff',
-              fontSize: 11,
-              fontWeight: 800,
-              padding: '3px 10px',
-              borderRadius: 6,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5
-            }}>
-              ⚙️ Espace Personnel & Sécurité
-            </span>
-            <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>
-              Authentification & Profil
-            </span>
-          </div>
           <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0, color: 'var(--text)', letterSpacing: -0.5 }}>
             Paramètres
           </h1>
@@ -508,12 +491,26 @@ export default function Settings({ toast }) {
             <button
               type="button"
               className="btn btn-outline btn-sm"
-              onClick={() => {
+              onClick={async () => {
+                toast('🔍 Recherche de mises à jour en cours…', 'info');
                 window.dispatchEvent(new CustomEvent('check-pwa-update'));
                 if ('serviceWorker' in navigator) {
-                  navigator.serviceWorker.ready.then(reg => reg.update()).catch(() => {});
+                  try {
+                    const reg = await navigator.serviceWorker.ready;
+                    await reg.update();
+                    if (reg.waiting) {
+                      toast('🚀 Nouvelle version trouvée ! Application en cours de mise à jour…', 'success');
+                      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                      setTimeout(() => window.location.reload(), 800);
+                      return;
+                    }
+                  } catch (e) {
+                    console.warn(e);
+                  }
                 }
-                toast('Recherche de mises à jour effectuée !', 'info');
+                setTimeout(() => {
+                  toast('✔️ Vous utilisez la dernière version disponible.', 'success');
+                }, 1000);
               }}
               style={{ flex: 1, justifyContent: 'center', minWidth: 160 }}
             >
@@ -523,12 +520,24 @@ export default function Settings({ toast }) {
               type="button"
               className="btn btn-ghost btn-sm"
               onClick={async () => {
-                if ('caches' in window) {
-                  const keys = await caches.keys();
-                  await Promise.all(keys.map(k => caches.delete(k)));
+                try {
+                  if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (const reg of registrations) {
+                      await reg.unregister();
+                    }
+                  }
+                  if ('caches' in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map(k => caches.delete(k)));
+                  }
+                } catch (e) {
+                  console.warn(e);
                 }
-                toast('Cache vidé, rechargement…', 'info');
-                setTimeout(() => window.location.reload(), 400);
+                toast('Cache et Service Worker réinitialisés ! Rechargement…', 'info');
+                setTimeout(() => {
+                  window.location.href = window.location.href.split('#')[0];
+                }, 500);
               }}
               style={{ justifyContent: 'center', color: 'var(--danger)', fontSize: 12 }}
             >

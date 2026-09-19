@@ -1886,8 +1886,22 @@ export default function Entreprises({ toast }) {
   const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
 
-  const [entreprises, setEntreprises] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [entreprises, setEntreprises] = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('gmt_cached_entreprises');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('gmt_cached_entreprises');
+      return !cached;
+    } catch {
+      return true;
+    }
+  });
   const [search, setSearch] = useState('');
   const [filterConv, setFilterConv] = useState('all');
   const [filterCampagne, setFilterCampagne] = useState('all');
@@ -1898,11 +1912,16 @@ export default function Entreprises({ toast }) {
   const [confirm, setConfirm] = useState(null);
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'table' | 'map'
   const [dateFilter, setDateFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(48);
 
   async function load() {
     try {
       const { data } = await axios.get('/api/entreprises');
       setEntreprises(data);
+      try {
+        sessionStorage.setItem('gmt_cached_entreprises', JSON.stringify(data));
+      } catch {}
     } catch {
       toast?.('Erreur chargement', 'error');
     } finally {
@@ -1913,6 +1932,11 @@ export default function Entreprises({ toast }) {
   useEffect(() => {
     load();
   }, []);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [search, filterConv, filterCampagne, dateFilter]);
 
   async function handleDelete(id) {
     try {
@@ -1960,6 +1984,12 @@ export default function Entreprises({ toast }) {
       return matchSearch && matchConv && matchCampagne && matchDate;
     });
   }, [entreprises, search, filterConv, filterCampagne, dateFilter, currentYear]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const displayedItems = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
 
   // ── Statistiques et Calculs Globaux ──────────────────────────
   const totalEffectif = entreprises.reduce((s, e) => s + (parseInt(e.effectif_total) || 0), 0);
@@ -2434,7 +2464,7 @@ export default function Entreprises({ toast }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((e) => {
+                {displayedItems.map((e) => {
                   const eff = parseInt(e.effectif_total, 10) || 0;
                   const vf = parseInt(e.nb_visites_faites, 10) || 0;
                   const aFaire = Math.max(0, eff - vf);
@@ -2601,7 +2631,7 @@ export default function Entreprises({ toast }) {
       ) : (
         /* ── VUE CARTES GRID PROFESSIONNELLE ── */
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 350px), 1fr))', gap: 16 }}>
-          {filtered.map((e) => {
+          {displayedItems.map((e) => {
             const eff = parseInt(e.effectif_total, 10) || 0;
             const vf = parseInt(e.nb_visites_faites, 10) || 0;
             const aFaire = Math.max(0, eff - vf);
@@ -2760,6 +2790,59 @@ export default function Entreprises({ toast }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── PAGINATION CONTROLS ── */}
+      {viewMode !== 'map' && filtered.length > pageSize && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 12,
+          marginTop: 20,
+          padding: '12px 18px',
+          background: 'var(--surface)',
+          borderRadius: 14,
+          border: '1px solid var(--border)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+        }}>
+          <div style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>
+            Affichage de <strong style={{ color: 'var(--text)' }}>{(page - 1) * pageSize + 1}</strong> à <strong style={{ color: 'var(--text)' }}>{Math.min(page * pageSize, filtered.length)}</strong> sur <strong style={{ color: 'var(--text)' }}>{filtered.length}</strong> entreprises
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-outline btn-sm"
+              disabled={page <= 1}
+              onClick={() => { setPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              style={{ fontWeight: 700 }}
+            >
+              ◀ Précédent
+            </button>
+            <span style={{ fontSize: 12.5, fontWeight: 800, padding: '4px 10px', background: 'var(--surface2)', borderRadius: 8, border: '1px solid var(--border)', color: 'var(--text)' }}>
+              Page {page} / {totalPages}
+            </span>
+            <button
+              className="btn btn-outline btn-sm"
+              disabled={page >= totalPages}
+              onClick={() => { setPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              style={{ fontWeight: 700 }}
+            >
+              Suivant ▶
+            </button>
+            <select
+              className="input"
+              style={{ height: 32, fontSize: 12, padding: '2px 8px', borderRadius: 8, fontWeight: 700 }}
+              value={pageSize}
+              onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+            >
+              <option value={24}>24 / page</option>
+              <option value={48}>48 / page</option>
+              <option value={96}>96 / page</option>
+              <option value={200}>200 / page</option>
+            </select>
+          </div>
         </div>
       )}
 

@@ -4,7 +4,7 @@ import { useSocket } from '../context/SocketContext';
 
 export default function BottomNav() {
   const { user } = useAuth();
-  const { onlineUsers } = useSocket();
+  const { unreadChatCount } = useSocket();
 
   if (!user) return null;
 
@@ -35,8 +35,8 @@ export default function BottomNav() {
       {!isChauffeur && (
         <NavLink to="/chat" className={navClass} style={{ position: 'relative' }}>
           <span className="bottom-nav-icon">💬</span>
-          {onlineUsers.length > 0 && (
-            <span className="bottom-nav-badge">{onlineUsers.length}</span>
+          {unreadChatCount > 0 && (
+            <span className="bottom-nav-badge">{unreadChatCount}</span>
           )}
           <span className="bottom-nav-label">Chat</span>
         </NavLink>

@@ -6,22 +6,38 @@ const { authenticate, authorize } = require('../middleware/auth');
 // ENTREPRISES
 // ═══════════════════════════════════════════════════════════════
 
+// In-memory cache for high performance on large dataset (898+ enterprises)
+let cachedEntreprises = null;
+let cacheTime = 0;
+const CACHE_TTL_MS = 60 * 1000; // 60s cache TTL
+
+function invalidateEntreprisesCache() {
+  cachedEntreprises = null;
+  cacheTime = 0;
+}
+
 // GET /api/entreprises
 router.get('/', authenticate, async (req, res) => {
   try {
     const isAdmin = req.user?.role === 'administrateur';
-    const [rows] = await db.query(`
-      SELECT e.*,
-        COUNT(DISTINCT r.id)          AS nb_avis,
-        ROUND(AVG(r.note), 1)         AS note_moyenne
-      FROM entreprises e
-      LEFT JOIN entreprise_avis r ON r.entreprise_id = e.id
-      GROUP BY e.id
-      ORDER BY e.nom ASC
-    `);
+    const now = Date.now();
+
+    if (!cachedEntreprises || (now - cacheTime > CACHE_TTL_MS)) {
+      const [rows] = await db.query(`
+        SELECT e.*,
+          COUNT(DISTINCT r.id)          AS nb_avis,
+          ROUND(AVG(r.note), 1)         AS note_moyenne
+        FROM entreprises e
+        LEFT JOIN entreprise_avis r ON r.entreprise_id = e.id
+        GROUP BY e.id
+        ORDER BY e.nom ASC
+      `);
+      cachedEntreprises = rows || [];
+      cacheTime = now;
+    }
 
     // Mask code if not administrator
-    const result = rows.map(r => {
+    const result = cachedEntreprises.map(r => {
       if (!isAdmin) {
         const { code, ...rest } = r;
         return rest;
@@ -309,6 +325,7 @@ router.post('/:id/visites', authenticate, authorize('administrateur', 'medecin',
       io.emit('entreprises_refresh');
       io.emit('planning_refresh');
     }
+    invalidateEntreprisesCache();
 
     res.status(201).json({
       message: 'Visite enregistrée avec succès ✓',
@@ -334,6 +351,7 @@ router.delete('/:id/visites/:visiteId', authenticate, authorize('administrateur'
     const newTotalExam = sumRows[0]?.total_vu || 0;
 
     await db.query('UPDATE entreprises SET nb_visites_faites = ? WHERE id = ?', [newTotalExam, req.params.id]);
+    invalidateEntreprisesCache();
 
     const io = req.app.get('io');
     if (io) {
@@ -379,6 +397,7 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
         parseInt(nb_bilans_manquants) || 0,
       ]
     );
+    invalidateEntreprisesCache();
     res.status(201).json({ message: 'Entreprise créée', id: result.insertId });
   } catch (err) {
     console.error(err);
@@ -419,6 +438,7 @@ router.put('/:id', authenticate, authorize('administrateur'), async (req, res) =
         req.params.id,
       ]
     );
+    invalidateEntreprisesCache();
     res.json({ message: 'Entreprise mise à jour' });
   } catch (err) {
     console.error(err);
@@ -472,6 +492,7 @@ router.patch('/:id/bilan', authenticate, authorize('administrateur', 'medecin', 
     if (io) {
       io.emit('entreprises_refresh');
     }
+    invalidateEntreprisesCache();
 
     res.json({ message: 'Bilan et effectif mis à jour avec succès' });
   } catch (err) {
@@ -518,6 +539,7 @@ router.post('/:id/nouvelle-campagne', authenticate, authorize('administrateur'),
       WHERE id = ?
     `, [targetYear, req.params.id]);
 
+    invalidateEntreprisesCache();
     res.json({
       message: `Campagne ${targetYear} initialisée avec succès. Effectif réinitialisé pour la nouvelle année.`,
       annee: targetYear,
@@ -533,8 +555,10 @@ router.post('/:id/nouvelle-campagne', authenticate, authorize('administrateur'),
 router.delete('/:id', authenticate, authorize('administrateur'), async (req, res) => {
   try {
     await db.query('DELETE FROM entreprises WHERE id=?', [req.params.id]);
+    invalidateEntreprisesCache();
     res.json({ message: 'Entreprise supprimée' });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -734,6 +758,7 @@ router.post('/import', authenticate, authorize('administrateur'), async (req, re
       }
     }
 
+    invalidateEntreprisesCache();
     res.json({
       message: 'Importation terminée avec succès',
       total: items.length,
@@ -764,6 +789,7 @@ router.post('/:id/avis', authenticate, async (req, res) => {
       'INSERT INTO entreprise_avis (entreprise_id,user_id,note,commentaire,type_avis) VALUES (?,?,?,?,?)',
       [req.params.id, req.user.id, note||null, commentaire.trim(), type_avis||'avis']
     );
+    invalidateEntreprisesCache();
     res.status(201).json({ message: 'Avis ajouté', id: result.insertId });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });
@@ -784,6 +810,7 @@ router.put('/:id/avis/:avisId', authenticate, async (req, res) => {
       'UPDATE entreprise_avis SET note=?,commentaire=?,type_avis=? WHERE id=?',
       [note||null, commentaire.trim(), type_avis||'avis', req.params.avisId]
     );
+    invalidateEntreprisesCache();
     res.json({ message: 'Avis mis à jour' });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });
@@ -799,6 +826,7 @@ router.delete('/:id/avis/:avisId', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Accès refusé' });
 
     await db.query('DELETE FROM entreprise_avis WHERE id=?', [req.params.avisId]);
+    invalidateEntreprisesCache();
     res.json({ message: 'Avis supprimé' });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });

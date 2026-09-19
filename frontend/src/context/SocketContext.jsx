@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { toast } from '../components/Toast';
 
@@ -98,12 +98,20 @@ export async function sendSystemNotification(title, body) {
 export function SocketProvider({ children }) {
   const { user, token } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const socketRef  = useRef(null);
   const [connected, setConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [notificationPermission, setNotificationPermission] = useState(
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
   );
+
+  useEffect(() => {
+    if (location.pathname === '/chat') {
+      setUnreadChatCount(0);
+    }
+  }, [location.pathname]);
 
   const requestNotificationPermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -138,10 +146,11 @@ export function SocketProvider({ children }) {
       return;
     }
 
-    const socketUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://projet-planning.onrender.com' : '/');
+    const socketUrl = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : '/');
     const socket = io(socketUrl, {
       auth: { token },
       transports: ['websocket', 'polling'],
+      timeout: 5000,
     });
 
     socket.on('connect', () => {
@@ -156,6 +165,9 @@ export function SocketProvider({ children }) {
       if (user && msg.user_id === user.id) return; // Ne pas notifier l'émetteur
 
       const isChatOpen = window.location.pathname === '/chat';
+      if (!isChatOpen) {
+        setUnreadChatCount((prev) => prev + 1);
+      }
       const textContent = typeof msg.content === 'string' ? msg.content.slice(0, 80) : 'Document / Pièce jointe';
 
       // Carillon sonore systématique
@@ -230,6 +242,8 @@ export function SocketProvider({ children }) {
         socket: socketRef.current,
         connected,
         onlineUsers,
+        unreadChatCount,
+        setUnreadChatCount,
         emit,
         on,
         notificationPermission,

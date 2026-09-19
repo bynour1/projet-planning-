@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gmt-ariana-v4';
+const CACHE_NAME = 'gmt-ariana-v7';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.json',
@@ -32,16 +32,24 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Fetch handler: Never intercept local development or API traffic
+// Fetch handler: Network-First to guarantee latest code updates on smartphones
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
   const url = new URL(e.request.url);
 
-  // In development or for dynamic APIs/assets, bypass Service Worker completely
+  // In development, tunnels, or API traffic: bypass Service Worker completely
   if (
     url.hostname === 'localhost' ||
     url.hostname === '127.0.0.1' ||
+    url.hostname.startsWith('192.168.') ||
+    url.hostname.startsWith('10.') ||
+    url.hostname.startsWith('172.') ||
+    url.hostname.includes('trycloudflare.com') ||
+    url.hostname.includes('loca.lt') ||
+    url.hostname.includes('ngrok') ||
+    url.port === '5173' ||
+    url.port === '5174' ||
     url.pathname.startsWith('/api') ||
     url.pathname.startsWith('/socket.io') ||
     url.pathname.startsWith('/@') ||
@@ -53,37 +61,21 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
+  // Network-First strategy: always fetch fresh version first, fallback to cache if offline
   e.respondWith(
-    caches.match(e.request).then((cachedResponse) => {
-      // Return cached version if found
-      if (cachedResponse) {
-        fetch(e.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              caches.open(CACHE_NAME).then((cache) => cache.put(e.request, networkResponse));
-            }
-          })
-          .catch(() => {});
-        return cachedResponse;
-      }
-
-      // Otherwise fetch from network with timeout fallback
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Network timeout')), 4000)
-      );
-
-      return Promise.race([fetch(e.request), timeoutPromise])
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const clone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
-          }
-          return networkResponse;
-        })
-        .catch(() => {
-          return caches.match('/') || new Response('Hors-ligne', { status: 503 });
+    fetch(e.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        return caches.match(e.request).then((cached) => {
+          return cached || caches.match('/') || new Response('Hors-ligne', { status: 503 });
         });
-    })
+      })
   );
 });
 

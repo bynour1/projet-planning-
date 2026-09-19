@@ -11,21 +11,21 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 import Sidebar        from './components/Sidebar';
 import BottomNav      from './components/BottomNav';
-import Login          from './pages/Login';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword  from './pages/ResetPassword';
 
 // Lazy-loaded pages for lightning-fast initial load
-const Dashboard     = lazy(() => import('./pages/Dashboard'));
-const Planning      = lazy(() => import('./pages/Planning'));
-const Calendar      = lazy(() => import('./pages/Calendar'));
-const Clino         = lazy(() => import('./pages/Clino'));
-const Chat          = lazy(() => import('./pages/Chat'));
-const Users         = lazy(() => import('./pages/Users'));
-const Settings      = lazy(() => import('./pages/Settings'));
-const ForcePassword = lazy(() => import('./pages/ForcePassword'));
-const Schedule      = lazy(() => import('./pages/Schedule'));
-const Entreprises   = lazy(() => import('./pages/Entreprises'));
+const Login          = lazy(() => import('./pages/Login'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword  = lazy(() => import('./pages/ResetPassword'));
+const Dashboard      = lazy(() => import('./pages/Dashboard'));
+const Planning       = lazy(() => import('./pages/Planning'));
+const Calendar       = lazy(() => import('./pages/Calendar'));
+const Clino          = lazy(() => import('./pages/Clino'));
+const Chat           = lazy(() => import('./pages/Chat'));
+const Users          = lazy(() => import('./pages/Users'));
+const Settings       = lazy(() => import('./pages/Settings'));
+const ForcePassword  = lazy(() => import('./pages/ForcePassword'));
+const Schedule       = lazy(() => import('./pages/Schedule'));
+const Entreprises    = lazy(() => import('./pages/Entreprises'));
 
 function AppShell() {
   const { user, loading } = useAuth();
@@ -42,12 +42,14 @@ function AppShell() {
     <>
       <PWAUpdateNotification />
       <ToastContainer toasts={toasts}/>
-      <Routes>
-        <Route path="/login"           element={<Login          toast={addToast}/>}/>
-        <Route path="/forgot-password" element={<ForgotPassword toast={addToast}/>}/>
-        <Route path="/reset-password"  element={<ResetPassword  toast={addToast}/>}/>
-        <Route path="*"                element={<Navigate to="/login" replace/>}/>
-      </Routes>
+      <Suspense fallback={<div className="loading-center" style={{ height:'100vh' }}><div className="spinner" style={{ width:36, height:36 }}/></div>}>
+        <Routes>
+          <Route path="/login"           element={<Login          toast={addToast}/>}/>
+          <Route path="/forgot-password" element={<ForgotPassword toast={addToast}/>}/>
+          <Route path="/reset-password"  element={<ResetPassword  toast={addToast}/>}/>
+          <Route path="*"                element={<Navigate to="/login" replace/>}/>
+        </Routes>
+      </Suspense>
     </>
   );
 
@@ -55,9 +57,11 @@ function AppShell() {
     <>
       <PWAUpdateNotification />
       <ToastContainer toasts={toasts}/>
-      <Routes>
-        <Route path="*" element={<ForcePassword toast={addToast}/>}/>
-      </Routes>
+      <Suspense fallback={<div className="loading-center" style={{ height:'100vh' }}><div className="spinner" style={{ width:36, height:36 }}/></div>}>
+        <Routes>
+          <Route path="*" element={<ForcePassword toast={addToast}/>}/>
+        </Routes>
+      </Suspense>
     </>
   );
 

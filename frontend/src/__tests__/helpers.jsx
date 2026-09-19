@@ -19,6 +19,8 @@ export const mockSocketContext = (overrides = {}) => ({
   socket: null,
   connected: true,
   onlineUsers: [MOCK_ADMIN],
+  unreadChatCount: 0,
+  setUnreadChatCount: vi.fn(),
   emit: vi.fn(),
   on:   vi.fn().mockReturnValue(() => {}),
   ...overrides,

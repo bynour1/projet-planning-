@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const db     = require('../config/db');
 const { authenticate, authorize } = require('../middleware/auth');
-const { notifyAllUsers, eventEmailHtml } = require('../config/mailer');
+const { notifyAllUsers, notifyAssignedIntervenants, eventEmailHtml } = require('../config/mailer');
 
 // Auto-migration for events columns
 (async () => {
@@ -102,12 +102,27 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
       if (isClinoVal) io.emit('clino_refresh');
     }
 
-    // Email notification (async)
-    notifyAllUsers({
-      subject:   `📅 Nouvel événement — ${titre}`,
-      html:      eventEmailHtml({ titre, type: type || 'Visite', date_debut, date_fin, lieu, createdBy: `${req.user.prenom} ${req.user.nom}` }),
-      excludeId: req.user.id,
-    });
+    // Email notification: Notifier uniquement les intervenants assignés pour la confidentialité des données
+    const assignedIds = Array.from(new Set([
+      medId,
+      tecId,
+      ...parsedParts.map(p => p.id),
+    ].filter(Boolean)));
+
+    if (assignedIds.length > 0) {
+      notifyAssignedIntervenants({
+        userIds: assignedIds,
+        subject: `📅 Nouvel événement assigné — ${titre}`,
+        html: eventEmailHtml({ titre, type: type || 'Visite', date_debut, date_fin, lieu, createdBy: `${req.user.prenom} ${req.user.nom}` }),
+      });
+    } else {
+      // Événement général sans assignation spécifique
+      notifyAllUsers({
+        subject:   `📅 Nouvel événement — ${titre}`,
+        html:      eventEmailHtml({ titre, type: type || 'Visite', date_debut, date_fin, lieu, createdBy: `${req.user.prenom} ${req.user.nom}` }),
+        excludeId: req.user.id,
+      });
+    }
 
     res.status(201).json({ message: 'Événement créé', id: result.insertId });
   } catch (err) {

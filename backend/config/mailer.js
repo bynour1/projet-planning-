@@ -161,10 +161,11 @@ async function notifyAllUsers({ subject, html, smsText = null, excludeId = null 
   }
 }
 
-// Notifier uniquement les intervenants assignés (Médecin + Technicien)
-async function notifyAssignedIntervenants({ medecin_id, technicien_id, subject, html, smsText = null }) {
+// Notifier uniquement les intervenants assignés (Médecins, Techniciens, Participants spécifiques)
+async function notifyAssignedIntervenants({ medecin_id, technicien_id, userIds: extraUserIds = [], subject, html, smsText = null }) {
   try {
-    const userIds = [medecin_id, technicien_id].filter(Boolean);
+    const rawIds = [medecin_id, technicien_id, ...(Array.isArray(extraUserIds) ? extraUserIds : [])].filter(Boolean);
+    const userIds = Array.from(new Set(rawIds.map(id => Number(id)).filter(id => !isNaN(id) && id > 0)));
     if (!userIds.length) return;
 
     const [users] = await db.query(

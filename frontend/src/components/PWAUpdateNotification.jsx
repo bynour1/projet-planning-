@@ -6,11 +6,6 @@ export default function PWAUpdateNotification() {
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-    // Disable automatic prompts on local dev server to avoid interference with Ctrl+R and HMR
-    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      return;
-    }
-
     if (!('serviceWorker' in navigator)) return;
 
     let registration = null;
@@ -38,12 +33,12 @@ export default function PWAUpdateNotification() {
       });
     }).catch(() => {});
 
-    // Periodic check for updates (every 10 minutes)
+    // Periodic check for updates (every 5 minutes)
     const interval = setInterval(() => {
       if (registration) {
         registration.update().catch(() => {});
       }
-    }, 10 * 60 * 1000);
+    }, 5 * 60 * 1000);
 
     // Check for update on window focus
     const handleFocus = () => {
