@@ -44,6 +44,35 @@ export default defineConfig({
                 statuses: [0, 200]
               }
             }
+          },
+          {
+            urlPattern: /\/uploads\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'uploads-cache',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 30
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /\/api\/(entreprises|users\/by-role)/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-static-data-cache',
+              networkTimeoutSeconds: 3,
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
           }
         ]
       },
@@ -109,11 +138,8 @@ export default defineConfig({
             if (id.includes('xlsx') || id.includes('docx') || id.includes('jspdf') || id.includes('html2canvas')) {
               return 'vendor-export';
             }
-            if (id.includes('@fullcalendar')) {
-              return 'vendor-calendar';
-            }
-            if (id.includes('leaflet')) {
-              return 'vendor-leaflet';
+            if (id.includes('date-fns')) {
+              return 'vendor-date-fns';
             }
             if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
               return 'vendor-react';

@@ -7,80 +7,10 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import NavigationSelector from '../components/NavigationSelector';
 import ExcelImportModal from '../components/ExcelImportModal';
 import ExportDropdown from '../components/ExportDropdown';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-
 // ── Helper : générer le lien Google Maps depuis une adresse ───
 function googleMapsUrl(adresse) {
   if (!adresse) return null;
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`;
-}
-
-function MapView({ entreprises }) {
-  const mapRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-    if (mapInstanceRef.current) return;
-
-    const map = L.map(mapRef.current).setView([36.8, 10.18], 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap',
-    }).addTo(map);
-    mapInstanceRef.current = map;
-
-    // Geocode each entreprise with Nominatim
-    entreprises
-      .filter((e) => e.adresse)
-      .forEach(async (ent) => {
-        const cached = sessionStorage.getItem('geo_' + ent.adresse);
-        let lat, lon;
-        if (cached) {
-          ({ lat, lon } = JSON.parse(cached));
-        } else {
-          try {
-            const r = await fetch(
-              `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
-                ent.adresse
-              )},Ariana,Tunisie&format=json&limit=1`
-            );
-            const data = await r.json();
-            if (data[0]) {
-              lat = parseFloat(data[0].lat);
-              lon = parseFloat(data[0].lon);
-              sessionStorage.setItem('geo_' + ent.adresse, JSON.stringify({ lat, lon }));
-            }
-          } catch {}
-        }
-        if (lat && lon) {
-          L.marker([lat, lon])
-            .addTo(map)
-            .bindPopup(
-              `<b>${ent.nom}</b><br>${ent.adresse}<br><small>${ent.secteur || ''}</small>`
-            );
-        }
-      });
-
-    return () => {
-      map.remove();
-      mapInstanceRef.current = null;
-    };
-  }, [entreprises]);
-
-  return (
-    <div
-      ref={mapRef}
-      style={{
-        height: 540,
-        width: '100%',
-        borderRadius: 14,
-        overflow: 'hidden',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-        border: '1px solid var(--border)',
-      }}
-    />
-  );
 }
 
 // ── Star rating component ─────────────────────────────────────

@@ -2214,20 +2214,20 @@ export default function Planning({ toast }) {
   const weekDiff = differenceInCalendarWeeks(weekStart, currentWeekStart, { weekStartsOn: 1 });
   const isoWeekNum = getISOWeek(weekStart);
 
-  const filterWeek = arr => arr.filter(e => {
+  const filterWeek = useCallback(arr => arr.filter(e => {
     const d = toRaw(e.date || e.date_debut?.slice(0, 10) || '');
     return d >= format(weekStart, 'yyyy-MM-dd') && d <= format(weekEnd, 'yyyy-MM-dd');
-  });
+  }), [weekStart, weekEnd]);
 
-  const filterMonth = arr => arr.filter(e => {
+  const filterMonth = useCallback(arr => arr.filter(e => {
     const d = toRaw(e.date || e.date_debut?.slice(0, 10) || '');
     if (!d) return false;
     const startStr = format(startOfMonth(monthDate), 'yyyy-MM-dd');
     const endStr   = format(endOfMonth(monthDate), 'yyyy-MM-dd');
     return d >= startStr && d <= endStr;
-  });
+  }), [monthDate]);
 
-  const filteredPe = pe.filter(e => {
+  const filteredPe = useMemo(() => pe.filter(e => {
     if (filters.date && toRaw(e.date) !== filters.date) return false;
     if (filters.role === 'medecin') {
       const hasMed = Boolean(e.medecin_id || (e.medecin_nom && e.medecin_nom !== '—' && e.medecin_nom !== '-'));
@@ -2263,9 +2263,9 @@ export default function Planning({ toast }) {
       if (!match) return false;
     }
     return true;
-  });
+  }), [pe, filters]);
 
-  const filteredCl = cl.filter(e => {
+  const filteredCl = useMemo(() => cl.filter(e => {
     if (filters.date && toRaw(e.date) !== filters.date) return false;
     if (filters.role === 'medecin') {
       const hasMed = Boolean(e.medecin_id || e.medecin_nom || e.medecin_full);
@@ -2305,9 +2305,9 @@ export default function Planning({ toast }) {
       if (!match) return false;
     }
     return true;
-  });
+  }), [cl, filters]);
 
-  const filteredCe = ce.filter(e => {
+  const filteredCe = useMemo(() => ce.filter(e => {
     if (filters.date && toRaw(e.date_debut?.slice(0, 10)) !== filters.date) return false;
     if (filters.role) return false;
     if (filters.entreprise) {
@@ -2334,9 +2334,9 @@ export default function Planning({ toast }) {
       if (!match) return false;
     }
     return true;
-  });
+  }), [ce, filters]);
 
-  const exportItems = [
+  const exportItems = useMemo(() => [
     ...filteredPe.map(e => ({
       ...e,
       _t: 'p',
@@ -2382,7 +2382,7 @@ export default function Planning({ toast }) {
       adresse: e.lieu || '-',
       commentaire: e.description || '',
     })),
-  ].sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.heure_debut || '').localeCompare(b.heure_debut || ''));
+  ].sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.heure_debut || '').localeCompare(b.heure_debut || '')), [filteredPe, filteredCl, filteredCe]);
 
   const totalFilteredCount = filteredPe.length + filteredCl.length + filteredCe.length;
   const hasActiveFilters = Boolean(filters.role || filters.entreprise || filters.search || filters.date);
