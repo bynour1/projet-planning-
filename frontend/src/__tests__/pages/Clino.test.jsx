@@ -9,11 +9,11 @@ import Clino from '../../pages/Clino';
 beforeEach(() => { vi.clearAllMocks(); });
 
 const CLINO_DATA = [
-  { id:1, date:'2026-05-17', heure:'09:00:00', adresse:'Rue de la Liberté, Tunis', medecin_full:'Sophie Benali', medecin_nom:'Sophie Benali', commentaire:'RAS' },
-  { id:2, date:'2026-05-18', heure:'14:00:00', adresse:'Avenue Bourguiba', medecin_full:'Karim Mansouri', medecin_nom:'Karim Mansouri', commentaire:null },
+  { id:1, date:'2026-05-18', heure:'09:00:00', adresse:'Rue de la Liberté, Tunis', medecin_full:'Sophie Benali', medecin_nom:'Sophie Benali', commentaire:'RAS' },
+  { id:2, date:'2026-05-19', heure:'14:00:00', adresse:'Avenue Bourguiba', medecin_full:'Karim Mansouri', medecin_nom:'Karim Mansouri', commentaire:null },
 ];
 const PLANNING_DATA = [
-  { id:1, titre:'ECG', date:'2026-05-17', heure_debut:'08:00', heure_fin:'10:00', adresse:'Clinique', medecin_nom:'Sophie Benali', technicien_nom:null },
+  { id:1, titre:'ECG', date:'2026-05-18', heure_debut:'08:00', heure_fin:'10:00', adresse:'Clinique', medecin_nom:'Sophie Benali', technicien_nom:null },
 ];
 
 function setup(user = MOCK_ADMIN) {
@@ -38,7 +38,7 @@ describe('Clino Mobile page', () => {
 
   it('shows formatted dates (DD/MM/YYYY)', async () => {
     setup();
-    await waitFor(() => expect(screen.getByText('17/05/2026')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('18/05/2026')).toBeInTheDocument());
   });
 
   it('shows add button for admin', async () => {
@@ -93,4 +93,20 @@ describe('Clino Mobile page', () => {
     await userEvent.click(screen.getAllByText('🗑')[0]);
     expect(screen.getByText(/Supprimer/i)).toBeInTheDocument();
   });
+
+  it('displays week separation header and day names prominently', async () => {
+    setup();
+    await waitFor(() => expect(screen.getAllByText('Rue de la Liberté, Tunis')[0]).toBeInTheDocument());
+    expect(screen.getAllByText(/Semaine/i)[0]).toBeInTheDocument();
+    expect(screen.getAllByText(/LUNDI/i)[0]).toBeInTheDocument();
+    expect(screen.getAllByText(/MARDI/i)[0]).toBeInTheDocument();
+  });
+
+  it('switches to weekly grid view', async () => {
+    setup();
+    await waitFor(() => screen.getByText(/Grille Hebdo/i));
+    await userEvent.click(screen.getByText(/Grille Hebdo/i));
+    expect(screen.getAllByText(/Cette semaine/i)[0]).toBeInTheDocument();
+  });
 });
+
