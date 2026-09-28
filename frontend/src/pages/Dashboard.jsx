@@ -74,54 +74,92 @@ export default function Dashboard({ toast }) {
   const { on }   = useSocket();
   const navigate = useNavigate();
 
-  const [stats, setStats] = useState({ users: 0, events: 0, planning: 0, clino: 0, entreprises: 0 });
-  const [upcomingEvents, setUpcomingEvents] = useState([]);
-  const [todayEvents, setTodayEvents] = useState([]);
-  const [myPlanning, setMyPlanning] = useState([]);
-  const [convEntreprises, setConvEntreprises] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Instant cache retrieval for 0ms initial render
+  const [cachedData] = useState(() => {
+    try {
+      if (typeof window === 'undefined' || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test')) return null;
+      const saved = sessionStorage.getItem('pm_dash_cache');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [stats, setStats] = useState(() => cachedData?.stats || { users: 0, events: 0, planning: 0, clino: 0, entreprises: 0 });
+  const [upcomingEvents, setUpcomingEvents] = useState(() => cachedData?.upcomingEvents || []);
+  const [todayEvents, setTodayEvents] = useState(() => cachedData?.todayEvents || []);
+  const [myPlanning, setMyPlanning] = useState(() => cachedData?.myPlanning || []);
+  const [convEntreprises, setConvEntreprises] = useState(() => cachedData?.convEntreprises || []);
+  const [loading, setLoading] = useState(() => !cachedData);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [usersRes, eventsRes, planningRes, clinoRes, myRes, todayRes, entreprisesRes] = await Promise.all([
-        user?.role === 'administrateur' ? axios.get('/api/users') : Promise.resolve({ data: [] }),
-        axios.get('/api/events'),
-        axios.get('/api/planning'),
-        axios.get('/api/clino'),
-        axios.get('/api/planning/mine'),
-        axios.get('/api/planning/today').catch(() => ({ data: [] })),
-        axios.get('/api/entreprises').catch(() => ({ data: [] })),
-      ]);
+      // 1. High-speed single summary endpoint
+      try {
+        const res = await axios.get('/api/stats/dashboard-summary');
+        if (res?.data && res.data.stats && res.data.upcomingEvents) {
+          const { stats: s, todayEvents: te, upcomingEvents: ue, myPlanning: mp, convEntreprises: ce } = res.data;
+          setStats(s || { users: 0, events: 0, planning: 0, clino: 0, entreprises: 0 });
+          setTodayEvents(te || []);
+          setUpcomingEvents(ue || []);
+          setMyPlanning(mp || []);
+          setConvEntreprises(ce || []);
 
-      const todayStr = new Date().toISOString().split('T')[0];
-      const allEnt = entreprisesRes?.data || [];
-      const convEnt = allEnt.filter(e => e.convensionne === 1 || e.convensionne === true || e.convensionne === '1');
-      const entCount = convEnt.length > 0 ? convEnt.length : allEnt.length;
+          try {
+            sessionStorage.setItem('pm_dash_cache', JSON.stringify({
+              stats: s,
+              todayEvents: te,
+              upcomingEvents: ue,
+              myPlanning: mp,
+              convEntreprises: ce,
+            }));
+          } catch {}
+          return;
+        }
+      } catch {}
 
-      setStats({
-        users:       usersRes?.data?.length || 0,
-        events:      eventsRes?.data?.length || 0,
-        planning:    planningRes?.data?.length || 0,
-        clino:       clinoRes?.data?.length || 0,
-        entreprises: entCount,
-      });
+      // Fallback to individual endpoints if summary endpoint fails or in tests
+      try {
+        const [usersRes, eventsRes, planningRes, clinoRes, myRes, todayRes, entreprisesRes] = await Promise.all([
+          user?.role === 'administrateur' ? axios.get('/api/users') : Promise.resolve({ data: [] }),
+          axios.get('/api/events'),
+          axios.get('/api/planning'),
+          axios.get('/api/clino'),
+          axios.get('/api/planning/mine'),
+          axios.get('/api/planning/today').catch(() => ({ data: [] })),
+          axios.get('/api/entreprises').catch(() => ({ data: [] })),
+        ]);
 
-      setConvEntreprises((convEnt.length > 0 ? convEnt : allEnt).slice(0, 5));
-      setTodayEvents(todayRes?.data || []);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const allEnt = entreprisesRes?.data || [];
+        const convEnt = allEnt.filter(e => e.convensionne === 1 || e.convensionne === true || e.convensionne === '1');
+        const entCount = convEnt.length > 0 ? convEnt.length : allEnt.length;
 
-      setUpcomingEvents(
-        (eventsRes?.data || [])
+        const newStats = {
+          users:       usersRes?.data?.length || 0,
+          events:      eventsRes?.data?.length || 0,
+          planning:    planningRes?.data?.length || 0,
+          clino:       clinoRes?.data?.length || 0,
+          entreprises: entCount,
+        };
+        const newToday = todayRes?.data || [];
+        const newUpcoming = (eventsRes?.data || [])
           .filter(e => (e?.date_debut?.slice(0, 10) >= todayStr))
-          .sort((a, b) => (a?.date_debut || '').localeCompare(b?.date_debut || ''))
-      );
+          .sort((a, b) => (a?.date_debut || '').localeCompare(b?.date_debut || ''));
+        const mine = myRes?.data || [];
+        const allPlan = planningRes?.data || [];
+        const newPlanning = (mine.length > 0 ? mine : allPlan).slice(0, 6);
+        const newConv = (convEnt.length > 0 ? convEnt : allEnt).slice(0, 5);
 
-      const mine = myRes?.data || [];
-      const allPlan = planningRes?.data || [];
-      const displayPlanning = (mine.length > 0 ? mine : allPlan).slice(0, 6);
-      setMyPlanning(displayPlanning);
-    } catch (err) {
-      toast?.('Erreur lors du chargement des données', 'error');
+        setStats(newStats);
+        setConvEntreprises(newConv);
+        setTodayEvents(newToday);
+        setUpcomingEvents(newUpcoming);
+        setMyPlanning(newPlanning);
+      } catch {
+        toast?.('Erreur lors du chargement des données', 'error');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);

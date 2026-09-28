@@ -12,6 +12,7 @@ const TOKEN = 'test.jwt.token';
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  sessionStorage.clear();
   axios.defaults.headers = { common: {} };
 });
 
@@ -22,8 +23,8 @@ describe('useAuth — initial state', () => {
     expect(result.current.user).toBeNull();
   });
 
-  it('fetches user when token is in localStorage', async () => {
-    localStorage.setItem('pm_token', TOKEN);
+  it('fetches user when token is in sessionStorage', async () => {
+    sessionStorage.setItem('pm_token', TOKEN);
     axios.get.mockResolvedValueOnce({ data: USER });
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -31,24 +32,25 @@ describe('useAuth — initial state', () => {
   });
 
   it('logs out if token invalid', async () => {
-    localStorage.setItem('pm_token', 'bad');
+    sessionStorage.setItem('pm_token', 'bad');
     axios.get.mockRejectedValueOnce({ response: { status: 401 } });
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.user).toBeNull();
-    expect(localStorage.getItem('pm_token')).toBeNull();
+    expect(sessionStorage.getItem('pm_token')).toBeNull();
   });
 });
 
 describe('useAuth — login', () => {
   it('stores token and sets user on successful login', async () => {
     axios.post.mockResolvedValueOnce({ data: { token: TOKEN, user: USER } });
+    axios.get.mockResolvedValueOnce({ data: USER });
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     await act(async () => { await result.current.login('admin@planning.com', 'Admin123!'); });
 
-    expect(localStorage.getItem('pm_token')).toBe(TOKEN);
+    expect(sessionStorage.getItem('pm_token')).toBe(TOKEN);
     expect(result.current.user?.email).toBe('admin@planning.com');
     expect(result.current.user?.role).toBe('administrateur');
   });
@@ -63,7 +65,7 @@ describe('useAuth — login', () => {
 
 describe('useAuth — logout', () => {
   it('clears user and token', async () => {
-    localStorage.setItem('pm_token', TOKEN);
+    sessionStorage.setItem('pm_token', TOKEN);
     axios.get.mockResolvedValueOnce({ data: USER });
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.user).not.toBeNull());
@@ -71,6 +73,6 @@ describe('useAuth — logout', () => {
     act(() => result.current.logout());
 
     expect(result.current.user).toBeNull();
-    expect(localStorage.getItem('pm_token')).toBeNull();
+    expect(sessionStorage.getItem('pm_token')).toBeNull();
   });
 });

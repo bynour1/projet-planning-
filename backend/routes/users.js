@@ -1,8 +1,16 @@
 const router     = require('express').Router();
 const bcrypt     = require('bcryptjs');
 const db         = require('../config/db');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, invalidateUserCache } = require('../middleware/auth');
 const { sendWelcomeEmail, sendSMS, getTransporter } = require('../config/mailer');
+
+// Fast in-memory cache for by-role users
+const roleCache = new Map();
+const ROLE_CACHE_TTL = 30 * 1000;
+
+function invalidateRolesCache() {
+  roleCache.clear();
+}
 
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -33,10 +41,17 @@ router.get('/', authenticate, async (req, res) => {
 // GET /api/users/by-role/:role
 router.get('/by-role/:role', authenticate, async (req, res) => {
   try {
+    const role = req.params.role;
+    const now = Date.now();
+    const cached = roleCache.get(role);
+    if (cached && (now - cached.ts < ROLE_CACHE_TTL)) {
+      return res.json(cached.data);
+    }
     const [rows] = await db.query(
       'SELECT id, nom, prenom, email, role FROM users WHERE role = ? AND is_active = 1',
-      [req.params.role]
+      [role]
     );
+    roleCache.set(role, { data: rows, ts: now });
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });
@@ -208,6 +223,8 @@ router.put('/:id', authenticate, authorize('administrateur'), async (req, res) =
       'UPDATE users SET nom=?, prenom=?, email=?, role=?, telephone=?, is_active=? WHERE id=?',
       [nom, prenom, email, role, telephone || null, is_active ? 1 : 0, req.params.id]
     );
+    invalidateUserCache(req.params.id);
+    invalidateRolesCache();
     res.json({ message: 'Utilisateur mis à jour' });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });
@@ -220,6 +237,8 @@ router.delete('/:id', authenticate, authorize('administrateur'), async (req, res
     if (parseInt(req.params.id) === req.user.id)
       return res.status(400).json({ message: 'Impossible de supprimer votre propre compte' });
     await db.query('DELETE FROM users WHERE id = ?', [req.params.id]);
+    invalidateUserCache(req.params.id);
+    invalidateRolesCache();
     res.json({ message: 'Utilisateur supprimé' });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });

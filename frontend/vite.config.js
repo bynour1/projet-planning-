@@ -125,6 +125,11 @@ export default defineConfig({
       'date-fns',
       'date-fns/locale',
       'socket.io-client',
+      'recharts',
+      'leaflet',
+      'jspdf',
+      'jspdf-autotable',
+      'xlsx',
     ],
   },
   build: {
@@ -165,6 +170,15 @@ export default defineConfig({
     host: true,
     port: 5173,
     allowedHosts: true,
+    warmup: {
+      clientFiles: [
+        './src/main.jsx',
+        './src/App.jsx',
+        './src/pages/Login.jsx',
+        './src/pages/Dashboard.jsx',
+        './src/components/Sidebar.jsx',
+      ],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:8083',

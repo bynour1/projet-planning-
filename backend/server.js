@@ -119,9 +119,14 @@ io.on('connection', (socket) => {
 app.set('io', io);
 
 // ─── Express Middleware ───────────────────────────────────────
-const helmet    = require('helmet');
-const rateLimit = require('express-rate-limit');
+const compression = require('compression');
+const helmet      = require('helmet');
+const rateLimit   = require('express-rate-limit');
 
+app.use(compression({
+  threshold: 1024,
+  level: 6,
+}));
 app.use(helmet({
   crossOriginResourcePolicy: false,
   contentSecurityPolicy: false,

@@ -2,7 +2,7 @@ const router   = require('express').Router();
 const bcrypt   = require('bcryptjs');
 const jwt      = require('jsonwebtoken');
 const db       = require('../config/db');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, invalidateUserCache } = require('../middleware/auth');
 const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
@@ -471,6 +471,7 @@ router.post('/reset-password', async (req, res) => {
     await db.query('UPDATE password_resets SET used = 1 WHERE token = ?', [token]);
 
     if (userId) {
+      invalidateUserCache(userId);
       const io = req.app.get('io');
       if (io) {
         io.emit('force_logout_user', { userId });
