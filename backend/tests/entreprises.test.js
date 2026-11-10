@@ -318,3 +318,73 @@ describe('DELETE /api/entreprises/:id/avis/:avisId', () => {
     expect((await request(app).delete('/api/entreprises/1/avis/99').set('Authorization', ADM)).status).toBe(404);
   });
 });
+
+// ══════════════════════════════════════════════════════════════
+// MODIFICATION DES EFFECTIFS & PATIENTS (BILANS & VISITES)
+// ══════════════════════════════════════════════════════════════
+describe('PATCH /api/entreprises/:id/bilan (Effectifs & Patients)', () => {
+  it('Admin updates effectif_total and nb_visites_faites', async () => {
+    db.query.mockResolvedValueOnce([{}]); // UPDATE
+    const res = await request(app)
+      .patch('/api/entreprises/1/bilan')
+      .set('Authorization', ADM)
+      .send({
+        effectif_total: 120,
+        nb_visites_faites: 45,
+        nb_bilans_faits: 40,
+        nb_bilans_manquants: 5,
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toMatch(/mis à jour/i);
+  });
+
+  it('Medecin can update nb_visites_faites and bilans', async () => {
+    db.query.mockResolvedValueOnce([{}]); // UPDATE
+    const res = await request(app)
+      .patch('/api/entreprises/1/bilan')
+      .set('Authorization', MED)
+      .send({
+        nb_visites_faites: 50,
+        nb_bilans_faits: 48,
+        nb_bilans_manquants: 2,
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toMatch(/mis à jour/i);
+  });
+});
+
+describe('POST /api/entreprises/:id/visites (Effectif examiné)', () => {
+  it('records a visit with examined patients and updates total', async () => {
+    db.query.mockResolvedValueOnce([[{ id: 1, nb_visites_faites: 30 }]]); // SELECT entreprise
+    db.query.mockResolvedValueOnce([{ insertId: 101 }]); // INSERT visit
+    db.query.mockResolvedValueOnce([[{ total_vu: 45, total_bilans: 40 }]]); // SUM query
+    db.query.mockResolvedValueOnce([{}]); // UPDATE entreprise
+    const res = await request(app)
+      .post('/api/entreprises/1/visites')
+      .set('Authorization', MED)
+      .send({
+        date: '2026-11-10',
+        nb_examines: 15,
+        nb_bilans: 10,
+        type_visite: 'Visite Périodique',
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.nb_examines).toBe(15);
+    expect(res.body.nb_visites_faites).toBe(45);
+  });
+});
+
+describe('POST /api/entreprises/:id/nouvelle-campagne (Cycle annuel effectif)', () => {
+  it('initializes new campaign year and resets examined patients to 0', async () => {
+    db.query.mockResolvedValueOnce([[{ id: 1, effectif_total: 100, nb_visites_faites: 90, nb_bilans_faits: 85, annee_campagne: 2025 }]]); // SELECT
+    db.query.mockResolvedValueOnce([{}]); // INSERT historique
+    db.query.mockResolvedValueOnce([{}]); // UPDATE entreprise reset
+    const res = await request(app)
+      .post('/api/entreprises/1/nouvelle-campagne')
+      .set('Authorization', ADM)
+      .send({ nouvelle_annee: 2026 });
+    expect(res.status).toBe(200);
+    expect(res.body.annee).toBe(2026);
+  });
+});
+
