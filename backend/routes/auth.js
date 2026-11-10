@@ -383,7 +383,7 @@ router.post('/forgot-password', async (req, res) => {
     const isPhone = method === 'phone' || (!input.includes('@') && cleanPhone.length >= 6);
 
     const successMsg = isPhone
-      ? 'Si ce numéro de téléphone correspond à un compte actif, un code / lien de réinitialisation vous a été envoyé par SMS.'
+      ? 'Si ce numéro de téléphone correspond à un compte actif, votre lien de réinitialisation WhatsApp est prêt.'
       : 'Si cette adresse email correspond à un compte actif, un lien de réinitialisation vous a été envoyé par email.';
 
     if (!user) {

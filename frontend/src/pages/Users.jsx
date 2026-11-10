@@ -384,7 +384,7 @@ function CredentialsModal({ data, onClose, toast }) {
               className="btn btn-outline"
               style={{ width: '100%', padding: '10px 16px', justifyContent: 'center', fontWeight: 700 }}
             >
-              {copied ? '✅ Message copié dans le presse-papier !' : '📋 Copier tout le message (SMS / Texte)'}
+              {copied ? '✅ Message copié dans le presse-papier !' : '📋 Copier le message d\'accès'}
             </button>
           </div>
         </div>
