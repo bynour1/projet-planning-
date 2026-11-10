@@ -453,3 +453,25 @@ describe('Chat upload route', () => {
     expect(res.status).toBe(200);
   });
 });
+
+// ══════════════════════════════════════════════════════════════
+// SWAGGER / OPENAPI DOCUMENTATION
+// ══════════════════════════════════════════════════════════════
+describe('Swagger / OpenAPI routes', () => {
+  it('GET /api-docs returns HTML documentation UI', async () => {
+    const res = await request(app).get('/api-docs/');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('swagger');
+  });
+
+  it('GET /api-docs.json returns valid OpenAPI 3.0 JSON specification', async () => {
+    const res = await request(app).get('/api-docs.json');
+    expect(res.status).toBe(200);
+    expect(res.body.openapi).toBe('3.0.0');
+    expect(res.body.info.title).toContain('GMT Ariana');
+    expect(res.body.paths['/api/auth/login']).toBeDefined();
+    expect(res.body.paths['/api/users']).toBeDefined();
+    expect(res.body.paths['/api/entreprises']).toBeDefined();
+  });
+});
+

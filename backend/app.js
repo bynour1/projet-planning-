@@ -11,6 +11,10 @@ app.use(express.urlencoded({ extended: true }));
 // Mock io so routes that do req.app.get('io') don't crash
 app.set('io', { emit: () => {} });
 
+// ─── Documentation Swagger / OpenAPI ───────────────────────────
+const { setupSwagger } = require('./config/swagger');
+setupSwagger(app);
+
 app.use('/api/auth',        require('./routes/auth'));
 app.use('/api/users',       require('./routes/users'));
 app.use('/api/planning',    require('./routes/planning'));

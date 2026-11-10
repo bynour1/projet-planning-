@@ -149,6 +149,10 @@ app.use('/api/auth/forgot-password', authLimiter);
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// ─── Documentation Swagger / OpenAPI ───────────────────────────
+const { setupSwagger } = require('./config/swagger');
+setupSwagger(app);
+
 // ─── Routes ───────────────────────────────────────────────────
 app.use('/api/auth',     require('./routes/auth'));
 app.use('/api/users',    require('./routes/users'));
