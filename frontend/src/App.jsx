@@ -115,7 +115,7 @@ function AppShell() {
                     <Route path="/clino"        element={<Clino        toast={addToast}/>}/>
                     <Route path="/chat"         element={<Chat         toast={addToast}/>}/>
                     <Route path="/entreprises"  element={<Entreprises  toast={addToast}/>}/>
-                    <Route path="/users"        element={<Users        toast={addToast}/>}/>
+                    <Route path="/users"        element={user?.role === 'administrateur' ? <Users toast={addToast}/> : <Navigate to="/dashboard" replace/>}/>
                     <Route path="/settings"     element={<Settings     toast={addToast}/>}/>
                     <Route path="*"             element={<Navigate to="/dashboard" replace/>}/>
                   </>
