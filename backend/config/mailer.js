@@ -11,34 +11,82 @@ function getTransporter() {
     return nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
       port: Number(process.env.EMAIL_PORT) || 587,
-      secure: process.env.EMAIL_SECURE === 'true',
+      secure: process.env.EMAIL_SECURE === 'true' || Number(process.env.EMAIL_PORT) === 465,
       auth: { user, pass },
       tls: { rejectUnauthorized: false },
+      connectionTimeout: 15000,
+      socketTimeout: 15000,
     });
   }
 
-  // Optimized for Render / Cloud host environment (supports port 587 & service: 'gmail')
-  if (process.env.EMAIL_SERVICE === 'gmail' || !process.env.EMAIL_SERVICE) {
+  // Gmail: using service: 'gmail' with SSL 465 is the most reliable across cloud hosts
+  if (process.env.EMAIL_SERVICE === 'gmail' || (!process.env.EMAIL_SERVICE && user.includes('@gmail.com'))) {
     return nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // STARTTLS
+      service: 'gmail',
       auth: { user, pass },
       tls: { rejectUnauthorized: false },
-      connectionTimeout: 10000,
+      connectionTimeout: 15000,
+      socketTimeout: 15000,
     });
   }
 
   return nodemailer.createTransport({
-    service: process.env.EMAIL_SERVICE,
+    service: process.env.EMAIL_SERVICE || 'gmail',
     auth: { user, pass },
+    tls: { rejectUnauthorized: false },
+    connectionTimeout: 15000,
+    socketTimeout: 15000,
   });
+}
+
+// Test / Diagnostic de la configuration email
+async function testEmailConnection(toEmail = null) {
+  const user = (process.env.EMAIL_USER || '').trim();
+  const pass = (process.env.EMAIL_PASS || '').trim();
+
+  if (!user || !pass) {
+    return {
+      ok: false,
+      configured: false,
+      message: 'Variables EMAIL_USER ou EMAIL_PASS non définies sur le serveur.',
+    };
+  }
+
+  try {
+    const transporter = getTransporter();
+    await transporter.verify();
+    if (toEmail) {
+      const info = await transporter.sendMail({
+        from: getFromAddress('Test Système'),
+        to: toEmail,
+        subject: '✅ Test réussi — GMT Ariana Planning',
+        text: 'La configuration email fonctionne parfaitement sur votre serveur !',
+      });
+      return { ok: true, configured: true, sent: true, messageId: info.messageId };
+    }
+    return { ok: true, configured: true, message: 'Connexion SMTP Google/Serveur validée avec succès.' };
+  } catch (err) {
+    return { ok: false, configured: true, error: err.message, code: err.code };
+  }
+}
+
+// Helper: Lien direct WhatsApp (wa.me) 100% gratuit
+function formatWhatsAppLink(phone, message) {
+  if (!phone) return null;
+  let clean = String(phone).replace(/[^\d+]/g, '');
+  if (!clean.startsWith('+')) {
+    clean = clean.replace(/^0+/, '');
+    if (clean.length === 8) clean = '216' + clean;
+  } else {
+    clean = clean.replace(/^\+/, '');
+  }
+  return `https://wa.me/${clean}?text=${encodeURIComponent(message)}`;
 }
 
 // Helper: Obtenir l'adresse expéditeur officielle (Compte Administration GMT Ariana)
 function getFromAddress(prefix = 'Administration') {
   if (process.env.EMAIL_FROM) return process.env.EMAIL_FROM;
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@gmt-ariana.tn';
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER || 'admin@gmt-ariana.tn';
   return `"GMT Ariana — ${prefix}" <${adminEmail}>`;
 }
 
@@ -357,72 +405,82 @@ function eventEmailHtml({ titre, type, date_debut, date_fin, lieu, createdBy }) 
 // Welcome Email with temporary password and OTP
 async function sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telephone = null }) {
   let emailSent = false;
+  let emailError = null;
 
   if (process.env.EMAIL_USER && process.env.EMAIL_PASS && isDeliverableEmail(email)) {
     console.log(`[Email Welcome] Tentative d'envoi à ${email}...`);
     const appUrl = process.env.FRONTEND_URL && !process.env.FRONTEND_URL.includes('localhost')
       ? process.env.FRONTEND_URL
-      : null;
+      : 'https://projet-planning-pi.vercel.app';
 
-    const transporter = getTransporter();
-    const info = await transporter.sendMail({
-      from: getFromAddress('Administration'),
-      replyTo: process.env.ADMIN_EMAIL || 'admin@gmt-ariana.tn',
-      to: email,
-      subject: 'Vos identifiants de connexion — GMT Ariana',
-      text: `Bonjour ${prenom} ${nom},\n\nUn compte a été créé pour vous sur la plateforme GMT Ariana.\n\nVos identifiants de connexion :\nIdentifiant (Email) : ${email}\nMot de passe initial : ${tempPassword}\nCode de confirmation : ${otp} (valable 15 minutes)\n${appUrl ? '\nLien d\'accès : ' + appUrl : ''}\n\nLors de votre première connexion, il vous sera demandé de modifier votre mot de passe.\n\nGMT Ariana`,
-      html: `
-          <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;border:1px solid #e2e8f0;border-radius:8px;background:#ffffff">
-            <h2 style="color:#0284c7;margin-top:0">GMT Ariana — Médecine du Travail</h2>
-            <p style="font-size:15px;color:#0f172a">Bonjour <strong>${prenom} ${nom}</strong>,</p>
-            <p style="color:#475569;font-size:14px">Un compte a été créé pour vous sur la plateforme du <strong>Groupement de Médecine du Travail de l'Ariana</strong>.</p>
+    try {
+      const transporter = getTransporter();
+      const info = await transporter.sendMail({
+        from: getFromAddress('Administration'),
+        replyTo: process.env.ADMIN_EMAIL || process.env.EMAIL_USER || 'admin@gmt-ariana.tn',
+        to: email,
+        subject: 'Vos identifiants de connexion — GMT Ariana',
+        text: `Bonjour ${prenom} ${nom},\n\nUn compte a été créé pour vous sur la plateforme GMT Ariana.\n\nVos identifiants de connexion :\nIdentifiant (Email) : ${email}\nMot de passe initial : ${tempPassword}\nCode de confirmation : ${otp} (valable 15 minutes)\n${appUrl ? '\nLien d\'accès : ' + appUrl : ''}\n\nLors de votre première connexion, il vous sera demandé de modifier votre mot de passe.\n\nGMT Ariana`,
+        html: `
+            <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;border:1px solid #e2e8f0;border-radius:8px;background:#ffffff">
+              <h2 style="color:#0284c7;margin-top:0">GMT Ariana — Médecine du Travail</h2>
+              <p style="font-size:15px;color:#0f172a">Bonjour <strong>${prenom} ${nom}</strong>,</p>
+              <p style="color:#475569;font-size:14px">Un compte a été créé pour vous sur la plateforme du <strong>Groupement de Médecine du Travail de l'Ariana</strong>.</p>
 
-            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0">
-              <p style="margin:0 0 10px;font-size:14px;font-weight:bold;color:#166534">Vos informations de connexion :</p>
-              <p style="margin:4px 0;font-size:14px"><strong>Email :</strong> ${email}</p>
-              <p style="margin:4px 0;font-size:14px"><strong>Mot de passe initial :</strong> <code style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:4px;font-size:15px;font-weight:bold">${tempPassword}</code></p>
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0">
+                <p style="margin:0 0 10px;font-size:14px;font-weight:bold;color:#166534">Vos informations de connexion :</p>
+                <p style="margin:4px 0;font-size:14px"><strong>Email :</strong> ${email}</p>
+                <p style="margin:4px 0;font-size:14px"><strong>Mot de passe initial :</strong> <code style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:4px;font-size:15px;font-weight:bold">${tempPassword}</code></p>
+              </div>
+
+              <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin:20px 0;text-align:center">
+                <p style="margin:0 0 8px;font-size:13px;color:#475569">Code de confirmation (OTP) :</p>
+                <div style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#0f172a">${otp}</div>
+                <p style="margin:8px 0 0;font-size:12px;color:#94a3b8">Valable pendant 15 minutes.</p>
+              </div>
+
+              ${appUrl ? `
+              <div style="text-align:center;margin:20px 0">
+                <a href="${appUrl}/login" style="background:#0284c7;color:#ffffff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block">
+                  Accéder à la plateforme
+                </a>
+              </div>` : ''}
+
+              <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0"/>
+              <p style="font-size:12px;color:#94a3b8;line-height:1.4">
+                Pour des raisons de sécurité, veuillez changer votre mot de passe dès votre première connexion.
+              </p>
             </div>
-
-            <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin:20px 0;text-align:center">
-              <p style="margin:0 0 8px;font-size:13px;color:#475569">Code de confirmation (OTP) :</p>
-              <div style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#0f172a">${otp}</div>
-              <p style="margin:8px 0 0;font-size:12px;color:#94a3b8">Valable pendant 15 minutes.</p>
-            </div>
-
-            ${appUrl ? `
-            <div style="text-align:center;margin:20px 0">
-              <a href="${appUrl}/login" style="background:#0284c7;color:#ffffff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block">
-                Accéder à la plateforme
-              </a>
-            </div>` : ''}
-
-            <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0"/>
-            <p style="font-size:12px;color:#94a3b8;line-height:1.4">
-              Pour des raisons de sécurité, veuillez changer votre mot de passe dès votre première connexion.
-            </p>
-          </div>
-        `,
-    });
-    console.log(`[Email Welcome] ✅ Envoyé avec succès à ${email} (ID: ${info.messageId})`);
-    emailSent = true;
+          `,
+      });
+      console.log(`[Email Welcome] ✅ Envoyé avec succès à ${email} (ID: ${info.messageId})`);
+      emailSent = true;
+    } catch (err) {
+      console.error(`[Email Welcome] ❌ Erreur envoi à ${email}:`, err.message);
+      emailError = err.message;
+    }
   } else if (!isDeliverableEmail(email)) {
-    console.warn(`[Email Welcome] ⚠️ Email ignoré (adresse test ou domaine factice non délivrable) : ${email}`);
+    emailError = 'Adresse email invalide ou domaine de test non délivrable';
+    console.warn(`[Email Welcome] ⚠️ ${emailError} : ${email}`);
   } else {
-    console.warn('[Email Welcome] ⚠️ EMAIL_USER ou EMAIL_PASS non configuré !');
+    emailError = 'Configuration SMTP absente (EMAIL_USER / EMAIL_PASS non configurés)';
+    console.warn(`[Email Welcome] ⚠️ ${emailError}`);
   }
 
-  // SMS & WhatsApp
+  // SMS & WhatsApp (si Twilio disponible)
   if (telephone) {
     const msg = `GMT Ariana 🏥\nBonjour ${prenom} ${nom} !\nVotre compte a été créé.\n\nEmail : ${email}\nMot de passe provisoire : ${tempPassword}\nCode OTP : ${otp}\n(Valable 15 minutes)`;
     await sendSMS(telephone, msg);
     await sendWhatsApp(telephone, msg);
   }
 
-  return emailSent;
+  return { emailSent, emailError };
 }
 
 module.exports = {
   getTransporter,
+  testEmailConnection,
+  formatWhatsAppLink,
   getFromAddress,
   notifyAllUsers,
   notifyAssignedIntervenants,

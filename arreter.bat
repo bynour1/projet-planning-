@@ -5,12 +5,8 @@ echo   Arret de Planning Medical...
 echo ========================================================
 echo.
 
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8083 :5173 :5174" ^| findstr "LISTENING"') do (
-    taskkill /F /PID %%a > nul 2>&1
-)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-NetTCPConnection -LocalPort 8083,5173,5174 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
 
 echo Tous les services ont ete arretes.
-ping 127.0.0.1 -n 2 > nul
+timeout /t 2 > nul
 exit
-
-

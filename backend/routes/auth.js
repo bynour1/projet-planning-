@@ -7,7 +7,7 @@ const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
 const crypto   = require('crypto');
-const { sendOTP, sendSMS, sendPasswordReset } = require('../config/mailer');
+const { sendOTP, sendSMS, sendPasswordReset, testEmailConnection, formatWhatsAppLink } = require('../config/mailer');
 
 // ─── Multer Storage for Avatars ────────────────────────────────
 const avatarDir = path.join(__dirname, '../uploads/avatars');
@@ -404,13 +404,33 @@ router.post('/forgot-password', async (req, res) => {
 
     await sendPasswordReset(targetEmail, user.nom, user.prenom, token, targetPhone);
 
+    const resetUrl = `${process.env.FRONTEND_URL || 'https://projet-planning-pi.vercel.app'}/reset-password?token=${token}`;
+    const whatsappMsg = `GMT Ariana 🏥\nBonjour ${user.prenom} ${user.nom},\nVoici votre lien de réinitialisation de mot de passe :\n${resetUrl}\n(Valable 1 heure)`;
+    const whatsappLink = formatWhatsAppLink(user.telephone, whatsappMsg);
+
     res.json({
       message: successMsg,
       method: isPhone ? 'phone' : 'email',
+      whatsapp_link: whatsappLink,
+      telephone: user.telephone || null,
     });
   } catch (err) {
     console.error('[forgot-password] Erreur:', err);
     res.status(500).json({ message: 'Erreur lors de la demande de réinitialisation' });
+  }
+});
+
+// POST /api/auth/test-email (Test direct de la configuration email)
+router.post('/test-email', async (req, res) => {
+  try {
+    const { to } = req.body;
+    const result = await testEmailConnection(to || null);
+    if (!result.ok) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 

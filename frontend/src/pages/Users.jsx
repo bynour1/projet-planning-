@@ -176,10 +176,27 @@ function UserModal({ user: editUser, onSave, onClose }) {
                 }}
               />
             </div>
-            {form.telephone && !/^\+216 \d{2} \d{3} \d{3}$/.test(form.telephone) && form.telephone.replace(/[^\d]/g,'').length >= 8 && (
-              <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 3 }}>⚠️ Format attendu : +216 XX XXX XXX</div>
-            )}
           </div>
+
+          {/* Mot de passe initial (création uniquement) */}
+          {!isEdit && (
+            <div className="form-group" style={{ margin: 0 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5, display: 'block' }}>
+                Mot de passe initial (optionnel)
+              </label>
+              <input
+                className="input"
+                type="text"
+                placeholder="Laisser vide pour générer automatiquement (ex: Med@4827)"
+                value={form.password || ''}
+                onChange={e => set('password', e.target.value)}
+                style={{ height: 40 }}
+              />
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
+                💡 Si vide, un mot de passe sécurisé sera généré et affiché à l'écran pour l'envoyer sur WhatsApp.
+              </div>
+            </div>
+          )}
 
           {/* Rôle — boutons visuels */}
           <div>
@@ -262,11 +279,130 @@ function UserModal({ user: editUser, onSave, onClose }) {
   );
 }
 
+function CredentialsModal({ data, onClose, toast }) {
+  const [copied, setCopied] = useState(false);
+  if (!data) return null;
+
+  const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://projet-planning-pi.vercel.app';
+  const fullName = `${data.prenom || ''} ${data.nom || ''}`.trim() || 'Collaborateur';
+  const phoneRaw = (data.telephone || '').replace(/[^\d+]/g, '');
+  let waPhone = phoneRaw;
+  if (!waPhone.startsWith('+')) {
+    waPhone = waPhone.replace(/^0+/, '');
+    if (waPhone.length === 8) waPhone = '216' + waPhone;
+  } else {
+    waPhone = waPhone.replace(/^\+/, '');
+  }
+
+  const shareText = `🏥 *GMT Ariana — Planning Médical*\n\nBonjour *${fullName}*,\nVotre compte d'accès a été créé avec succès.\n\n🔗 *Lien de connexion :* ${appUrl}/login\n📧 *Identifiant :* ${data.email}\n🔑 *Mot de passe initial :* ${data.tempPassword}\n🔒 *Code confirmation (OTP) :* ${data.otp || 'Non requis'}\n\n⚠️ _Lors de votre première connexion, il vous sera demandé de modifier votre mot de passe._`;
+
+  function copyText() {
+    navigator.clipboard.writeText(shareText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+    toast && toast('Informations copiées dans le presse-papier !', 'success');
+  }
+
+  function openWhatsApp() {
+    const url = waPhone
+      ? `https://wa.me/${waPhone}?text=${encodeURIComponent(shareText)}`
+      : `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+    window.open(url, '_blank');
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 490, padding: 0, overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+        <div style={{
+          background: 'linear-gradient(135deg, #0284c7, #0ea5e9)',
+          padding: '20px 24px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 28 }}>🔑</span>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Accès Compte & Partage WhatsApp</h3>
+              <p style={{ margin: '2px 0 0', fontSize: 12, opacity: 0.9 }}>Transmission directe à l'utilisateur</p>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Status banner */}
+          <div style={{
+            padding: '10px 14px', borderRadius: 8, fontSize: 12.5, lineHeight: 1.4,
+            background: data.email_sent ? '#f0fdf4' : '#fffbeb',
+            border: `1px solid ${data.email_sent ? '#bbf7d0' : '#fde68a'}`,
+            color: data.email_sent ? '#166534' : '#92400e',
+            display: 'flex', alignItems: 'flex-start', gap: 8
+          }}>
+            <span style={{ fontSize: 16 }}>{data.email_sent ? '✅' : '⚠️'}</span>
+            <span>
+              {data.email_sent
+                ? `E-mail envoyé avec succès à ${data.email}`
+                : `E-mail automatique non expédié (${data.email_error || 'Configuration SMTP non active'}). Transmettez directement les accès ci-dessous via WhatsApp.`}
+            </span>
+          </div>
+
+          {/* Credentials box */}
+          <div style={{ background: 'var(--surface2)', padding: 16, borderRadius: 10, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontSize: 13 }}><strong>Collaborateur :</strong> {fullName} {data.role ? `(${data.role})` : ''}</div>
+            <div style={{ fontSize: 13 }}><strong>Email (Identifiant) :</strong> <code style={{ color: 'var(--primary)', fontWeight: 700 }}>{data.email}</code></div>
+            <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div><strong>Mot de passe initial :</strong> <code style={{ background: '#dcfce7', color: '#166534', padding: '3px 8px', borderRadius: 4, fontWeight: 800, fontSize: 14 }}>{data.tempPassword}</code></div>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(data.tempPassword);
+                  toast && toast('Mot de passe copié', 'success');
+                }}
+              >
+                Copier 📋
+              </button>
+            </div>
+            {data.otp && (
+              <div style={{ fontSize: 13 }}><strong>Code OTP :</strong> <code style={{ letterSpacing: 2, fontWeight: 700 }}>{data.otp}</code></div>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+            <button
+              onClick={openWhatsApp}
+              style={{
+                width: '100%', padding: '12px 16px', background: '#25D366', color: '#fff',
+                border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 14, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                boxShadow: '0 2px 8px rgba(37,211,102,.3)'
+              }}
+            >
+              <span style={{ fontSize: 20 }}>💬</span> Envoyer les accès sur WhatsApp (Gratuit)
+            </button>
+
+            <button
+              onClick={copyText}
+              className="btn btn-outline"
+              style={{ width: '100%', padding: '10px 16px', justifyContent: 'center', fontWeight: 700 }}
+            >
+              {copied ? '✅ Message copié dans le presse-papier !' : '📋 Copier tout le message (SMS / Texte)'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ padding: '12px 24px', background: 'var(--bg)', borderTop: '1px solid var(--border)', textAlign: 'right' }}>
+          <button className="btn btn-outline" onClick={onClose}>Fermer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Users({ toast }) {
   const { user: me } = useAuth();
   const [users,   setUsers]   = useState([]);
   const [modal,   setModal]   = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [credentialsModal, setCredentialsModal] = useState(null);
   const [search,  setSearch]  = useState('');
   const [loading, setLoading] = useState(true);
   const [filter,  setFilter]  = useState('all');
@@ -282,17 +418,54 @@ export default function Users({ toast }) {
   async function handleCreated(data) {
     setModal(null);
     await load();
-    toast(data?.message || 'Compte créé avec succès ! Les identifiants ont été envoyés par e-mail.', 'success');
+    if (data?.tempPassword) {
+      setCredentialsModal(data);
+    } else {
+      toast(data?.message || 'Compte créé avec succès !', 'success');
+    }
   }
 
   async function handleResendEmail(u) {
     try {
       const res = await axios.post(`/api/users/${u.id}/resend-welcome`);
-      toast(res.data?.message || `E-mail d'accès renvoyé à ${u.email}`, 'success');
       await load();
+      if (res.data?.tempPassword) {
+        setCredentialsModal(res.data);
+      } else {
+        toast(res.data?.message || `E-mail d'accès renvoyé à ${u.email}`, 'success');
+      }
     } catch (err) {
       toast(err.response?.data?.message || 'Erreur lors du renvoi', 'error');
     }
+  }
+
+  async function handleResetPassword(u) {
+    const custom = window.prompt(`Définir un nouveau mot de passe pour ${u.prenom} ${u.nom} (minimum 6 caractères) :\n\nLaissez vide pour générer automatiquement un mot de passe aléatoire :`);
+    if (custom === null) return;
+    try {
+      const res = await axios.post(`/api/users/${u.id}/reset-password`, { password: custom || undefined });
+      await load();
+      setCredentialsModal(res.data);
+    } catch (err) {
+      toast(err.response?.data?.message || 'Erreur réinitialisation', 'error');
+    }
+  }
+
+  function openWhatsAppForUser(u) {
+    const fullName = `${u.prenom || ''} ${u.nom || ''}`.trim() || 'Collaborateur';
+    const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://projet-planning-pi.vercel.app';
+    let phone = (u.telephone || '').replace(/[^\d+]/g, '');
+    if (!phone.startsWith('+')) {
+      phone = phone.replace(/^0+/, '');
+      if (phone.length === 8) phone = '216' + phone;
+    } else {
+      phone = phone.replace(/^\+/, '');
+    }
+    const msg = `🏥 *GMT Ariana — Planning Médical*\n\nBonjour *${fullName}*,\nVoici le lien d'accès à votre espace Planning GMT Ariana :\n🔗 *Lien :* ${appUrl}/login\n📧 *Identifiant :* ${u.email}\n\nSi vous avez besoin d'aide ou de réinitialiser votre mot de passe, contactez l'administration.`;
+    const url = phone
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
   }
 
   async function handleDelete(id) {
@@ -461,7 +634,26 @@ export default function Users({ toast }) {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn btn-outline btn-sm" title="Renvoyer l'e-mail avec nouveaux identifiants" onClick={() => handleResendEmail(u)}>
+                      <button
+                        className="btn btn-sm"
+                        style={{ background: '#25D366', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: 6, fontWeight: 700 }}
+                        title="Partager le lien d'accès sur WhatsApp (Gratuit)"
+                        onClick={() => openWhatsAppForUser(u)}
+                      >
+                        💬
+                      </button>
+                      <button
+                        className="btn btn-outline btn-sm"
+                        title="Réinitialiser le mot de passe et voir les accès"
+                        onClick={() => handleResetPassword(u)}
+                      >
+                        🔑
+                      </button>
+                      <button
+                        className="btn btn-outline btn-sm"
+                        title="Renvoyer l'e-mail avec nouveaux identifiants"
+                        onClick={() => handleResendEmail(u)}
+                      >
                         ✉️
                       </button>
                       <button className="btn btn-outline btn-sm" title="Modifier" onClick={() => setModal(u)}>
@@ -484,6 +676,9 @@ export default function Users({ toast }) {
 
       {modal !== null && (
         <UserModal user={modal?.id ? modal : null} onSave={modal?.id ? () => { setModal(null); load(); toast('Mis à jour', 'success'); } : handleCreated} onClose={() => setModal(null)} />
+      )}
+      {credentialsModal && (
+        <CredentialsModal data={credentialsModal} onClose={() => setCredentialsModal(null)} toast={toast} />
       )}
       {confirm && (
         <ConfirmDialog title="Supprimer l'utilisateur ?" message="Cette action est irréversible." danger

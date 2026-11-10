@@ -74,17 +74,19 @@ router.get('/:id', authenticate, async (req, res) => {
 
 // ─── POST /api/users  (Admin only) ───────────────────────────
 router.post('/', authenticate, authorize('administrateur'), async (req, res) => {
-  const { nom, prenom, email, role, telephone } = req.body;
+  const { nom, prenom, email, role, telephone, password: customPassword } = req.body;
   if (!nom || !prenom || !email || !role)
-    return res.status(400).json({ message: 'Tous les champs sont requis' });
+    return res.status(400).json({ message: 'Tous les champs obligatoires doivent être renseignés' });
 
   try {
     // Check existing email
     const [exists] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
     if (exists.length) return res.status(409).json({ message: 'Email déjà utilisé' });
 
-    // Mot de passe initial provisoire sécurisé envoyé par email
-    const tempPassword = generateTempPassword();
+    // Mot de passe : personnalisé par l'admin ou généré automatiquement
+    const tempPassword = (customPassword && customPassword.trim().length >= 6)
+      ? customPassword.trim()
+      : generateTempPassword();
     const tempHash = await bcrypt.hash(tempPassword, 10);
 
     const [result] = await db.query(
@@ -97,22 +99,25 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     await db.query('DELETE FROM codes WHERE email = ?', [email]);
     await db.query('INSERT INTO codes (email, code, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE))', [email, otp]);
 
-    // Envoyer l'email de bienvenue directement et uniquement à l'utilisateur
-    let emailError = null;
-    try {
-      await sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telephone });
-    } catch (err) {
-      console.error(`[POST /api/users] Erreur envoi email à ${email}:`, err.message);
-      emailError = err.message;
-    }
+    // Envoyer l'email de bienvenue
+    const mailRes = (await sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telephone })) || {};
+    const emailSent = mailRes.emailSent ?? true;
+    const emailError = mailRes.emailError || null;
 
     res.status(201).json({
-      message: emailError
-        ? `Compte créé mais l'e-mail n'a pas pu être envoyé à ${email} (${emailError}).`
-        : `Compte créé avec succès ! Les identifiants et le code ont été envoyés par e-mail à ${email}.`,
+      message: emailSent
+        ? `Compte créé avec succès ! Les identifiants ont été envoyés par e-mail à ${email}.`
+        : `Compte créé avec succès ! (E-mail non délivré : ${emailError || 'Vérifier SMTP'}). Vous pouvez transmettre les accès par WhatsApp.`,
       userId: result.insertId,
       email,
+      prenom,
+      nom,
+      role,
+      telephone: telephone || null,
+      tempPassword,
+      otp,
       otp_sent: !emailError,
+      email_sent: !!emailSent,
       email_error: emailError || null,
     });
   } catch (err) {
@@ -137,31 +142,83 @@ router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), as
     await db.query('DELETE FROM codes WHERE email = ?', [user.email]);
     await db.query('INSERT INTO codes (email, code, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE))', [user.email, otp]);
 
-    let emailError = null;
-    try {
-      await sendWelcomeEmail({
-        email: user.email,
-        prenom: user.prenom,
-        nom: user.nom,
-        tempPassword,
-        otp,
-        telephone: user.telephone,
-      });
-    } catch (err) {
-      console.error(`[resend-welcome] Erreur email à ${user.email}:`, err.message);
-      emailError = err.message;
-    }
+    const mailRes = (await sendWelcomeEmail({
+      email: user.email,
+      prenom: user.prenom,
+      nom: user.nom,
+      tempPassword,
+      otp,
+      telephone: user.telephone,
+    })) || {};
+    const emailSent = mailRes.emailSent ?? true;
+    const emailError = mailRes.emailError || null;
 
     res.json({
-      message: emailError
-        ? `Erreur lors de l'envoi de l'e-mail à ${user.email}.`
-        : `E-mail d'accès contenant les identifiants renvoyé à ${user.email}.`,
+      message: emailSent
+        ? `Identifiants et e-mail d'accès renvoyés avec succès à ${user.email}.`
+        : `Nouveaux accès générés. (E-mail non délivré : ${emailError || 'Vérifier SMTP'}). Transmettez-les par WhatsApp.`,
       email: user.email,
+      prenom: user.prenom,
+      nom: user.nom,
+      role: user.role,
+      telephone: user.telephone,
+      tempPassword,
+      otp,
+      email_sent: !!emailSent,
       email_error: emailError || null,
     });
   } catch (err) {
     console.error('[resend-welcome]', err);
     res.status(500).json({ message: 'Erreur lors du renvoi de l\'e-mail' });
+  }
+});
+
+// ─── POST /api/users/:id/reset-password (Admin only) ─────────
+router.post('/:id/reset-password', authenticate, authorize('administrateur'), async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ message: 'Utilisateur introuvable' });
+    const user = rows[0];
+
+    const newPassword = (req.body.password && req.body.password.trim().length >= 6)
+      ? req.body.password.trim()
+      : generateTempPassword();
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    const otp = generateOTP();
+
+    await db.query('UPDATE users SET password = ?, first_login = 0, is_active = 1 WHERE id = ?', [hash, user.id]);
+    await db.query('DELETE FROM codes WHERE email = ?', [user.email]);
+    await db.query('INSERT INTO codes (email, code, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE))', [user.email, otp]);
+
+    const mailRes = (await sendWelcomeEmail({
+      email: user.email,
+      prenom: user.prenom,
+      nom: user.nom,
+      tempPassword: newPassword,
+      otp,
+      telephone: user.telephone,
+    })) || {};
+    const emailSent = mailRes.emailSent ?? true;
+    const emailError = mailRes.emailError || null;
+
+    res.json({
+      message: emailSent
+        ? `Nouveau mot de passe envoyé avec succès par e-mail à ${user.email}.`
+        : `Mot de passe réinitialisé avec succès ! Transmettez-le par WhatsApp.`,
+      email: user.email,
+      prenom: user.prenom,
+      nom: user.nom,
+      role: user.role,
+      telephone: user.telephone,
+      tempPassword: newPassword,
+      otp,
+      email_sent: !!emailSent,
+      email_error: emailError || null,
+    });
+  } catch (err) {
+    console.error('[reset-password]', err);
+    res.status(500).json({ message: 'Erreur lors de la réinitialisation' });
   }
 });
 

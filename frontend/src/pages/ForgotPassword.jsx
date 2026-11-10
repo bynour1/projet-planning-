@@ -7,6 +7,7 @@ export default function ForgotPassword({ toast }) {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [sentMethod, setSentMethod] = useState('email');
+  const [whatsappLink, setWhatsappLink] = useState(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -25,6 +26,7 @@ export default function ForgotPassword({ toast }) {
         method,
       });
       setSentMethod(res.data?.method || method);
+      setWhatsappLink(res.data?.whatsapp_link || null);
       setSent(true);
     } catch (err) {
       toast(err.response?.data?.message || 'Erreur lors de la demande', 'error');
@@ -123,12 +125,12 @@ export default function ForgotPassword({ toast }) {
                     justifyContent: 'center',
                     gap: 6,
                     background: method === 'phone' ? 'var(--surface)' : 'transparent',
-                    color: method === 'phone' ? '#0d9488' : 'var(--text-2)',
+                    color: method === 'phone' ? '#16a34a' : 'var(--text-2)',
                     boxShadow: method === 'phone' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
                     transition: 'all 0.15s ease',
                   }}
                 >
-                  <span>📱</span> Par Téléphone (SMS)
+                  <span>💬</span> Par WhatsApp
                 </button>
               </div>
 
@@ -138,7 +140,7 @@ export default function ForgotPassword({ toast }) {
                     {method === 'email' ? (
                       <><span>✉️</span> Adresse Email du compte *</>
                     ) : (
-                      <><span>📱</span> Numéro de Téléphone portable *</>
+                      <><span>💬</span> Numéro de Téléphone (WhatsApp) *</>
                     )}
                   </label>
                   <input
@@ -153,8 +155,8 @@ export default function ForgotPassword({ toast }) {
                   />
                   <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
                     {method === 'email'
-                      ? 'Un lien de réinitialisation unique et crypté sera envoyé à cette adresse.'
-                      : 'Un SMS contenant le lien d\'accès sécurisé sera envoyé sur ce numéro.'}
+                      ? 'Un lien de réinitialisation sécurisé sera envoyé à cette adresse.'
+                      : 'Un lien d\'accès direct sur WhatsApp sera généré pour ce numéro.'}
                   </div>
                 </div>
 
@@ -167,7 +169,7 @@ export default function ForgotPassword({ toast }) {
                     justifyContent: 'center',
                     fontWeight: 700,
                     fontSize: 13.5,
-                    background: method === 'phone' ? 'linear-gradient(135deg, #0d9488, #059669)' : undefined,
+                    background: method === 'phone' ? '#25D366' : undefined,
                   }}
                 >
                   {loading ? (
@@ -175,7 +177,7 @@ export default function ForgotPassword({ toast }) {
                   ) : method === 'email' ? (
                     '✉️ Recevoir le lien par Email'
                   ) : (
-                    '📱 Recevoir le lien par SMS'
+                    '💬 Réinitialiser via WhatsApp (Gratuit)'
                   )}
                 </button>
 
@@ -208,20 +210,46 @@ export default function ForgotPassword({ toast }) {
                 fontSize: 30,
                 marginBottom: 16
               }}>
-                {sentMethod === 'phone' ? '📱' : '📬'}
+                {sentMethod === 'phone' ? '💬' : '📬'}
               </div>
 
               <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 8, color: 'var(--text)' }}>
                 {sentMethod === 'phone'
-                  ? 'Vérifiez vos messages SMS'
+                  ? 'Lien WhatsApp généré'
                   : 'Vérifiez votre boîte de réception'}
               </h3>
 
               <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6, margin: '0 0 16px' }}>
                 {sentMethod === 'phone'
-                  ? 'Si ce numéro correspond à un compte actif dans GMT Ariana, vous recevrez un SMS avec le lien sécurisé.'
+                  ? 'Si ce numéro correspond à un compte actif dans GMT Ariana, cliquez sur le bouton ci-dessous pour ouvrir votre lien dans WhatsApp :'
                   : 'Si cette adresse email correspond à un compte actif, un lien de réinitialisation sécurisé vous a été envoyé.'}
               </p>
+
+              {whatsappLink && (
+                <div style={{ margin: '14px 0' }}>
+                  <a
+                    href={whatsappLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      padding: '12px 18px',
+                      background: '#25D366',
+                      color: '#ffffff',
+                      borderRadius: 8,
+                      textDecoration: 'none',
+                      fontSize: 14,
+                      fontWeight: 800,
+                      boxShadow: '0 2px 8px rgba(37,211,102,.4)'
+                    }}
+                  >
+                    <span>💬</span> Ouvrir dans WhatsApp
+                  </a>
+                </div>
+              )}
 
               <div style={{
                 padding: '12px 14px',
@@ -241,9 +269,7 @@ export default function ForgotPassword({ toast }) {
                   {sentMethod === 'email' && (
                     <li>Vérifiez aussi votre dossier <em>Courriers indésirables (Spam)</em> si besoin.</li>
                   )}
-                  {sentMethod === 'phone' && (
-                    <li>Assurez-vous que votre téléphone capte le réseau mobile.</li>
-                  )}
+                  <li>Si vous ne recevez rien, contactez directement l'administrateur de GMT Ariana.</li>
                 </ul>
               </div>
 
