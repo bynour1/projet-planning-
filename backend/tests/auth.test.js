@@ -1,10 +1,14 @@
 // tests/auth.test.js
 jest.mock('../config/db', () => require('./__mocks__/db'));
-jest.mock('../config/mailer', () => ({
-  sendOTP: jest.fn(), sendPasswordReset: jest.fn(),
-  notifyAllUsers: jest.fn(), planningEmailHtml: jest.fn(() => ''),
-  eventEmailHtml: jest.fn(() => ''),
-}));
+jest.mock('../config/mailer', () => {
+  const actual = jest.requireActual('../config/mailer');
+  return {
+    ...actual,
+    sendOTP: jest.fn(), sendPasswordReset: jest.fn(),
+    notifyAllUsers: jest.fn(), planningEmailHtml: jest.fn(() => ''),
+    eventEmailHtml: jest.fn(() => ''),
+  };
+});
 
 const request = require('supertest');
 const bcrypt  = require('bcryptjs');
@@ -168,6 +172,16 @@ describe('Password Reset Flow', () => {
     db.query.mockResolvedValue([[]]); // user not found — still 200
     const res = await request(app).post('/api/auth/forgot-password').send({ email: 'nobody@x.com' });
     expect(res.status).toBe(200);
+  });
+
+  it('POST /forgot-password with phone returns whatsapp_link', async () => {
+    db.query.mockResolvedValueOnce([[{ id: 1, email: 'user@x.com', nom: 'Ben', prenom: 'Ali', telephone: '98123456' }]]); // found user
+    db.query.mockResolvedValueOnce([{}]); // delete old tokens
+    db.query.mockResolvedValueOnce([{}]); // insert new token
+    const res = await request(app).post('/api/auth/forgot-password').send({ identifier: '98123456', method: 'phone' });
+    expect(res.status).toBe(200);
+    expect(res.body.method).toBe('phone');
+    expect(res.body.whatsapp_link).toContain('https://wa.me/21698123456');
   });
 
   it('GET /reset-password returns 400 for invalid token', async () => {

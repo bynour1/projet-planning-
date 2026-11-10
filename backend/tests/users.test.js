@@ -150,3 +150,31 @@ describe('DELETE /api/users/:id', () => {
     expect(res.status).toBe(200);
   });
 });
+
+// ─── POST /api/users/:id/resend-welcome ─────────────────────────
+describe('POST /api/users/:id/resend-welcome', () => {
+  it('resends welcome credentials and returns tempPassword for WhatsApp', async () => {
+    db.query.mockResolvedValueOnce([[USER_ROW]]); // select user
+    db.query.mockResolvedValueOnce([{}]); // update password
+    db.query.mockResolvedValueOnce([{}]); // delete codes
+    db.query.mockResolvedValueOnce([{}]); // insert code
+    const res = await request(app).post('/api/users/2/resend-welcome').set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.tempPassword).toBeDefined();
+    expect(res.body.otp).toBeDefined();
+  });
+});
+
+// ─── POST /api/users/:id/reset-password ─────────────────────────
+describe('POST /api/users/:id/reset-password', () => {
+  it('resets password and returns credentials for WhatsApp sharing', async () => {
+    db.query.mockResolvedValueOnce([[USER_ROW]]); // select user
+    db.query.mockResolvedValueOnce([{}]); // update password
+    const res = await request(app).post('/api/users/2/reset-password')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ password: 'CustomPassword123!' });
+    expect(res.status).toBe(200);
+    expect(res.body.tempPassword).toBe('CustomPassword123!');
+  });
+});
+
