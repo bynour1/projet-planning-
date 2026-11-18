@@ -356,7 +356,9 @@ describe('PATCH /api/entreprises/:id/bilan (Effectifs & Patients)', () => {
 describe('POST /api/entreprises/:id/visites (Effectif examiné)', () => {
   it('records a visit with examined patients and updates total', async () => {
     db.query.mockResolvedValueOnce([[{ id: 1, nb_visites_faites: 30 }]]); // SELECT entreprise
+    db.query.mockResolvedValueOnce([{ insertId: 99 }]); // INSERT planning_events sync
     db.query.mockResolvedValueOnce([{ insertId: 101 }]); // INSERT visit
+    db.query.mockResolvedValueOnce([[{ total_patients: 0, nb_patients_visites: 0 }]]); // patientStats
     db.query.mockResolvedValueOnce([[{ total_vu: 45, total_bilans: 40 }]]); // SUM query
     db.query.mockResolvedValueOnce([{}]); // UPDATE entreprise
     const res = await request(app)
@@ -387,4 +389,70 @@ describe('POST /api/entreprises/:id/nouvelle-campagne (Cycle annuel effectif)', 
     expect(res.body.annee).toBe(2026);
   });
 });
+
+describe('Rapports HSE et Médicaux — Droits par rôle', () => {
+  const HSE = tok('hse', 5);
+
+  it('interdit la création d\'un rapport HSE par un médecin (403)', async () => {
+    db.query.mockResolvedValueOnce([[{ id: 1, nom: 'Entreprise Test' }]]);
+    const res = await request(app)
+      .post('/api/entreprises/1/visites')
+      .set('Authorization', MED)
+      .send({
+        date: '2026-11-18',
+        rapport_type: 'hse',
+        lieu_poste: 'Atelier de soudure',
+        constats: 'Bruit excessif',
+      });
+    expect(res.status).toBe(403);
+    expect(res.body.message).toMatch(/Seul le Responsable HSE/i);
+  });
+
+  it('autorise la création d\'un rapport HSE par le rôle HSE (201)', async () => {
+    db.query.mockResolvedValueOnce([[{ id: 1, nom: 'Entreprise Test', adresse: 'Zone Ind' }]]); // SELECT entreprise
+    db.query.mockResolvedValueOnce([{ insertId: 88 }]); // INSERT planning_events
+    db.query.mockResolvedValueOnce([{ insertId: 202 }]); // INSERT entreprise_visites
+    db.query.mockResolvedValueOnce([{}]); // UPDATE entreprises
+    const res = await request(app)
+      .post('/api/entreprises/1/visites')
+      .set('Authorization', HSE)
+      .send({
+        date: '2026-11-18',
+        rapport_type: 'hse',
+        lieu_poste: 'Atelier usinage',
+        commentaire: 'Port des EPI vérifié',
+        recommandations: 'Installer un capteur de fumée',
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.rapport_type).toBe('hse');
+  });
+
+  it('permet à un médecin d\'importer son rapport médical (200)', async () => {
+    db.query.mockResolvedValueOnce([[{ fullname: 'Dr. Test' }]]); // SELECT user
+    db.query.mockResolvedValueOnce([[{ id: 10, nom: 'STE IMPORT' }]]); // SELECT entreprise
+    db.query.mockResolvedValueOnce([{ insertId: 301 }]); // INSERT entreprise_visites
+    db.query.mockResolvedValueOnce([[{ total_vu: 20 }]]); // SUM
+    db.query.mockResolvedValueOnce([{}]); // UPDATE entreprises
+
+    const res = await request(app)
+      .post('/api/entreprises/rapport-medecin/import')
+      .set('Authorization', MED)
+      .send({
+        items: [
+          {
+            date: '2026-11-15',
+            entreprise: 'STE IMPORT',
+            type_visite: 'Visite Périodique',
+            nb_examines: 20,
+            nb_bilans: 2,
+            commentaire: 'Rapport médical importé',
+          }
+        ]
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.importedCount).toBe(1);
+  });
+});
+
 

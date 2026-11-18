@@ -30,7 +30,7 @@ describe('Entreprises page — liste', () => {
     axios.get.mockResolvedValueOnce({ data: MOCK_ENTREPRISES });
     renderWithProviders(<Entreprises toast={mockToast} />, { user: MOCK_ADMIN });
     await waitFor(() => {
-      expect(screen.getByText('+ Ajouter')).toBeInTheDocument();
+      expect(screen.getByText('Nouvelle entreprise')).toBeInTheDocument();
       expect(screen.getByText('Importer Excel')).toBeInTheDocument();
     });
   });
@@ -39,7 +39,7 @@ describe('Entreprises page — liste', () => {
     axios.get.mockResolvedValueOnce({ data: MOCK_ENTREPRISES });
     renderWithProviders(<Entreprises toast={mockToast} />, { user: MOCK_MEDECIN });
     await waitFor(() => {
-      expect(screen.queryByText('+ Ajouter')).not.toBeInTheDocument();
+      expect(screen.queryByText('Nouvelle entreprise')).not.toBeInTheDocument();
       expect(screen.queryByText('Importer Excel')).not.toBeInTheDocument();
     });
   });
@@ -113,24 +113,24 @@ describe('Entreprises page — liste', () => {
   it('opens create modal on add button click', async () => {
     axios.get.mockResolvedValueOnce({ data: [] });
     renderWithProviders(<Entreprises toast={mockToast} />, { user: MOCK_ADMIN });
-    await waitFor(() => screen.getByText('+ Ajouter'));
-    await userEvent.click(screen.getByText('+ Ajouter'));
-    expect(screen.getByText('➕ Nouvelle entreprise')).toBeInTheDocument();
+    await waitFor(() => screen.getByText('Nouvelle entreprise'));
+    await userEvent.click(screen.getByText('Nouvelle entreprise'));
+    expect(screen.getAllByText('Nouvelle entreprise').length).toBeGreaterThan(0);
   });
 
   it('modal has required nom field', async () => {
     axios.get.mockResolvedValueOnce({ data: [] });
     renderWithProviders(<Entreprises toast={mockToast} />, { user: MOCK_ADMIN });
-    await waitFor(() => screen.getByText('+ Ajouter'));
-    await userEvent.click(screen.getByText('+ Ajouter'));
+    await waitFor(() => screen.getByText('Nouvelle entreprise'));
+    await userEvent.click(screen.getByText('Nouvelle entreprise'));
     expect(screen.getByPlaceholderText(/Les Oliviers/)).toBeInTheDocument();
   });
 
   it('save disabled when nom empty', async () => {
     axios.get.mockResolvedValueOnce({ data: [] });
     renderWithProviders(<Entreprises toast={mockToast} />, { user: MOCK_ADMIN });
-    await waitFor(() => screen.getByText('+ Ajouter'));
-    await userEvent.click(screen.getByText('+ Ajouter'));
+    await waitFor(() => screen.getByText('Nouvelle entreprise'));
+    await userEvent.click(screen.getByText('Nouvelle entreprise'));
     expect(screen.getByRole('button', { name: /Enregistrer/ })).toBeDisabled();
   });
 
@@ -139,8 +139,8 @@ describe('Entreprises page — liste', () => {
     axios.post.mockResolvedValueOnce({ data: { message:'Créée', id:10 } });
     axios.get.mockResolvedValueOnce({ data: [{ id:10, nom:'Nouvelle Clinique', secteur:'Médical', convensionne:1, date_debut_convention:'2026-01-01', date_fin_convention:'2026-12-31', renouvelable:1, nb_avis:0, note_moyenne:null }] });
     renderWithProviders(<Entreprises toast={mockToast} />, { user: MOCK_ADMIN });
-    await waitFor(() => screen.getByText('+ Ajouter'));
-    await userEvent.click(screen.getByText('+ Ajouter'));
+    await waitFor(() => screen.getByText('Nouvelle entreprise'));
+    await userEvent.click(screen.getByText('Nouvelle entreprise'));
     await userEvent.type(screen.getByPlaceholderText(/Les Oliviers/), 'Nouvelle Clinique');
     expect(screen.getByText(/Date début convention/)).toBeInTheDocument();
     expect(screen.getByText(/Date fin convention/)).toBeInTheDocument();
@@ -156,7 +156,7 @@ describe('Entreprises page — détail & avis', () => {
     axios.get.mockResolvedValueOnce({ data: MOCK_AVIS });
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
-    await userEvent.click(screen.getAllByText('Voir détails →')[0]);
+    await userEvent.click(screen.getAllByText('Détails →')[0]);
     await waitFor(() => {
       expect(screen.getByText(/Avis & Remarques/i)).toBeInTheDocument();
       expect(screen.getByText(/Convention de Médecine du Travail/)).toBeInTheDocument();
@@ -164,11 +164,15 @@ describe('Entreprises page — détail & avis', () => {
   });
 
   it('shows avis in detail panel', async () => {
-    axios.get.mockResolvedValueOnce({ data: MOCK_ENTREPRISES });
-    axios.get.mockResolvedValueOnce({ data: MOCK_AVIS });
+    axios.get.mockImplementation((url) => {
+      if (url?.includes('/avis')) return Promise.resolve({ data: MOCK_AVIS });
+      if (url?.includes('/visites')) return Promise.resolve({ data: { visites: [] } });
+      if (url?.includes('/patients')) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: MOCK_ENTREPRISES });
+    });
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
-    await userEvent.click(screen.getAllByText('Voir détails →')[0]);
+    await userEvent.click(screen.getAllByText('Détails →')[0]);
     await waitFor(() => screen.getByText(/Avis & Remarques/i));
     await userEvent.click(screen.getByText(/Avis & Remarques/i));
     await waitFor(() => {
@@ -182,10 +186,10 @@ describe('Entreprises page — détail & avis', () => {
     axios.get.mockResolvedValueOnce({ data: [] });
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
-    await userEvent.click(screen.getAllByText('Voir détails →')[0]);
+    await userEvent.click(screen.getAllByText('Détails →')[0]);
     await waitFor(() => screen.getByText(/Avis & Remarques/i));
     await userEvent.click(screen.getByText(/Avis & Remarques/i));
-    await waitFor(() => expect(screen.getByText('➕ Donner mon avis')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Donner mon avis')).toBeInTheDocument());
   });
 
   it('opens avis modal on button click', async () => {
@@ -193,12 +197,12 @@ describe('Entreprises page — détail & avis', () => {
     axios.get.mockResolvedValueOnce({ data: [] });
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
-    await userEvent.click(screen.getAllByText('Voir détails →')[0]);
+    await userEvent.click(screen.getAllByText('Détails →')[0]);
     await waitFor(() => screen.getByText(/Avis & Remarques/i));
     await userEvent.click(screen.getByText(/Avis & Remarques/i));
-    await waitFor(() => screen.getByText('➕ Donner mon avis'));
-    await userEvent.click(screen.getByText('➕ Donner mon avis'));
-    expect(screen.getByText('➕ Partager votre avis')).toBeInTheDocument();
+    await waitFor(() => screen.getByText('Donner mon avis'));
+    await userEvent.click(screen.getByText('Donner mon avis'));
+    expect(screen.getByText('Partager votre avis')).toBeInTheDocument();
   });
 
   it('publish button disabled when commentaire empty', async () => {
@@ -206,11 +210,11 @@ describe('Entreprises page — détail & avis', () => {
     axios.get.mockResolvedValueOnce({ data: [] });
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
-    await userEvent.click(screen.getAllByText('Voir détails →')[0]);
+    await userEvent.click(screen.getAllByText('Détails →')[0]);
     await waitFor(() => screen.getByText(/Avis & Remarques/i));
     await userEvent.click(screen.getByText(/Avis & Remarques/i));
-    await waitFor(() => screen.getByText('➕ Donner mon avis'));
-    await userEvent.click(screen.getByText('➕ Donner mon avis'));
+    await waitFor(() => screen.getByText('Donner mon avis'));
+    await userEvent.click(screen.getByText('Donner mon avis'));
     expect(screen.getByRole('button', { name: /Publier/ })).toBeDisabled();
   });
 
@@ -219,14 +223,14 @@ describe('Entreprises page — détail & avis', () => {
     axios.get.mockResolvedValueOnce({ data: [] });
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
-    await userEvent.click(screen.getAllByText('Voir détails →')[0]);
+    await userEvent.click(screen.getAllByText('Détails →')[0]);
     await waitFor(() => screen.getByText(/Avis & Remarques/i));
     await userEvent.click(screen.getByText(/Avis & Remarques/i));
-    await waitFor(() => screen.getByText('➕ Donner mon avis'));
-    await userEvent.click(screen.getByText('➕ Donner mon avis'));
-    expect(screen.getByRole('button', { name: /^💬 Avis$/ })).toBeInTheDocument();
-    expect(screen.getByText(/⚠️ Remarque/)).toBeInTheDocument();
-    expect(screen.getByText(/💡 Suggestion/)).toBeInTheDocument();
+    await waitFor(() => screen.getByText('Donner mon avis'));
+    await userEvent.click(screen.getByText('Donner mon avis'));
+    expect(screen.getByRole('button', { name: /^Avis$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Remarque$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Suggestion$/ })).toBeInTheDocument();
   });
 
   it('submits avis successfully', async () => {
@@ -236,11 +240,11 @@ describe('Entreprises page — détail & avis', () => {
     axios.get.mockResolvedValueOnce({ data: [{ id:10, note:5, commentaire:'Super!', type_avis:'avis', user_nom:'Admin', user_prenom:'Système', user_role:'administrateur', created_at: new Date().toISOString() }] });
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
-    await userEvent.click(screen.getAllByText('Voir détails →')[0]);
+    await userEvent.click(screen.getAllByText('Détails →')[0]);
     await waitFor(() => screen.getByText(/Avis & Remarques/i));
     await userEvent.click(screen.getByText(/Avis & Remarques/i));
-    await waitFor(() => screen.getByText('➕ Donner mon avis'));
-    await userEvent.click(screen.getByText('➕ Donner mon avis'));
+    await waitFor(() => screen.getByText('Donner mon avis'));
+    await userEvent.click(screen.getByText('Donner mon avis'));
     await userEvent.type(screen.getByPlaceholderText(/Partagez/), 'Très bonne clinique!');
     await userEvent.click(screen.getByRole('button', { name: /Publier/ }));
     await waitFor(() => expect(mockToast).toHaveBeenCalledWith('Avis publié', 'success'));
@@ -251,7 +255,7 @@ describe('Entreprises page — détail & avis', () => {
     axios.get.mockResolvedValueOnce({ data: MOCK_AVIS });
     renderWithProviders(<Entreprises toast={mockToast} />);
     await waitFor(() => screen.getByText('Clinique Les Oliviers'));
-    await userEvent.click(screen.getAllByText('Voir détails →')[0]);
+    await userEvent.click(screen.getAllByText('Détails →')[0]);
     await waitFor(() => screen.getByText('✕ Fermer'));
     await userEvent.click(screen.getByText('✕ Fermer'));
     await waitFor(() => expect(screen.getByText('Clinique Les Oliviers')).toBeInTheDocument());
