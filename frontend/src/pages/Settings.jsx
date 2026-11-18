@@ -409,8 +409,17 @@ export default function Settings({ toast }) {
         throw new Error('PushManager indisponible. Veuillez recharger la page.');
       }
 
-      const { data: keyData } = await axios.get('/api/push/public-key');
-      const vapidPublicKey = keyData?.publicKey;
+      let vapidPublicKey;
+      try {
+        const { data: keyData } = await axios.get('/api/push/public-key');
+        vapidPublicKey = keyData?.publicKey;
+      } catch (keyErr) {
+        if (keyErr.response?.status === 404) {
+          throw new Error('Le serveur backend est en cours de mise à jour sur Render. Veuillez patienter 1 à 2 minutes ou vérifier le statut du déploiement.');
+        }
+        throw new Error(keyErr.response?.data?.message || keyErr.message || 'Impossible de contacter le serveur pour la configuration push.');
+      }
+
       if (!vapidPublicKey) {
         throw new Error('Clé de notification introuvable sur le serveur.');
       }
@@ -432,7 +441,10 @@ export default function Settings({ toast }) {
       await checkPushDiagnostic();
     } catch (err) {
       console.error('[Push Subscription Error]:', err);
-      const userMessage = err.message || "Erreur lors de l'activation des notifications.";
+      const is404 = err.response?.status === 404;
+      const userMessage = is404
+        ? 'Le serveur backend est en cours de mise à jour sur Render. Veuillez patienter 1 à 2 minutes.'
+        : (err.message || "Erreur lors de l'activation des notifications.");
       setActivationError(userMessage);
       toast(userMessage, 'error');
     } finally {
@@ -486,7 +498,10 @@ export default function Settings({ toast }) {
       }
       toast('Push serveur envoyé avec succès !', 'success');
     } catch (err) {
-      const errorMsg = err.response?.data?.message || err.message || 'Échec de l\'envoi du push de test.';
+      const is404 = err.response?.status === 404;
+      const errorMsg = is404
+        ? 'La route de notification n\'est pas encore active sur le serveur (mise à jour Render en cours). Réessayez dans 1 à 2 minutes.'
+        : (err.response?.data?.message || err.message || 'Échec de l\'envoi du push de test.');
       setTestPushResult({
         success: false,
         message: errorMsg,
