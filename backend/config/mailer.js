@@ -2,36 +2,90 @@ require('dotenv').config();
 const nodemailer = require('nodemailer');
 const db         = require('../config/db');
 
-// ─── Email transporter ─────────────────────────────────────────
-function getTransporter() {
+// ─── Regex de détection d'adresses personnelles ────────────────
+const PERSONAL_EMAIL_REGEX = /@(gmail\.com|yahoo\.[a-z]+|hotmail\.[a-z]+|outlook\.[a-z]+)$/i;
+
+// ─── Validation de la configuration email ──────────────────────
+function validateMailerConfig() {
+  const isProd = process.env.NODE_ENV === 'production';
+  const emailProvider = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
+  const isGmailMode = emailProvider === 'gmail';
+  const emailHost = (process.env.EMAIL_HOST || '').trim();
+  const emailUser = (process.env.EMAIL_USER || '').trim();
+  const emailPass = (process.env.EMAIL_PASS || '').trim();
+  const emailFrom = (process.env.EMAIL_FROM || '').trim();
+
+  // Mode Gmail dédié : usage interne sans nom de domaine propre
+  if (isGmailMode) {
+    console.warn('[Mailer] ⚠️ Mode Gmail dédié : usage interne, environ 500 emails/jour');
+
+    if (isProd) {
+      const missing = [];
+      if (!emailUser) missing.push('EMAIL_USER');
+      if (!emailPass) missing.push('EMAIL_PASS');
+
+      if (missing.length > 0) {
+        const errorMsg = `[Mailer FATAL] Variables d'environnement email manquantes en production (mode Gmail) : ${missing.join(', ')}`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+    }
+
+    // L'expéditeur doit être EMAIL_USER (règle imposée par Google / Gmail)
+    if (emailFrom && emailUser) {
+      const match = emailFrom.match(/<([^>]+)>/) || [null, emailFrom];
+      const rawFrom = (match[1] || emailFrom).trim().toLowerCase();
+      if (rawFrom !== emailUser.toLowerCase()) {
+        console.warn(`[Mailer AVERTISSEMENT] Gmail impose que l'expéditeur corresponde à EMAIL_USER (${emailUser}). EMAIL_FROM actuel (${rawFrom}) pourrait être ignoré ou altéré par Gmail.`);
+      }
+    }
+
+    // Le blocage @gmail.com ne s'applique pas en mode Gmail dédié
+    return;
+  }
+
+  // Comportement standard Brevo / domaine d'entreprise
+  if (isProd) {
+    const missing = [];
+    if (!emailHost) missing.push('EMAIL_HOST');
+    if (!emailUser) missing.push('EMAIL_USER');
+    if (!emailPass) missing.push('EMAIL_PASS');
+    if (!emailFrom) missing.push('EMAIL_FROM');
+
+    if (missing.length > 0) {
+      const errorMsg = `[Mailer FATAL] Variables d'environnement email manquantes en production : ${missing.join(', ')}`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    // Extraction et validation de l'adresse email dans EMAIL_FROM
+    const match = emailFrom.match(/<([^>]+)>/) || [null, emailFrom];
+    const rawFrom = (match[1] || emailFrom).trim();
+    if (PERSONAL_EMAIL_REGEX.test(rawFrom)) {
+      const errorMsg = `[Mailer FATAL] EMAIL_FROM (${rawFrom}) ne peut pas être une adresse personnelle (@gmail, @yahoo, @hotmail, @outlook). Utilisez obligatoirement une adresse de votre domaine professionnel.`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+  }
+}
+
+// ─── Email transporter (Brevo SMTP, Gmail dédié & Ethereal dev) ──
+let brevoTransporter = null;
+let gmailTransporter = null;
+let etherealAccount = null;
+let etherealTransporter = null;
+
+function createBrevoTransport() {
+  const host = (process.env.EMAIL_HOST || 'smtp-relay.brevo.com').trim();
+  const port = Number(process.env.EMAIL_PORT) || 587;
+  const secure = process.env.EMAIL_SECURE === 'true' || port === 465;
   const user = (process.env.EMAIL_USER || '').trim();
   const pass = (process.env.EMAIL_PASS || '').trim();
 
-  if (process.env.EMAIL_HOST) {
-    return nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: Number(process.env.EMAIL_PORT) || 587,
-      secure: process.env.EMAIL_SECURE === 'true' || Number(process.env.EMAIL_PORT) === 465,
-      auth: { user, pass },
-      tls: { rejectUnauthorized: false },
-      connectionTimeout: 15000,
-      socketTimeout: 15000,
-    });
-  }
-
-  // Gmail: using service: 'gmail' with SSL 465 is the most reliable across cloud hosts
-  if (process.env.EMAIL_SERVICE === 'gmail' || (!process.env.EMAIL_SERVICE && user.includes('@gmail.com'))) {
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user, pass },
-      tls: { rejectUnauthorized: false },
-      connectionTimeout: 15000,
-      socketTimeout: 15000,
-    });
-  }
-
   return nodemailer.createTransport({
-    service: process.env.EMAIL_SERVICE || 'gmail',
+    host,
+    port,
+    secure,
     auth: { user, pass },
     tls: { rejectUnauthorized: false },
     connectionTimeout: 15000,
@@ -39,134 +93,244 @@ function getTransporter() {
   });
 }
 
-// Test / Diagnostic de la configuration email
-async function testEmailConnection(toEmail = null) {
+function createGmailTransport() {
   const user = (process.env.EMAIL_USER || '').trim();
   const pass = (process.env.EMAIL_PASS || '').trim();
 
-  if (!user || !pass) {
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user, pass },
+    connectionTimeout: 15000,
+    socketTimeout: 15000,
+  });
+}
+
+async function getTransporterAsync() {
+  validateMailerConfig();
+
+  const emailProvider = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
+  const isGmailMode = emailProvider === 'gmail';
+  const user = (process.env.EMAIL_USER || '').trim();
+  const pass = (process.env.EMAIL_PASS || '').trim();
+
+  // Mode Gmail dédié
+  if (isGmailMode) {
+    if (user && pass && !user.includes('votre_login') && !pass.includes('votre_cle')) {
+      if (!gmailTransporter) {
+        gmailTransporter = createGmailTransport();
+        try {
+          await gmailTransporter.verify();
+          console.log(`[Mailer] ✅ Connexion SMTP Gmail OK`);
+        } catch (err) {
+          console.error('[Mailer] ❌ Erreur connexion SMTP Gmail :', {
+            code: err.code,
+            message: err.message,
+            response: err.response,
+          });
+          if (process.env.NODE_ENV === 'production') {
+            throw err;
+          }
+        }
+      }
+      return {
+        transporter: gmailTransporter,
+        isEthereal: false,
+        user,
+      };
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('[Mailer FATAL] EMAIL_USER et EMAIL_PASS sont obligatoires en mode Gmail dédié en production.');
+    }
+  }
+
+  // Mode production ou si identifiants fournis dans .env : SMTP Brevo
+  if (user && pass && !user.includes('votre_login') && !pass.includes('votre_cle')) {
+    if (!brevoTransporter) {
+      brevoTransporter = createBrevoTransport();
+      try {
+        await brevoTransporter.verify();
+        const host = process.env.EMAIL_HOST || 'smtp-relay.brevo.com';
+        const port = process.env.EMAIL_PORT || 587;
+        console.log(`[Mailer] ✅ Connexion SMTP Brevo OK (${host}:${port})`);
+      } catch (err) {
+        console.error('[Mailer] ❌ Erreur connexion SMTP :', {
+          code: err.code,
+          message: err.message,
+          response: err.response,
+        });
+        if (process.env.NODE_ENV === 'production') {
+          throw err;
+        }
+      }
+    }
     return {
-      ok: false,
-      configured: false,
-      message: 'Variables EMAIL_USER ou EMAIL_PASS non définies sur le serveur.',
+      transporter: brevoTransporter,
+      isEthereal: false,
+      user,
     };
   }
 
-  try {
-    const transporter = getTransporter();
-    await transporter.verify();
-    if (toEmail) {
-      const info = await transporter.sendMail({
-        from: getFromAddress('Test Système'),
-        to: toEmail,
-        subject: '✅ Test réussi — GMT Ariana Planning',
-        text: 'La configuration email fonctionne parfaitement sur votre serveur !',
+  // Interdiction formelle d'Ethereal en production
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('[Mailer FATAL] Ethereal est strictement interdit en production. Configurez Brevo ou le mode Gmail dédié.');
+  }
+
+  // Passerelle test automatique (Ethereal) autorisée UNIQUEMENT en développement
+  if (!etherealTransporter) {
+    try {
+      etherealAccount = await nodemailer.createTestAccount();
+      console.log(`[Mailer] 📧 Compte SMTP de test (Ethereal dev) initialisé : ${etherealAccount.user}`);
+      etherealTransporter = nodemailer.createTransport({
+        host: 'smtp.ethereal.email',
+        port: 587,
+        secure: false,
+        auth: {
+          user: etherealAccount.user,
+          pass: etherealAccount.pass,
+        },
       });
-      return { ok: true, configured: true, sent: true, messageId: info.messageId };
+    } catch (e) {
+      console.warn('[Mailer] Initialisation compte Ethereal impossible :', e.message);
     }
-    return { ok: true, configured: true, message: 'Connexion SMTP Google/Serveur validée avec succès.' };
-  } catch (err) {
-    return { ok: false, configured: true, error: err.message, code: err.code };
   }
+
+  return {
+    transporter: etherealTransporter || createBrevoTransport(),
+    isEthereal: !!etherealTransporter,
+    user: etherealAccount ? etherealAccount.user : 'ethereal@local',
+  };
 }
 
-// Helper: Lien direct WhatsApp (wa.me) 100% gratuit
-function formatWhatsAppLink(phone, message) {
-  if (!phone) return null;
-  let clean = String(phone).replace(/[^\d+]/g, '');
-  if (!clean.startsWith('+')) {
-    clean = clean.replace(/^0+/, '');
-    if (clean.length === 8) clean = '216' + clean;
-  } else {
-    clean = clean.replace(/^\+/, '');
+function getTransporter() {
+  const emailProvider = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
+  const isGmailMode = emailProvider === 'gmail';
+  const user = (process.env.EMAIL_USER || '').trim();
+  const pass = (process.env.EMAIL_PASS || '').trim();
+
+  if (isGmailMode) {
+    if (gmailTransporter) return gmailTransporter;
+    if (user && pass && !user.includes('votre_login')) {
+      gmailTransporter = createGmailTransport();
+      return gmailTransporter;
+    }
   }
-  return `https://wa.me/${clean}?text=${encodeURIComponent(message)}`;
+
+  if (brevoTransporter) return brevoTransporter;
+  if (etherealTransporter) return etherealTransporter;
+  if (user && pass && !user.includes('votre_login')) {
+    brevoTransporter = createBrevoTransport();
+    return brevoTransporter;
+  }
+  return etherealTransporter || createBrevoTransport();
 }
 
-// Helper: Obtenir l'adresse expéditeur officielle (Compte Administration GMT Ariana)
+// ─── Expéditeur professionnel & Reply-To ────────────────────────
 function getFromAddress(prefix = 'Administration') {
-  if (process.env.EMAIL_FROM) return process.env.EMAIL_FROM;
-  const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER || 'admin@gmt-ariana.tn';
-  return `"GMT Ariana — ${prefix}" <${adminEmail}>`;
+  const isProd = process.env.NODE_ENV === 'production';
+  const emailProvider = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
+  const isGmailMode = emailProvider === 'gmail';
+  const emailUser = (process.env.EMAIL_USER || '').trim();
+  const fromConfig = (process.env.EMAIL_FROM || '').trim();
+
+  if (isGmailMode) {
+    if (fromConfig) {
+      const match = fromConfig.match(/<([^>]+)>/) || [null, fromConfig];
+      const rawFrom = (match[1] || fromConfig).trim().toLowerCase();
+      if (emailUser && rawFrom !== emailUser.toLowerCase()) {
+        console.warn(`[Mailer AVERTISSEMENT] Gmail impose que l'expéditeur corresponde à EMAIL_USER (${emailUser}). EMAIL_FROM (${rawFrom}) a une adresse différente.`);
+      }
+      if (fromConfig.includes('<') && fromConfig.includes('>')) {
+        return fromConfig;
+      }
+      return `"GMT Ariana — ${prefix}" <${fromConfig}>`;
+    }
+    if (emailUser) {
+      return `"GMT Ariana — ${prefix}" <${emailUser}>`;
+    }
+  }
+
+  if (fromConfig) {
+    if (fromConfig.includes('<') && fromConfig.includes('>')) {
+      return fromConfig;
+    }
+    return `"GMT Ariana — ${prefix}" <${fromConfig}>`;
+  }
+
+  if (isProd) {
+    throw new Error('[Mailer FATAL] EMAIL_FROM est obligatoire en production.');
+  }
+
+  if (etherealAccount) {
+    return `"GMT Ariana — ${prefix}" <${etherealAccount.user}>`;
+  }
+  return `"GMT Ariana — ${prefix}" <no-reply@gmt-ariana.tn>`;
 }
 
-// ─── Twilio SMS client ─────────────────────────────────────────
-function getTwilioClient() {
-  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN ||
-      process.env.TWILIO_ACCOUNT_SID.startsWith('ACxxxxxxx')) {
-    return null;
-  }
-  try {
-    const twilio = require('twilio');
-    return twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  } catch {
-    return null;
-  }
+function getReplyToAddress() {
+  const replyTo = (process.env.EMAIL_REPLY_TO || '').trim();
+  return replyTo || undefined;
 }
 
-// Send SMS to a single phone number
-async function sendSMS(to, message) {
-  const client = getTwilioClient();
-  if (!client || !to) return;
+// Test / Diagnostic de la configuration email
+async function testEmailConnection(toEmail = null) {
   try {
-    let phone = String(to).trim();
-    if (!phone.startsWith('+')) phone = '+216' + phone.replace(/^0+/, '');
-    await client.messages.create({
-      body: message,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to:   phone,
-    });
+    const { transporter, isEthereal, user } = await getTransporterAsync();
+    await transporter.verify();
+    const emailProvider = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
+    const isGmailMode = emailProvider === 'gmail';
+
+    if (toEmail) {
+      const fromAddr = isEthereal ? `"GMT Ariana — Test" <${user}>` : getFromAddress('Test Système');
+      const replyTo = getReplyToAddress();
+      const info = await transporter.sendMail({
+        from: fromAddr,
+        ...(replyTo ? { replyTo } : {}),
+        to: toEmail,
+        subject: `✅ Test réussi — GMT Ariana Planning (${isGmailMode ? 'Gmail' : 'Brevo'})`,
+        text: 'La configuration email fonctionne parfaitement sur votre serveur !',
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:500px;margin:auto;padding:24px;border:1px solid #e2e8f0;border-radius:10px">
+            <h2 style="color:#0284c7;margin-top:0">✅ Configuration Email Validée</h2>
+            <p>La transmission des e-mails (mots de passe, codes de sécurité, alertes planning) est active et fonctionnelle.</p>
+            <p style="color:#64748b;font-size:12px">Serveur utilisé : ${isEthereal ? 'Passerelle test SMTP Ethereal' : (isGmailMode ? 'Serveur SMTP Gmail Dédié' : 'Serveur SMTP Brevo')}</p>
+          </div>
+        `,
+      });
+      const previewUrl = isEthereal ? nodemailer.getTestMessageUrl(info) : null;
+      return {
+        ok: true,
+        configured: true,
+        sent: true,
+        messageId: info.messageId,
+        previewUrl,
+        mode: isEthereal ? 'test_ethereal' : (isGmailMode ? 'gmail_dedicated' : 'production_smtp'),
+      };
+    }
+    return {
+      ok: true,
+      configured: true,
+      message: isEthereal
+        ? `Passerelle email active (mode test : ${user}).`
+        : (isGmailMode ? 'Connexion SMTP Gmail validée avec succès.' : 'Connexion SMTP Brevo validée avec succès.'),
+    };
   } catch (err) {
-    console.warn('[SMS] Envoi impossible à', to, ':', err.message);
+    return { ok: false, configured: false, error: err.message, code: err.code };
   }
 }
 
-// Send WhatsApp message to a single phone number
-async function sendWhatsApp(to, message) {
-  const client = getTwilioClient();
-  if (!client || !to) return false;
-  try {
-    let phone = String(to).trim();
-    if (!phone.startsWith('+')) phone = '+216' + phone.replace(/^0+/, '');
-
-    const fromWhatsApp = process.env.TWILIO_WHATSAPP_NUMBER 
-      ? (process.env.TWILIO_WHATSAPP_NUMBER.startsWith('whatsapp:') ? process.env.TWILIO_WHATSAPP_NUMBER : `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`)
-      : 'whatsapp:+14155238886'; // Default Twilio Sandbox WhatsApp number
-
-    await client.messages.create({
-      body: message,
-      from: fromWhatsApp,
-      to:   `whatsapp:${phone}`,
-    });
-    console.log(`[WhatsApp] ✅ Message envoyé avec succès à whatsapp:${phone}`);
-    return true;
-  } catch (err) {
-    console.warn('[WhatsApp] Envoi impossible à', to, ':', err.message);
-    return false;
-  }
+// ─── Service SMS (Totalement désactivé) ─────────────────────────
+async function sendSMS() {
+  return null;
 }
 
-// Helper: Vérifier si l'adresse email est valide et délivrable (pas un domaine factice/test)
+
+
+// Helper: Vérifier si l'adresse email a un format valide
 function isDeliverableEmail(email) {
   if (!email || typeof email !== 'string') return false;
   const trimmed = email.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return false;
-  const domain = trimmed.split('@')[1];
-  const blockedDomains = [
-    'planning.com',
-    'example.com',
-    'example.org',
-    'example.net',
-    'test.com',
-    'test.fr',
-    'local.dev',
-    'localhost',
-    'domain.com',
-    'fake.com',
-    'nomail.com',
-  ];
-  if (blockedDomains.includes(domain)) return false;
-  return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
 }
 
 // Send to all active users (except optionally sender) — Email + SMS
@@ -179,22 +343,26 @@ async function notifyAllUsers({ subject, html, smsText = null, excludeId = null 
     if (!users.length) return;
 
     // ── Email ──
-    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-      const transporter = getTransporter();
+    try {
+      const { transporter, isEthereal, user: senderUser } = await getTransporterAsync();
+      const fromAddr = isEthereal ? `"GMT Ariana — Santé" <${senderUser}>` : getFromAddress('Santé au Travail');
+      const replyTo = getReplyToAddress();
       for (const u of users) {
         if (!isDeliverableEmail(u.email)) continue;
         try {
           await transporter.sendMail({
-            from:    getFromAddress('Santé au Travail'),
-            replyTo: process.env.ADMIN_EMAIL || 'admin@gmt-ariana.tn',
+            from: fromAddr,
+            ...(replyTo ? { replyTo } : {}),
             to:      u.email,
             subject,
             html,
           });
         } catch (err) {
-          console.warn(`[Email] Envoi impossible à ${u.email} :`, err.message);
+          console.error(`[Mailer] ❌ Envoi impossible à ${u.email} :`, { code: err.code, message: err.message });
         }
       }
+    } catch (err) {
+      console.error('[notifyAllUsers Email] :', { code: err.code, message: err.message });
     }
 
     // ── SMS ──
@@ -205,7 +373,7 @@ async function notifyAllUsers({ subject, html, smsText = null, excludeId = null 
       }
     }
   } catch (err) {
-    console.warn('[Notify] Erreur :', err.message);
+    console.error('[Notify] Erreur :', { message: err.message });
   }
 }
 
@@ -223,23 +391,27 @@ async function notifyAssignedIntervenants({ medecin_id, technicien_id, userIds: 
     if (!users.length) return;
 
     // ── Email ──
-    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-      const transporter = getTransporter();
+    try {
+      const { transporter, isEthereal, user: senderUser } = await getTransporterAsync();
+      const fromAddr = isEthereal ? `"GMT Ariana — Planning" <${senderUser}>` : getFromAddress('Planning Médical');
+      const replyTo = getReplyToAddress();
       for (const u of users) {
         if (!isDeliverableEmail(u.email)) continue;
         try {
           await transporter.sendMail({
-            from:    getFromAddress('Planning Médical'),
-            replyTo: process.env.ADMIN_EMAIL || 'admin@gmt-ariana.tn',
+            from: fromAddr,
+            ...(replyTo ? { replyTo } : {}),
             to:      u.email,
             subject,
             html,
           });
           console.log(`[Planning Notify] ✅ Email envoyé à ${u.email}`);
         } catch (err) {
-          console.warn(`[Planning Notify] ⚠️ Envoi impossible à ${u.email} :`, err.message);
+          console.error(`[Planning Notify] ❌ Envoi impossible à ${u.email} :`, { code: err.code, message: err.message });
         }
       }
+    } catch (err) {
+      console.error('[notifyAssignedIntervenants Email] :', { code: err.code, message: err.message });
     }
 
     // ── SMS ──
@@ -249,22 +421,27 @@ async function notifyAssignedIntervenants({ medecin_id, technicien_id, userIds: 
       }
     }
   } catch (err) {
-    console.warn('[notifyAssignedIntervenants] Erreur :', err.message);
+    console.error('[notifyAssignedIntervenants] Erreur :', { message: err.message });
   }
 }
 
 // Send OTP — Email + SMS
 async function sendOTP(email, code, nom, prenom, telephone = null) {
+  let emailSent = false;
+  let emailError = null;
+
   // Email
-  if (process.env.EMAIL_USER && isDeliverableEmail(email)) {
+  if (email && isDeliverableEmail(email)) {
     try {
-      const transporter = getTransporter();
-      await transporter.sendMail({
-        from:    getFromAddress('Sécurité'),
-        replyTo: process.env.ADMIN_EMAIL || 'admin@gmt-ariana.tn',
+      const { transporter, isEthereal, user: senderUser } = await getTransporterAsync();
+      const fromAddr = isEthereal ? `"GMT Ariana — Sécurité" <${senderUser}>` : getFromAddress('Sécurité');
+      const replyTo = getReplyToAddress();
+      const info = await transporter.sendMail({
+        from: fromAddr,
+        ...(replyTo ? { replyTo } : {}),
         to:      email,
         subject: 'Confirmation de votre compte — GMT Ariana',
-        text:    `Bonjour ${prenom} ${nom},\n\nVotre compte GMT Ariana a été créé.\nCode de confirmation : ${code}\nCe code expire dans 15 minutes.\n\nGMT Ariana — Groupement de Médecine du Travail`,
+        text:    `Bonjour ${prenom} ${nom},\n\nVotre compte GMT Ariana a été créé.\nCode de confirmation : ${code}\nCe code expire dans 10 minutes.\n\nGMT Ariana — Groupement de Médecine du Travail`,
         html: `
           <div style="font-family:DM Sans,Segoe UI,Arial,sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff">
             <div style="text-align:center;margin-bottom:24px">
@@ -277,38 +454,55 @@ async function sendOTP(email, code, nom, prenom, telephone = null) {
             <div style="font-size:36px;font-weight:900;letter-spacing:10px;color:#0f172a;background:#f1f5f9;padding:20px;border-radius:10px;text-align:center;margin:20px 0;border:1px solid #e2e8f0">
               ${code}
             </div>
-            <p style="color:#64748b;font-size:13px;text-align:center">⏱ Ce code expire dans <strong>15 minutes</strong>.</p>
+            <p style="color:#64748b;font-size:13px;text-align:center">⏱ Ce code de sécurité expire dans <strong>10 minutes</strong>.</p>
             <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0"/>
             <p style="font-size:12px;color:#94a3b8;text-align:center">GMT Ariana — Groupement de Médecine du Travail de l'Ariana</p>
           </div>`,
       });
+      emailSent = true;
+      if (isEthereal) {
+        console.log(`[Email OTP] ✅ Envoyé à ${email} (Preview: ${nodemailer.getTestMessageUrl(info)})`);
+      } else {
+        console.log(`[Email OTP] ✅ Envoyé à ${email}`);
+      }
     } catch (err) {
-      console.warn('[Email OTP] :', err.message);
+      console.error(`[Email OTP] ❌ Échec envoi à ${email}:`, {
+        code: err.code,
+        message: err.message,
+        response: err.response,
+      });
+      emailError = err.message;
     }
   }
 
-  // SMS & WhatsApp OTP
+  // SMS OTP
   if (telephone) {
-    const msg = `GMT Ariana 🏥\nVotre code de confirmation : ${code}\n(Valable 15 minutes)`;
+    const msg = `GMT Ariana 🏥\nVotre code de confirmation : ${code}\n(Valable 10 minutes)`;
     await sendSMS(telephone, msg);
-    await sendWhatsApp(telephone, msg);
   }
+
+  return { emailSent, emailError };
 }
 
-// Send password reset link — Email + SMS + WhatsApp
+// Send password reset link — Email + SMS
 async function sendPasswordReset(email, nom, prenom, token, telephone = null) {
-  const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
+  const appUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+  const resetUrl = `${appUrl}/reset-password?token=${token}`;
+  let emailSent = false;
+  let emailError = null;
 
   // Email
-  if (process.env.EMAIL_USER && isDeliverableEmail(email)) {
+  if (email && isDeliverableEmail(email)) {
     try {
-      const transporter = getTransporter();
+      const { transporter, isEthereal, user: senderUser } = await getTransporterAsync();
+      const fromAddr = isEthereal ? `"GMT Ariana — Sécurité" <${senderUser}>` : getFromAddress('Sécurité Compte');
+      const replyTo = getReplyToAddress();
       const info = await transporter.sendMail({
-        from:    getFromAddress('Sécurité Compte'),
-        replyTo: process.env.ADMIN_EMAIL || 'admin@gmt-ariana.tn',
+        from: fromAddr,
+        ...(replyTo ? { replyTo } : {}),
         to:      email,
         subject: 'Réinitialisation de mot de passe — GMT Ariana',
-        text:    `Bonjour ${prenom} ${nom},\n\nVous avez demandé une réinitialisation de votre mot de passe pour accéder à votre espace GMT Ariana.\nLien de réinitialisation : ${resetUrl}\nCe lien expire dans 1 heure.\n\nSi vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email.\n\nGMT Ariana`,
+        text:    `Bonjour ${prenom} ${nom},\n\nVous avez demandé une réinitialisation de votre mot de passe pour accéder à votre espace GMT Ariana.\nLien de réinitialisation : ${resetUrl}\nCe lien expire dans 10 minutes.\n\nSi vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email.\n\nGMT Ariana`,
         html: `
           <div style="font-family:DM Sans,Segoe UI,Arial,sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff">
             <div style="text-align:center;margin-bottom:24px">
@@ -323,24 +517,37 @@ async function sendPasswordReset(email, nom, prenom, token, telephone = null) {
                 Réinitialiser mon mot de passe
               </a>
             </div>
-            <p style="color:#64748b;font-size:13px">⏱ Ce lien de sécurité expire dans <strong>1 heure</strong>.</p>
+            <p style="color:#64748b;font-size:13px">⏱ Ce lien de sécurité expire dans <strong>10 minutes</strong>.</p>
             <p style="color:#94a3b8;font-size:12px">Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email en toute sécurité.</p>
             <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0"/>
             <p style="font-size:11px;color:#94a3b8;word-break:break-all">Lien direct : ${resetUrl}</p>
           </div>`,
       });
-      console.log(`[Email Reset] Envoyé avec succès à ${email} (ID: ${info.messageId})`);
+      emailSent = true;
+      if (isEthereal) {
+        const previewUrl = nodemailer.getTestMessageUrl(info);
+        console.log(`[Email Reset] ✅ Envoyé avec succès à ${email} (ID: ${info.messageId})`);
+        console.log(`[Email Reset] 🌐 Prévisualisation Ethereal : ${previewUrl}`);
+      } else {
+        console.log(`[Email Reset] ✅ Envoyé avec succès à ${email} (ID: ${info.messageId})`);
+      }
     } catch (err) {
-      console.error(`[Email Reset] Erreur envoi à ${email}:`, err.message);
+      console.error(`[Email Reset] ❌ Échec envoi à ${email}:`, {
+        code: err.code,
+        message: err.message,
+        response: err.response,
+      });
+      emailError = err.message;
     }
   }
 
-  // SMS & WhatsApp reset link
+  // SMS reset link (si configuré)
   if (telephone) {
-    const msg = `GMT Ariana 🏥\nRéinitialisez votre mot de passe ici :\n${resetUrl}\n(Lien valable 1 heure)`;
+    const msg = `GMT Ariana 🏥\nRéinitialisez votre mot de passe ici :\n${resetUrl}\n(Lien valable 10 minutes)`;
     await sendSMS(telephone, msg);
-    await sendWhatsApp(telephone, msg);
   }
+
+  return { emailSent, emailError };
 }
 
 // Planning notification email HTML
@@ -402,93 +609,117 @@ function eventEmailHtml({ titre, type, date_debut, date_fin, lieu, createdBy }) 
     </div>`;
 }
 
-// Welcome Email with temporary password and OTP
-async function sendWelcomeEmail({ email, prenom, nom, tempPassword, otp, telephone = null }) {
+// Welcome Email — Transmission exclusive du mot de passe provisoire au collaborateur (validité 48h)
+async function sendWelcomeEmail({ email, prenom, nom, tempPassword, telephone = null }) {
   let emailSent = false;
   let emailError = null;
+  let previewUrl = null;
 
-  if (process.env.EMAIL_USER && process.env.EMAIL_PASS && isDeliverableEmail(email)) {
-    console.log(`[Email Welcome] Tentative d'envoi à ${email}...`);
-    const appUrl = process.env.FRONTEND_URL && !process.env.FRONTEND_URL.includes('localhost')
-      ? process.env.FRONTEND_URL
-      : 'https://projet-planning-pi.vercel.app';
+  if (email && isDeliverableEmail(email)) {
+    console.log(`[Email Welcome] Préparation de l'envoi de bienvenue à ${email}...`);
+    const appUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
 
     try {
-      const transporter = getTransporter();
+      const { transporter, isEthereal, user: senderUser } = await getTransporterAsync();
+      const fromAddr = isEthereal ? `"GMT Ariana — Administration" <${senderUser}>` : getFromAddress('Administration');
+      const replyTo = getReplyToAddress();
+
       const info = await transporter.sendMail({
-        from: getFromAddress('Administration'),
-        replyTo: process.env.ADMIN_EMAIL || process.env.EMAIL_USER || 'admin@gmt-ariana.tn',
+        from: fromAddr,
+        ...(replyTo ? { replyTo } : {}),
         to: email,
-        subject: 'Vos identifiants de connexion — GMT Ariana',
-        text: `Bonjour ${prenom} ${nom},\n\nUn compte a été créé pour vous sur la plateforme GMT Ariana.\n\nVos identifiants de connexion :\nIdentifiant (Email) : ${email}\nMot de passe initial : ${tempPassword}\nCode de confirmation : ${otp} (valable 15 minutes)\n${appUrl ? '\nLien d\'accès : ' + appUrl : ''}\n\nLors de votre première connexion, il vous sera demandé de modifier votre mot de passe.\n\nGMT Ariana`,
+        subject: 'Bienvenue sur GMT Ariana — Vos identifiants et mot de passe provisoire',
+        text: `Bonjour ${prenom} ${nom},\n\nVotre compte d'accès a été créé sur la plateforme GMT Ariana.\n\nVos identifiants de connexion :\n• Identifiant (E-mail) : ${email}\n• Mot de passe provisoire : ${tempPassword}\n\n⏱ Validité : Ce mot de passe provisoire est valable pendant 48 heures.\n⚠️ Consigne : Changez-le dès votre première connexion.\n\nLien d'accès direct : ${appUrl}/login\n\nGroupement de Médecine du Travail de l'Ariana (GMT Ariana)`,
         html: `
-            <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;border:1px solid #e2e8f0;border-radius:8px;background:#ffffff">
-              <h2 style="color:#0284c7;margin-top:0">GMT Ariana — Médecine du Travail</h2>
-              <p style="font-size:15px;color:#0f172a">Bonjour <strong>${prenom} ${nom}</strong>,</p>
-              <p style="color:#475569;font-size:14px">Un compte a été créé pour vous sur la plateforme du <strong>Groupement de Médecine du Travail de l'Ariana</strong>.</p>
-
-              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0">
-                <p style="margin:0 0 10px;font-size:14px;font-weight:bold;color:#166534">Vos informations de connexion :</p>
-                <p style="margin:4px 0;font-size:14px"><strong>Email :</strong> ${email}</p>
-                <p style="margin:4px 0;font-size:14px"><strong>Mot de passe initial :</strong> <code style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:4px;font-size:15px;font-weight:bold">${tempPassword}</code></p>
+            <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;border:1px solid #e2e8f0;border-radius:10px;background:#ffffff">
+              <div style="text-align:center;margin-bottom:20px">
+                <h2 style="color:#0284c7;margin:0">GMT Ariana — Médecine du Travail</h2>
+                <p style="color:#64748b;font-size:13px;margin:4px 0">Portail Médical & Gestion du Planning</p>
               </div>
+              <p style="font-size:15px;color:#0f172a">Bonjour <strong>${prenom} ${nom}</strong>,</p>
+              <p style="color:#475569;font-size:14px;line-height:1.5">Un compte d'accès a été créé pour vous sur la plateforme du <strong>Groupement de Médecine du Travail de l'Ariana</strong>.</p>
 
-              <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin:20px 0;text-align:center">
-                <p style="margin:0 0 8px;font-size:13px;color:#475569">Code de confirmation (OTP) :</p>
-                <div style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#0f172a">${otp}</div>
-                <p style="margin:8px 0 0;font-size:12px;color:#94a3b8">Valable pendant 15 minutes.</p>
+              <div style="background:#f0fdf4;border:2px solid #86efac;border-radius:10px;padding:18px;margin:22px 0">
+                <p style="margin:0 0 10px;font-size:12px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:1px;text-align:center">
+                  Vos identifiants de première connexion
+                </p>
+                <div style="background:#ffffff;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin:8px 0">
+                  <p style="margin:4px 0;font-size:13.5px;color:#334155">
+                    <strong>Identifiant (E-mail) :</strong> <code style="color:#0284c7;font-weight:700">${email}</code>
+                  </p>
+                  <div style="margin:10px 0 4px">
+                    <span style="font-size:13.5px;color:#334155;font-weight:700">Mot de passe provisoire :</span>
+                    <div style="margin-top:6px;background:#f8fafc;padding:10px 14px;border-radius:6px;border:1.5px dashed #16a34a;text-align:center">
+                      <span style="font-size:20px;font-weight:900;color:#15803d;font-family:monospace;letter-spacing:1.5px">${tempPassword}</span>
+                    </div>
+                  </div>
+                </div>
+                <p style="margin:10px 0 0;font-size:12px;color:#15803d;line-height:1.4;text-align:center">
+                  ⏱ Validité : <strong>48 heures</strong>.<br>
+                  ⚠️ <strong>Consigne :</strong> Changez-le dès votre première connexion.
+                </p>
               </div>
 
               ${appUrl ? `
-              <div style="text-align:center;margin:20px 0">
-                <a href="${appUrl}/login" style="background:#0284c7;color:#ffffff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block">
-                  Accéder à la plateforme
+              <div style="text-align:center;margin:24px 0">
+                <a href="${appUrl}/login" style="background:#0284c7;color:#ffffff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block;box-shadow:0 2px 8px rgba(2,132,199,0.3)">
+                  Accéder à la plateforme & Me connecter
                 </a>
               </div>` : ''}
 
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;margin:16px 0;font-size:12px;color:#64748b">
+                ℹ️ En cas de difficulté lors de votre connexion, contactez l'administrateur de votre groupement médical.
+              </div>
+
               <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0"/>
-              <p style="font-size:12px;color:#94a3b8;line-height:1.4">
-                Pour des raisons de sécurité, veuillez changer votre mot de passe dès votre première connexion.
-              </p>
+              <p style="font-size:11px;color:#94a3b8;text-align:center">GMT Ariana — Groupement de Médecine du Travail de l'Ariana</p>
             </div>
           `,
       });
-      console.log(`[Email Welcome] ✅ Envoyé avec succès à ${email} (ID: ${info.messageId})`);
+
       emailSent = true;
+      if (isEthereal) {
+        previewUrl = nodemailer.getTestMessageUrl(info);
+        console.log(`[Email Welcome] ✅ Envoyé avec succès à ${email} (ID: ${info.messageId})`);
+        console.log(`[Email Welcome] 🌐 Prévisualisation Ethereal (Lien web direct) : ${previewUrl}`);
+      } else {
+        console.log(`[Email Welcome] ✅ Envoyé avec succès à ${email} (ID: ${info.messageId})`);
+      }
     } catch (err) {
-      console.error(`[Email Welcome] ❌ Erreur envoi à ${email}:`, err.message);
+      console.error(`[Email Welcome] ❌ Échec envoi à ${email}:`, {
+        code: err.code,
+        message: err.message,
+        response: err.response,
+      });
       emailError = err.message;
     }
-  } else if (!isDeliverableEmail(email)) {
-    emailError = 'Adresse email invalide ou domaine de test non délivrable';
-    console.warn(`[Email Welcome] ⚠️ ${emailError} : ${email}`);
   } else {
-    emailError = 'Configuration SMTP absente (EMAIL_USER / EMAIL_PASS non configurés)';
-    console.warn(`[Email Welcome] ⚠️ ${emailError}`);
+    emailError = 'Format d\'adresse email invalide';
+    console.warn(`[Email Welcome] ⚠️ ${emailError} : ${email}`);
   }
 
-  // SMS & WhatsApp (si Twilio disponible)
+  // SMS notification (si Twilio disponible)
   if (telephone) {
-    const msg = `GMT Ariana 🏥\nBonjour ${prenom} ${nom} !\nVotre compte a été créé.\n\nEmail : ${email}\nMot de passe provisoire : ${tempPassword}\nCode OTP : ${otp}\n(Valable 15 minutes)`;
+    const msg = `GMT Ariana 🏥\nBonjour ${prenom} ${nom} !\nVotre compte d'accès a été créé.\nMot de passe provisoire : ${tempPassword}\n(Valable 48 heures - à changer dès votre première connexion)`;
     await sendSMS(telephone, msg);
-    await sendWhatsApp(telephone, msg);
   }
 
-  return { emailSent, emailError };
+  return { emailSent, emailError, previewUrl };
 }
 
 module.exports = {
   getTransporter,
+  getTransporterAsync,
   testEmailConnection,
-  formatWhatsAppLink,
   getFromAddress,
+  validateMailerConfig,
+  PERSONAL_EMAIL_REGEX,
   notifyAllUsers,
   notifyAssignedIntervenants,
   sendOTP,
   sendPasswordReset,
   sendWelcomeEmail,
   sendSMS,
-  sendWhatsApp,
   planningEmailHtml,
   planningSmsText,
   eventEmailHtml,

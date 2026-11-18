@@ -163,8 +163,10 @@ export default function CameraCaptureModal({ isOpen, onClose, onCapture }) {
           overflow: 'hidden',
         }}>
           {error ? (
-            <div style={{ padding: 20, textAlign: 'center', color: '#f87171', fontSize: 13 }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>⚠️</div>
+            <div style={{ padding: 20, textAlign: 'center', color: '#f87171', fontSize: 13, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ marginBottom: 8, color: '#ef4444' }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              </div>
               {error}
             </div>
           ) : photoPreview ? (
@@ -210,9 +212,10 @@ export default function CameraCaptureModal({ isOpen, onClose, onCapture }) {
                 className="btn btn-ghost"
                 onClick={toggleCamera}
                 title="Changer de caméra"
-                style={{ color: '#94a3b8', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}
+                style={{ color: '#94a3b8', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
               >
-                🔄 Retourner
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                <span>Retourner</span>
               </button>
 
               {/* Shutter Button */}
@@ -231,14 +234,14 @@ export default function CameraCaptureModal({ isOpen, onClose, onCapture }) {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 22,
+                  color: '#fff',
                   transition: 'transform .1s',
                 }}
                 onMouseDown={e => e.currentTarget.style.transform = 'scale(0.92)'}
                 onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
                 title="Prendre la photo"
               >
-                📸
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
               </button>
 
               <button
@@ -256,17 +259,19 @@ export default function CameraCaptureModal({ isOpen, onClose, onCapture }) {
                 type="button"
                 className="btn btn-outline"
                 onClick={retake}
-                style={{ flex: 1, borderColor: 'rgba(255,255,255,0.2)', color: '#fff' }}
+                style={{ flex: 1, borderColor: 'rgba(255,255,255,0.2)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               >
-                🔄 Reprendre
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                <span>Reprendre</span>
               </button>
               <button
                 type="button"
                 className="btn btn-primary"
                 onClick={confirmPhoto}
-                style={{ flex: 1, background: '#059669', borderColor: '#059669' }}
+                style={{ flex: 1, background: '#059669', borderColor: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               >
-                ✅ Envoyer la photo
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <span>Envoyer la photo</span>
               </button>
             </>
           ) : (

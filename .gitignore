@@ -18,6 +18,10 @@ frontend/.env
 *.key
 *.crt
 *.pfx
+*sauvegarde*.sql
+*.dump.sql
+vapid.json
+backend/config/vapid.json
 
 # Logs & Test outputs
 *.log

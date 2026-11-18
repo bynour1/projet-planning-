@@ -137,7 +137,7 @@ function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
         <div className="modal-header">
           <div>
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
-              {init.id ? '✏️ Modifier le programme Clino' : '➕ Nouveau programme Clino Mobile'}
+              {init.id ? 'Modifier le programme Clino' : 'Nouveau programme Clino Mobile'}
             </h3>
             <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-3)' }}>
               Mission de l'unité médicale mobile sur site d'entreprise
@@ -201,7 +201,7 @@ function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
                 <option value="">— Aucun médecin —</option>
                 {medecins?.map(m => (
                   <option key={m.id} value={m.id}>
-                    👨‍⚕️ Dr. {m.prenom} {m.nom}
+                    Dr. {m.prenom} {m.nom}
                   </option>
                 ))}
               </select>
@@ -212,7 +212,7 @@ function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
                 <option value="">— Aucun technicien —</option>
                 {techniciens?.map(t => (
                   <option key={t.id} value={t.id}>
-                    🔧 {t.prenom} {t.nom}
+                    {t.prenom} {t.nom}
                   </option>
                 ))}
               </select>
@@ -232,7 +232,7 @@ function ClinoModal({ item, medecins, techniciens, onSave, onClose }) {
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onClose}>Annuler</button>
           <button className="btn btn-primary" onClick={save} disabled={saving || !f.date || !f.heure || !f.adresse}>
-            {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : '💾 Enregistrer la tournée'}
+            {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Enregistrer la tournée'}
           </button>
         </div>
       </div>
@@ -283,7 +283,7 @@ function ClinoCard({ item, isAdmin, onEdit, onDelete }) {
           <span
             className="badge badge-blue"
             style={{
-              fontSize: 12.5,
+              fontSize: 12,
               fontWeight: 800,
               padding: '3px 8px',
               borderRadius: 7,
@@ -292,10 +292,9 @@ function ClinoCard({ item, isAdmin, onEdit, onDelete }) {
               border: '1px solid #bae6fd',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 4,
             }}
           >
-            🚗 {timeStr}
+            {timeStr}
           </span>
 
           {/* Date formatted */}
@@ -327,19 +326,23 @@ function ClinoCard({ item, isAdmin, onEdit, onDelete }) {
             <div style={{ display: 'flex', gap: 4 }}>
               <button
                 className="btn btn-outline btn-sm"
-                style={{ padding: '3px 7px', fontSize: 11, borderRadius: 6 }}
+                style={{ padding: '4px 8px', borderRadius: 6 }}
                 onClick={() => onEdit(item)}
                 title="Modifier"
               >
-                ✏️
+                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
               </button>
               <button
                 className="btn btn-danger btn-sm"
-                style={{ padding: '3px 7px', fontSize: 11, borderRadius: 6 }}
+                style={{ padding: '4px 8px', borderRadius: 6 }}
                 onClick={() => onDelete(item.id)}
                 title="Supprimer"
               >
-                🗑
+                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
               </button>
             </div>
           )}
@@ -353,8 +356,7 @@ function ClinoCard({ item, isAdmin, onEdit, onDelete }) {
 
       {/* Address */}
       {item.adresse && (
-        <div style={{ fontSize: 12, color: '#0369a1', display: 'flex', alignItems: 'center', gap: 5, wordBreak: 'break-word' }}>
-          <span>📍</span>
+        <div style={{ fontSize: 12, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 5, wordBreak: 'break-word' }}>
           <span style={{ fontWeight: 600 }}>{item.adresse}</span>
         </div>
       )}
@@ -373,10 +375,9 @@ function ClinoCard({ item, isAdmin, onEdit, onDelete }) {
               borderRadius: 6,
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 4,
             }}
           >
-            👨‍⚕️ {docName.startsWith('Dr.') ? docName : `Dr. ${docName}`}
+            {docName.startsWith('Dr.') ? docName : `Dr. ${docName}`}
           </span>
         )}
         {tecName && (
@@ -391,10 +392,9 @@ function ClinoCard({ item, isAdmin, onEdit, onDelete }) {
               borderRadius: 6,
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 4,
             }}
           >
-            🔧 {tecName}
+            {tecName}
           </span>
         )}
         {!docName && !tecName && (
@@ -421,7 +421,6 @@ function ClinoCard({ item, isAdmin, onEdit, onDelete }) {
             gap: 6,
           }}
         >
-          <span>💬</span>
           <span style={{ wordBreak: 'break-word' }}>{item.commentaire}</span>
         </div>
       )}
@@ -467,7 +466,7 @@ function DailyProgram({ selectedDate, clinoItems, isAdmin, onAddClino, onEditCli
       >
         <div>
           <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: 0.3 }}>
-            📅 {formatSafeDateTitle(selectedDate)}
+            {formatSafeDateTitle(selectedDate)}
           </div>
           <div style={{ fontSize: 12, color: '#bae6fd', marginTop: 2 }}>
             {total} tournée{total > 1 ? 's' : ''} Clino Mobile au programme
@@ -496,7 +495,6 @@ function DailyProgram({ selectedDate, clinoItems, isAdmin, onAddClino, onEditCli
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 14px' }}>
         {dayClino.length === 0 ? (
           <div style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 13, padding: '40px 10px' }}>
-            <div style={{ fontSize: 36, marginBottom: 10 }}>🚗</div>
             <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-2)' }}>
               Aucune mission Clino ce jour
             </div>
@@ -505,7 +503,7 @@ function DailyProgram({ selectedDate, clinoItems, isAdmin, onAddClino, onEditCli
             </p>
             {isAdmin && (
               <button className="btn btn-outline btn-sm" onClick={onAddClino} style={{ fontWeight: 700, padding: '6px 14px' }}>
-                + Planifier une tournée
+                Planifier une tournée
               </button>
             )}
           </div>
@@ -897,7 +895,7 @@ export default function Clino({ toast }) {
                 letterSpacing: 0.5,
               }}
             >
-              🚗 Unité Médicale Mobile
+              Unité Médicale Mobile
             </span>
             <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>
               Planning & Tournées Terrain
@@ -970,8 +968,8 @@ export default function Clino({ toast }) {
           {/* View Tab Switcher: Only 2 views (Grille Hebdo & Programme jour) */}
           <div className="clino-nav-tabs">
             {[
-              ['semaine', '📊 Grille Hebdo'],
-              ['programme', '📅 Programme jour'],
+              ['semaine', 'Grille hebdomadaire'],
+              ['programme', 'Programme du jour'],
             ].map(([v, l]) => (
               <button
                 key={v}
@@ -1017,7 +1015,7 @@ export default function Clino({ toast }) {
             gap: 4,
           }}
         >
-          🏷️ Filtres :
+          Filtres :
         </span>
 
         {/* Filter by Role */}
@@ -1034,14 +1032,13 @@ export default function Clino({ toast }) {
           value={filters.role}
           onChange={e => setFilters(f => ({ ...f, role: e.target.value }))}
         >
-          <option value="">👥 Tous les intervenants</option>
-          <option value="medecin">👨‍⚕️ Médecins uniquement</option>
-          <option value="technicien">🔧 Techniciens uniquement</option>
+          <option value="">Tous les intervenants</option>
+          <option value="medecin">Médecins</option>
+          <option value="technicien">Techniciens</option>
         </select>
 
         {/* Filter by Date */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>📅</span>
           <input
             type="date"
             className="input"
@@ -1064,7 +1061,7 @@ export default function Clino({ toast }) {
         <input
           className="input"
           type="text"
-          placeholder="🔍 Rechercher entreprise, mot-clé, médecin, adresse..."
+          placeholder="Rechercher entreprise, médecin, adresse..."
           style={{ flex: 1, minWidth: 200, fontSize: 12, padding: '6px 12px', height: 38, borderRadius: 8 }}
           value={filters.search}
           onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
@@ -1078,7 +1075,7 @@ export default function Clino({ toast }) {
               style={{ fontSize: 12, padding: '5px 10px', color: 'var(--danger)', fontWeight: 700 }}
               title="Réinitialiser tous les filtres"
             >
-              ✕ Réinitialiser
+              Réinitialiser
             </button>
             <span className="badge badge-blue" style={{ fontSize: 11, fontWeight: 800 }}>
               {filtered.length} tournée{filtered.length > 1 ? 's' : ''} trouvée{filtered.length > 1 ? 's' : ''}
@@ -1095,7 +1092,6 @@ export default function Clino({ toast }) {
           </div>
         ) : filtered.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">🚗</div>
             <p style={{ fontWeight: 700, fontSize: 16 }}>Aucun programme trouvé</p>
             {hasActiveFilters && (
               <button

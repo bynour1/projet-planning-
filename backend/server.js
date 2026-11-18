@@ -1,5 +1,11 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+const { verifyTotpEnvironment } = require('./utils/totp');
+verifyTotpEnvironment();
+const { validateMailerConfig } = require('./config/mailer');
+try { validateMailerConfig(); } catch (e) { if (process.env.NODE_ENV === 'production') throw e; }
+const { validateWebAuthnConfig } = require('./config/webauthn');
+try { validateWebAuthnConfig(); } catch (e) { if (process.env.NODE_ENV === 'production') throw e; }
 const express   = require('express');
 const http      = require('http');
 const cors      = require('cors');
@@ -21,7 +27,7 @@ const corsOptions = {
     if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
       return callback(null, true);
     }
-    return callback(null, true);
+    return callback(new Error('Origine non autorisée par la politique CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -38,6 +44,9 @@ io.use((socket, next) => {
   if (!token) return next(new Error('Authentication error'));
   try {
     socket.user = jwt.verify(token, process.env.JWT_SECRET);
+    if (socket.user.is_2fa_temp) {
+      return next(new Error('Authentication error: complete session token required'));
+    }
     next();
   } catch {
     next(new Error('Invalid token'));
@@ -71,6 +80,19 @@ io.on('connection', (socket) => {
       );
       const [rows] = await db.query('SELECT * FROM messages WHERE id = ?', [result.insertId]);
       io.emit('new_message', rows[0]);
+
+      // Push notification aux autres utilisateurs (zéro fuite de données médicales ou patient)
+      try {
+        const pushService = require('./services/pushService');
+        const [subs] = await db.query('SELECT DISTINCT user_id FROM push_subscriptions WHERE user_id != ?', [user.id]);
+        if (subs?.length) {
+          pushService.sendPushToMultipleUsers(subs.map(s => s.user_id), {
+            title: 'Nouveau message',
+            body: 'Vous avez reçu un nouveau message.',
+            data: { url: '/chat' },
+          }).catch(() => {});
+        }
+      } catch {}
     } catch (err) {
       console.error('Socket send_message error:', err.message);
     }
@@ -123,6 +145,8 @@ const compression = require('compression');
 const helmet      = require('helmet');
 const rateLimit   = require('express-rate-limit');
 
+const cookieParser = require('./middleware/cookies');
+
 app.use(compression({
   threshold: 1024,
   level: 6,
@@ -132,6 +156,7 @@ app.use(helmet({
   contentSecurityPolicy: false,
 }));
 app.use(cors(corsOptions));
+app.use(cookieParser);
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
@@ -145,6 +170,17 @@ const authLimiter = rateLimit({
 });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/forgot-password', authLimiter);
+app.use('/api/auth/verify-2fa', authLimiter);
+
+// Limiteur général d'API pour protection contre le déni de service (DDoS)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  message: { message: 'Seuil de requêtes API atteint. Veuillez patienter.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', apiLimiter);
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -165,6 +201,7 @@ app.use('/api/entreprises', require('./routes/entreprises'));
 
 app.use('/api/stats', require('./routes/stats'));
 app.use('/api/search', require('./routes/search'));
+app.use('/api/push',   require('./routes/push'));
 
 // Health check
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', time: new Date() }));
@@ -192,6 +229,61 @@ process.on('uncaughtException', (error) => {
 // ─── Ensure schema migrations ───────────────────────────────
 db.query('ALTER TABLE clino_mobile MODIFY COLUMN heure TIME NULL DEFAULT NULL').catch(() => {});
 db.query('ALTER TABLE users ADD COLUMN token_version INT DEFAULT 1').catch(() => {});
+db.query('ALTER TABLE users ADD COLUMN totp_secret_enc TEXT NULL').catch(() => {});
+db.query('ALTER TABLE users ADD COLUMN totp_last_step BIGINT NULL').catch(() => {});
+db.query(`CREATE TABLE IF NOT EXISTS trusted_devices (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  token_hash VARCHAR(64) NOT NULL,
+  user_agent VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  INDEX idx_trusted_user (user_id),
+  INDEX idx_trusted_token_hash (token_hash)
+)`).catch(() => {});
+db.query(`CREATE TABLE IF NOT EXISTS refresh_tokens (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  token_hash VARCHAR(64) NOT NULL,
+  trusted_device_id INT NULL,
+  is_trusted TINYINT(1) DEFAULT 0,
+  user_agent VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  revoked_at DATETIME NULL DEFAULT NULL,
+  INDEX idx_refresh_user (user_id),
+  INDEX idx_refresh_token_hash (token_hash)
+)`).catch(() => {});
+db.query('ALTER TABLE planning_events ADD COLUMN statut VARCHAR(30) DEFAULT \'confirme\'').catch(() => {});
+db.query(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  endpoint TEXT NOT NULL,
+  endpoint_hash VARCHAR(64) NOT NULL UNIQUE,
+  p256dh VARCHAR(255) NOT NULL,
+  auth VARCHAR(255) NOT NULL,
+  user_agent VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_active_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_push_at DATETIME NULL DEFAULT NULL,
+  INDEX idx_push_user (user_id),
+  INDEX idx_push_endpoint_hash (endpoint_hash)
+)`).catch(() => {});
+db.query(`CREATE TABLE IF NOT EXISTS webauthn_credentials (
+  id VARCHAR(255) PRIMARY KEY,
+  user_id INT NOT NULL,
+  public_key TEXT NOT NULL,
+  counter BIGINT NOT NULL DEFAULT 0,
+  device_name VARCHAR(150) NULL,
+  transports VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used_at DATETIME NULL,
+  INDEX idx_webauthn_user (user_id)
+)`).catch(() => {});
+// Invalidation des anciens identifiants biométriques non sécurisés
+db.query('UPDATE users SET biometric_credential = NULL WHERE biometric_credential IS NOT NULL').catch(() => {});
 
 // ─── Start Reminders ──────────────────────────────────────────
 require('./cron/reminders')(db);

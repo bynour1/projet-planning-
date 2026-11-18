@@ -112,7 +112,7 @@ describe('Chat page', () => {
     await waitFor(() => {
       expect(screen.getByText('Hier msg')).toBeInTheDocument();
       expect(screen.getByText('Aujourd msg')).toBeInTheDocument();
-      expect(screen.getAllByText(/📅/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/2026/).length).toBeGreaterThanOrEqual(1);
     });
   });
 });

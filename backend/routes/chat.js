@@ -72,6 +72,20 @@ router.post('/messages', authenticate, async (req, res) => {
     const msg = firstRow(rows);
     const io = req.app.get('io');
     if (io) io.emit('new_message', msg);
+
+    // Notification push réelle (zéro fuite de données médicales ou patient)
+    try {
+      const pushService = require('../services/pushService');
+      const [subs] = await db.query('SELECT DISTINCT user_id FROM push_subscriptions WHERE user_id != ?', [req.user.id]);
+      if (subs?.length) {
+        pushService.sendPushToMultipleUsers(subs.map(s => s.user_id), {
+          title: 'Nouveau message',
+          body: 'Vous avez reçu un nouveau message.',
+          data: { url: '/chat' },
+        }).catch(() => {});
+      }
+    } catch {}
+
     res.status(201).json(msg);
   } catch { res.status(500).json({ message:'Erreur serveur' }); }
 });
@@ -95,6 +109,20 @@ router.post('/upload', authenticate, upload.single('file'), async (req, res) => 
     const msg = firstRow(rows);
     const io = req.app.get('io');
     if (io) io.emit('new_message', msg);
+
+    // Notification push réelle (sans donnée confidentielle)
+    try {
+      const pushService = require('../services/pushService');
+      const [subs] = await db.query('SELECT DISTINCT user_id FROM push_subscriptions WHERE user_id != ?', [req.user.id]);
+      if (subs?.length) {
+        pushService.sendPushToMultipleUsers(subs.map(s => s.user_id), {
+          title: 'Nouveau message',
+          body: 'Vous avez reçu un nouveau document.',
+          data: { url: '/chat' },
+        }).catch(() => {});
+      }
+    } catch {}
+
     res.status(201).json(msg);
   } catch (err) {
     console.error('Upload error:', err);

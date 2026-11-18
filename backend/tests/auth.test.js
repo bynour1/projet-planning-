@@ -174,14 +174,14 @@ describe('Password Reset Flow', () => {
     expect(res.status).toBe(200);
   });
 
-  it('POST /forgot-password with phone returns whatsapp_link', async () => {
-    db.query.mockResolvedValueOnce([[{ id: 1, email: 'user@x.com', nom: 'Ben', prenom: 'Ali', telephone: '98123456' }]]); // found user
+  it('POST /forgot-password with valid email returns emailSent true', async () => {
+    db.query.mockResolvedValueOnce([[{ id: 1, email: 'user@x.com', nom: 'Ben', prenom: 'Ali', telephone: '98123456', is_active: 1 }]]); // found user
     db.query.mockResolvedValueOnce([{}]); // delete old tokens
     db.query.mockResolvedValueOnce([{}]); // insert new token
-    const res = await request(app).post('/api/auth/forgot-password').send({ identifier: '98123456', method: 'phone' });
+    const res = await request(app).post('/api/auth/forgot-password').send({ email: 'user@x.com' });
     expect(res.status).toBe(200);
-    expect(res.body.method).toBe('phone');
-    expect(res.body.whatsapp_link).toContain('https://wa.me/21698123456');
+    expect(res.body.emailSent).toBe(true);
+    expect(res.body.message).toMatch(/lien de réinitialisation/i);
   });
 
   it('GET /reset-password returns 400 for invalid token', async () => {

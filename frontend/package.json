@@ -13,6 +13,7 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^14.0.0",
     "axios": "^1.7.2",
     "date-fns": "^3.6.0",
     "jspdf": "^4.2.1",

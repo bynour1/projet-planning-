@@ -58,65 +58,55 @@ export default function PWAInstallBanner() {
         style={{
           margin: '8px 8px 4px',
           padding: '10px 12px',
-          background: 'linear-gradient(135deg, #0284c7, #0ea5e9)',
+          background: 'var(--surface2)',
+          border: '1px solid var(--border)',
           borderRadius: 10,
-          color: '#fff',
+          color: 'var(--text)',
           display: 'flex',
           flexDirection: 'column',
           gap: 6,
-          boxShadow: '0 2px 8px rgba(14,165,233,.25)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700 }}>
-          <span>📱</span> Installer sur mobile
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+          <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'var(--primary)' }}>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          </svg>
+          Application mobile
         </div>
-        <div style={{ fontSize: 11, opacity: 0.9, lineHeight: 1.3 }}>
-          Installez l'app sur votre téléphone pour un accès rapide.
+        <div style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.3 }}>
+          Accédez directement à vos plannings depuis votre smartphone.
         </div>
-        <div style={{ marginTop: 6 }}>
+        <div style={{ marginTop: 4 }}>
           {deferredPrompt ? (
             <button
               onClick={handleInstallClick}
+              className="btn btn-primary btn-sm"
               style={{
                 width: '100%',
-                padding: '8px 12px',
-                background: '#fff',
-                color: '#0284c7',
-                border: 'none',
-                borderRadius: 8,
-                fontWeight: 800,
-                fontSize: 12,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
+                padding: '6px 10px',
+                fontSize: 11.5,
+                fontWeight: 700,
                 justifyContent: 'center',
-                gap: 6,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                borderRadius: 7,
               }}
             >
-              📲 Installer l'Application
+              Installer l'application
             </button>
           ) : (
             <button
               onClick={() => setShowIOSModal(true)}
+              className="btn btn-outline btn-sm"
               style={{
                 width: '100%',
-                padding: '8px 12px',
-                background: '#fff',
-                color: '#0284c7',
-                border: 'none',
-                borderRadius: 8,
-                fontWeight: 800,
-                fontSize: 12,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
+                padding: '6px 10px',
+                fontSize: 11.5,
+                fontWeight: 600,
                 justifyContent: 'center',
-                gap: 6,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                borderRadius: 7,
+                background: 'var(--surface)',
               }}
             >
-              📷 Ouvrir sur Mobile (QR Code)
+              Ouvrir sur mobile
             </button>
           )}
         </div>
@@ -127,25 +117,25 @@ export default function PWAInstallBanner() {
         <div className="modal-overlay" onClick={() => setShowIOSModal(false)}>
           <div className="modal" style={{ maxWidth: 440, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
-                📱 Accès & Installation Mobile
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
+                Accès & installation mobile
               </h3>
               <button className="btn btn-ghost btn-icon" onClick={() => setShowIOSModal(false)}>✕</button>
             </div>
             <div className="modal-body" style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text)' }}>
               
-              <div style={{ margin: '10px auto 16px', padding: 12, background: '#fff', borderRadius: 12, display: 'inline-block', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+              <div style={{ margin: '10px auto 16px', padding: 12, background: '#fff', borderRadius: 12, display: 'inline-block', border: '1px solid var(--border)' }}>
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : '')}`}
                   alt="QR Code Planning Médical"
-                  style={{ width: 190, height: 190, display: 'block', borderRadius: 8 }}
+                  style={{ width: 180, height: 180, display: 'block', borderRadius: 6 }}
                 />
-                <p style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: '#0284c7' }}>
-                  Scannez avec l'appareil photo du téléphone
+                <p style={{ marginTop: 8, fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>
+                  Scannez avec l'appareil photo de votre smartphone
                 </p>
               </div>
 
-              <div style={{ textAlign: 'center', background: '#f8fafc', padding: 14, borderRadius: 10, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+              <div style={{ textAlign: 'center', background: 'var(--surface2)', padding: 14, borderRadius: 10, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
                 {deferredPrompt ? (
                   <button
                     onClick={() => {
@@ -153,23 +143,19 @@ export default function PWAInstallBanner() {
                       setShowIOSModal(false);
                     }}
                     className="btn btn-primary"
-                    style={{ width: '100%', padding: '10px 16px', fontSize: 13, fontWeight: 800, borderRadius: 10, justifyContent: 'center' }}
+                    style={{ width: '100%', padding: '10px 16px', fontSize: 13, fontWeight: 700, borderRadius: 8, justifyContent: 'center' }}
                   >
-                    📲 Installer l'Application Maintenant
+                    Installer l'application
                   </button>
                 ) : isIOS ? (
                   <div style={{ fontSize: 12, color: 'var(--text-2)', textAlign: 'left', width: '100%' }}>
-                    <strong style={{ color: '#0284c7' }}>Sur iPhone / iPad :</strong> Appuyez sur <strong>Partager 📤</strong> puis <strong>« Sur l'écran d'accueil » ➕</strong>.
+                    <strong>Sur iPhone / iPad :</strong> Appuyez sur le bouton <em>Partager</em> dans Safari puis sélectionnez <em>« Sur l'écran d'accueil »</em>.
                   </div>
                 ) : (
                   <div style={{ fontSize: 12, color: 'var(--text-2)', textAlign: 'center', width: '100%' }}>
-                    Scannez le QR code ou ouvrez le lien sur votre smartphone pour l'installer directement sur votre écran d'accueil.
+                    Scannez le QR code ou ouvrez le lien sur votre smartphone pour installer l'application sur votre écran d'accueil.
                   </div>
                 )}
-              </div>
-
-              <div style={{ marginTop: 12, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, color: '#166534', fontSize: 11 }}>
-                ✅ Installation directe et rapide en 1 clic.
               </div>
             </div>
             <div className="modal-footer" style={{ justifyContent: 'center' }}>

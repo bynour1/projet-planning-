@@ -102,7 +102,7 @@ export default function Schedule({ toast }) {
             <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600 }}>• Calendrier hebdomadaire</span>
           </div>
           <h2 style={{ fontSize: 24, fontWeight: 900, color: 'var(--text)', letterSpacing: -0.5, margin: 0 }}>
-            🗓 Vue Semaine
+            Vue Semaine
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4, margin: 0, textTransform: 'capitalize' }}>
             {format(weekStart, 'd MMMM', { locale: fr })} – {format(weekEnd, 'd MMMM yyyy', { locale: fr })} • Coordination des visites et interventions sur site.
@@ -192,7 +192,6 @@ export default function Schedule({ toast }) {
         <div className="loading-center"><div className="spinner" /></div>
       ) : dayEvents.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-icon">📭</div>
           <p>Aucune intervention ce jour</p>
           {isAdmin && (
             <p style={{ fontSize:13, color:'var(--text-3)', marginTop:6 }}>
@@ -247,7 +246,7 @@ export default function Schedule({ toast }) {
                   {/* Horaire */}
                   {ev.heure_debut && ev.heure_fin && (
                     <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:4 }}>
-                      ⏱ {ev.heure_debut} → {ev.heure_fin}
+                      {ev.heure_debut} → {ev.heure_fin}
                     </div>
                   )}
 
@@ -255,17 +254,17 @@ export default function Schedule({ toast }) {
                   <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
                     {ev.medecin_nom    && (
                       <span style={{ fontSize:12, color:'var(--text-2)' }}>
-                        👨‍⚕️ {ev.medecin_nom}
+                        {ev.medecin_nom.startsWith('Dr.') ? ev.medecin_nom : `Dr. ${ev.medecin_nom}`}
                       </span>
                     )}
                     {ev.technicien_nom && (
                       <span style={{ fontSize:12, color:'var(--text-2)' }}>
-                        🔧 {ev.technicien_nom}
+                        Tech : {ev.technicien_nom}
                       </span>
                     )}
                     {ev.adresse && (
                       <span style={{ fontSize:12, color:'var(--text-3)' }}>
-                        📍 {ev.adresse}
+                        {ev.adresse}
                       </span>
                     )}
                   </div>
@@ -278,7 +277,7 @@ export default function Schedule({ toast }) {
                       fontSize:12, color:'var(--text-2)', fontStyle:'italic',
                       borderLeft:'2px solid var(--primary)',
                     }}>
-                      💬 {ev.commentaire}
+                      {ev.commentaire}
                     </div>
                   )}
                 </div>
@@ -292,7 +291,7 @@ export default function Schedule({ toast }) {
       {!loading && planning.length > 0 && (
         <div style={{ marginTop:32 }}>
           <h4 style={{ fontSize:14, fontWeight:700, color:'var(--text-2)', marginBottom:12 }}>
-            📊 Résumé de la semaine — {planning.length} intervention(s)
+            Résumé de la semaine — {planning.length} intervention(s)
           </h4>
           <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
             {DAYS_FR.map((d, i) => {

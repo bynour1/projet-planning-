@@ -238,6 +238,39 @@ Les comptes utilisateurs (Administrateurs, Médecins, Techniciens) sont gérés 
 
 Aucun identifiant par défaut n'est stocké dans le code source. Lors de la première initialisation, créez votre compte administrateur avec un mot de passe fort via l'interface ou les commandes d'administration.
 
+### 🛡️ Procédure en cas de téléphone perdu (2FA TOTP)
+
+Si un collaborateur ou un administrateur perd son smartphone ou son application Authenticator :
+
+1. **Option 1 — Réinitialisation par un administrateur (Interface Web)** :
+   * Connectez-vous avec un autre compte administrateur.
+   * Rendez-vous dans **Utilisateurs** 👥.
+   * Cliquez sur le bouton de réinitialisation 2FA en face de l'utilisateur concerné.
+   * L'action est tracée dans les journaux d'audit de sécurité (`[Admin 2FA Reset] AUDIT SÉCURITÉ`).
+   * *Remarque : Un administrateur ne peut pas réinitialiser sa propre 2FA depuis cette interface (protection anti-verrouillage).*
+
+2. **Option 2 — Réinitialisation d'urgence via script CLI (Sur le serveur)** :
+   * Si aucun autre administrateur n'est disponible ou si le compte principal est bloqué, lancez la commande suivante directement sur le serveur :
+   ```bash
+   cd backend
+   node scripts/reset-user-2fa.js email-ou-id-utilisateur
+   # Exemple :
+   node scripts/reset-user-2fa.js admin@gmt-ariana.tn
+   ```
+   * Ce script révoque immédiatement le secret TOTP chiffré, supprime tous les codes de secours de la base de données et repasse `totp_enabled = 0`. L'utilisateur peut immédiatement se reconnecter avec son mot de passe et reconfigurer son application Authenticator.
+
+### ⚠️ Architecture Mono-serveur et Stockage en Mémoire (Limites Connues)
+
+Pour l'architecture actuelle de l'application (serveur interne unique sur Node.js) :
+
+* **Registre des jetons temporaires (`consumedTempTokens`)** : Le cache d'invalidation à usage unique strict des jetons de connexion 2FA est conservé dans la mémoire vive (RAM) du processus Node.js pendant leur durée de validité (5 minutes).
+* **Compteurs de limitation de débit (`express-rate-limit`)** : Les compteurs de requêtes anti-force brute (5 essais / 15 min) sont stockés en mémoire vive.
+
+**Conséquences & limites connues** :
+1. Un redémarrage du backend remet ces compteurs et ce registre à zéro (le risque reste négligeable grâce à l'expiration courte des tokens de 5 min).
+2. Si le backend est mis à l'échelle sur plusieurs serveurs ou conteneurs derrière un répartiteur de charge (Load Balancer) sans affinité de session (*sticky sessions*), chaque instance dispose de sa propre mémoire locale.
+3. Pour un futur déploiement multi-instances à haute disponibilité, ces deux registres pourront être facilement déportés vers une base Redis partagée (`rate-limit-redis`) ou une table MySQL.
+
 ---
 
 ## 📊 Architecture

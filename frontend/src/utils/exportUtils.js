@@ -469,17 +469,17 @@ export function exportMatrixToWord({
       const itemsHtml = [];
       pEvents.forEach(p => {
         const time = p.heure_debut ? `${p.heure_debut}${p.heure_fin ? '-' + p.heure_fin : ''}` : '';
-        const clinoTag = (p.is_clino || p.clino_id) ? '<span style="background-color: #e0f2fe; color: #0369a1; padding: 1px 3px; font-size: 7pt; font-weight: bold; border-radius: 2px; margin-right: 2px;">🚗 Clino</span>' : '';
+        const clinoTag = (p.is_clino || p.clino_id) ? '<span style="background-color: #e0f2fe; color: #0369a1; padding: 1px 4px; font-size: 7pt; font-weight: bold; border-radius: 2px; margin-right: 2px;">[Clino]</span>' : '';
         const titlePart = p.titre || 'Visite';
-        const locPart = p.adresse ? `<div style="font-size: 7.5pt; color: #0284c7; margin-top: 1px;">📍 ${p.adresse}</div>` : '';
+        const locPart = p.adresse ? `<div style="font-size: 7.5pt; color: #0284c7; margin-top: 1px;">${p.adresse}</div>` : '';
         const counterpartPart = isTechnician
-          ? (p.medecin_nom ? `<div style="font-size: 7.5pt; color: #059669; margin-top: 1px;">👨‍⚕️ Dr. ${cleanDoctorName(p.medecin_nom)}</div>` : '')
-          : (p.technicien_nom ? `<div style="font-size: 7.5pt; color: #d97706; margin-top: 1px;">🔧 Tech. ${p.technicien_nom}</div>` : '');
+          ? (p.medecin_nom ? `<div style="font-size: 7.5pt; color: #059669; margin-top: 1px;">Dr. ${cleanDoctorName(p.medecin_nom)}</div>` : '')
+          : (p.technicien_nom ? `<div style="font-size: 7.5pt; color: #d97706; margin-top: 1px;">Tech. ${p.technicien_nom}</div>` : '');
 
         itemsHtml.push(`
           <div style="background-color: #ffffff; border: 1px solid #cbd5e1; border-left: 3px solid #0284c7; padding: 4px 5px; margin-bottom: 3px; text-align: left;">
             <div style="font-weight: bold; font-size: 8pt; color: #0f172a; line-height: 1.2;">
-              ${time ? `<span style="color: #0284c7; margin-right: 2px;">⏰ ${time}</span>` : ''}
+              ${time ? `<span style="color: #0284c7; margin-right: 2px;">${time}</span>` : ''}
               ${clinoTag}
               <span>${titlePart}</span>
             </div>
@@ -493,14 +493,14 @@ export function exportMatrixToWord({
         const time = c.heure ? String(c.heure).slice(0, 5) : '';
         const addr = c.adresse || 'Tournée Clino';
         const counterpart = isTechnician
-          ? ((c.medecin_full || c.medecin_nom) ? `<div style="font-size: 7.5pt; color: #059669; margin-top: 1px;">👨‍⚕️ Dr. ${cleanDoctorName(c.medecin_full || c.medecin_nom)}</div>` : '')
-          : ((c.technicien_full || c.technicien_nom) ? `<div style="font-size: 7.5pt; color: #d97706; margin-top: 1px;">🔧 Tech. ${c.technicien_full || c.technicien_nom}</div>` : '');
+          ? ((c.medecin_full || c.medecin_nom) ? `<div style="font-size: 7.5pt; color: #059669; margin-top: 1px;">Dr. ${cleanDoctorName(c.medecin_full || c.medecin_nom)}</div>` : '')
+          : ((c.technicien_full || c.technicien_nom) ? `<div style="font-size: 7.5pt; color: #d97706; margin-top: 1px;">Tech. ${c.technicien_full || c.technicien_nom}</div>` : '');
 
         itemsHtml.push(`
           <div style="background-color: #ffffff; border: 1px solid #cbd5e1; border-left: 3px solid #10b981; padding: 4px 5px; margin-bottom: 3px; text-align: left;">
             <div style="font-weight: bold; font-size: 8pt; color: #0f172a; line-height: 1.2;">
-              <span style="background-color: #ecfdf5; color: #059669; padding: 1px 3px; font-size: 7pt; font-weight: bold; border-radius: 2px; margin-right: 2px;">🚗 Clino</span>
-              ${time ? `<span style="color: #059669; margin-right: 2px;">⏰ ${time}</span>` : ''}
+              <span style="background-color: #ecfdf5; color: #059669; padding: 1px 4px; font-size: 7pt; font-weight: bold; border-radius: 2px; margin-right: 2px;">[Clino]</span>
+              ${time ? `<span style="color: #059669; margin-right: 2px;">${time}</span>` : ''}
               <span>${addr}</span>
             </div>
             ${counterpart}
@@ -678,7 +678,7 @@ export function exportToICS(events) {
     const hEnd   = ev.heure_fin || hStart;
     const start  = `${dateStr}T${hStart.replace(':', '').slice(0, 4)}00`;
     const end    = `${dateStr}T${hEnd.replace(':', '').slice(0, 4)}00`;
-    const typeLabel = ev.type_label || (ev._t === 'cl' ? '🚗 Clino Mobile' : '📋 Programme');
+    const typeLabel = ev.type_label || (ev._t === 'cl' ? 'Clino Mobile' : 'Programme');
     const summary = `${typeLabel} - ${ev.titre || ev.adresse || 'Intervention'}`;
 
     lines.push(
@@ -712,7 +712,7 @@ export function googleCalendarLink(event) {
   const hEnd = event.heure_fin || hStart;
   const start = `${d}T${hStart.replace(':', '').slice(0, 4)}00`;
   const end = `${d}T${hEnd.replace(':', '').slice(0, 4)}00`;
-  const typeLabel = event.type_label || (event._t === 'cl' ? '🚗 Clino Mobile' : '📋 Programme');
+  const typeLabel = event.type_label || (event._t === 'cl' ? 'Clino Mobile' : 'Programme');
   const params = new URLSearchParams({
     text: `${typeLabel} - ${event.titre || event.adresse || 'Intervention GMT Ariana'}`,
     dates: `${start}/${end}`,

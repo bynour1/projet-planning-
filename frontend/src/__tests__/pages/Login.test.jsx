@@ -64,10 +64,10 @@ describe('Login page', () => {
     const pwdInput = screen.getByPlaceholderText(/••••/);
     expect(pwdInput).toHaveAttribute('type', 'password');
 
-    await userEvent.click(screen.getByText('👁'));
+    await userEvent.click(screen.getByTitle('Afficher'));
     expect(pwdInput).toHaveAttribute('type', 'text');
 
-    await userEvent.click(screen.getByText('🙈'));
+    await userEvent.click(screen.getByTitle('Masquer'));
     expect(pwdInput).toHaveAttribute('type', 'password');
   });
 

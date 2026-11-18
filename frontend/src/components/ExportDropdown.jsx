@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 
 /**
  * Composant de menu déroulant professionnel et unifié pour les exports et l'impression.
- * Regroupe Imprimer, PDF, Excel et Word dans un bouton compact et moderne.
+ * Regroupe Imprimer, PDF, Excel et Word dans un bouton compact et moderne (style Linear / Stripe).
  */
 export default function ExportDropdown({
   onPrint,
@@ -46,24 +46,37 @@ export default function ExportDropdown({
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,
-          fontWeight: 800,
-          fontSize: 12,
+          fontWeight: 600,
+          fontSize: 12.5,
           padding: '6px 12px',
           borderRadius: 8,
           background: open ? 'var(--surface2)' : 'var(--surface)',
           borderColor: open ? 'var(--primary)' : 'var(--border)',
           color: 'var(--text)',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
           transition: 'all 0.15s ease',
           ...buttonStyle,
         }}
         title="Options d'exportation et d'impression"
       >
-        <span style={{ fontSize: 13 }}>📄</span>
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
         <span>{label}</span>
-        <span style={{ fontSize: 10, opacity: 0.7, transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' }}>
-          ▼
-        </span>
+        <svg
+          width="12"
+          height="12"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          style={{
+            opacity: 0.6,
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.15s ease',
+          }}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
       </button>
 
       {open && (
@@ -73,11 +86,11 @@ export default function ExportDropdown({
             top: 'calc(100% + 6px)',
             [align === 'right' ? 'right' : 'left']: 0,
             zIndex: 1000,
-            minWidth: 200,
+            minWidth: 220,
             background: 'var(--surface)',
             border: '1px solid var(--border)',
-            borderRadius: 12,
-            boxShadow: '0 10px 30px rgba(0,0,0,0.12), 0 4px 10px rgba(0,0,0,0.04)',
+            borderRadius: 10,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)',
             padding: 5,
             display: 'flex',
             flexDirection: 'column',
@@ -97,20 +110,29 @@ export default function ExportDropdown({
                 width: '100%',
                 justifyContent: 'flex-start',
                 padding: '8px 12px',
-                borderRadius: 8,
-                fontSize: 12,
-                fontWeight: 700,
-                color: '#991b1b',
+                borderRadius: 7,
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: 'var(--text)',
                 textAlign: 'left',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
+                gap: 10,
               }}
             >
-              <span style={{ fontSize: 15 }}>📕</span>
+              <div style={{
+                width: 28, height: 28, borderRadius: 6,
+                background: '#fef2f2', border: '1px solid #fecaca',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#dc2626', flexShrink: 0
+              }}>
+                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </div>
               <div style={{ flex: 1 }}>
                 <div>Document PDF (.pdf)</div>
-                <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500 }}>Format officiel A4 Paysage</div>
+                <div style={{ fontSize: 10.5, color: 'var(--text-3)', fontWeight: 400 }}>Format officiel A4 Paysage</div>
               </div>
             </button>
           )}
@@ -127,20 +149,29 @@ export default function ExportDropdown({
                 width: '100%',
                 justifyContent: 'flex-start',
                 padding: '8px 12px',
-                borderRadius: 8,
-                fontSize: 12,
-                fontWeight: 700,
-                color: '#166534',
+                borderRadius: 7,
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: 'var(--text)',
                 textAlign: 'left',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
+                gap: 10,
               }}
             >
-              <span style={{ fontSize: 15 }}>📗</span>
+              <div style={{
+                width: 28, height: 28, borderRadius: 6,
+                background: '#f0fdf4', border: '1px solid #bbf7d0',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#16a34a', flexShrink: 0
+              }}>
+                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
               <div style={{ flex: 1 }}>
                 <div>Tableur Excel (.xlsx)</div>
-                <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500 }}>Données et calculs bruts</div>
+                <div style={{ fontSize: 10.5, color: 'var(--text-3)', fontWeight: 400 }}>Données et calculs bruts</div>
               </div>
             </button>
           )}
@@ -157,20 +188,68 @@ export default function ExportDropdown({
                 width: '100%',
                 justifyContent: 'flex-start',
                 padding: '8px 12px',
-                borderRadius: 8,
-                fontSize: 12,
-                fontWeight: 700,
-                color: '#1e40af',
+                borderRadius: 7,
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: 'var(--text)',
                 textAlign: 'left',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
+                gap: 10,
               }}
             >
-              <span style={{ fontSize: 15 }}>📘</span>
+              <div style={{
+                width: 28, height: 28, borderRadius: 6,
+                background: '#eff6ff', border: '1px solid #bfdbfe',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#2563eb', flexShrink: 0
+              }}>
+                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
               <div style={{ flex: 1 }}>
                 <div>Document Word (.doc)</div>
-                <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500 }}>Rapport éditable</div>
+                <div style={{ fontSize: 10.5, color: 'var(--text-3)', fontWeight: 400 }}>Rapport éditable</div>
+              </div>
+            </button>
+          )}
+
+          {onPrint && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setOpen(false);
+                onPrint();
+              }}
+              style={{
+                width: '100%',
+                justifyContent: 'flex-start',
+                padding: '8px 12px',
+                borderRadius: 7,
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: 'var(--text)',
+                textAlign: 'left',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <div style={{
+                width: 28, height: 28, borderRadius: 6,
+                background: 'var(--surface2)', border: '1px solid var(--border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--text)', flexShrink: 0
+              }}>
+                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div>Imprimer</div>
+                <div style={{ fontSize: 10.5, color: 'var(--text-3)', fontWeight: 400 }}>Aperçu d'impression</div>
               </div>
             </button>
           )}

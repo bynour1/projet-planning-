@@ -83,13 +83,20 @@ export default function ImageMessage({ url, originalname, isMine }) {
               justifyContent: 'space-between',
               background: isMine ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.03)',
             }}>
-              <span>📸 {originalname?.length > 25 ? originalname.slice(0, 22) + '...' : originalname}</span>
-              <span style={{ opacity: 0.7 }}>🔍 Agrandir</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                <span>{originalname?.length > 25 ? originalname.slice(0, 22) + '...' : originalname}</span>
+              </span>
+              <span style={{ opacity: 0.7, display: 'flex', alignItems: 'center', gap: 3 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+                <span>Agrandir</span>
+              </span>
             </div>
           </div>
         ) : (
-          <div style={{ padding: 12, fontSize: 12, color: 'var(--danger)' }}>
-            ⚠️ Image indisponible
+          <div style={{ padding: 12, fontSize: 12, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <span>Image indisponible</span>
           </div>
         )}
       </div>

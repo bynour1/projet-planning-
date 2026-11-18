@@ -33,12 +33,12 @@ export default function NavigationSelector({ addr, style = {}, compact = false }
         style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 4,
+          gap: 5,
           background: 'rgba(14, 165, 233, 0.08)',
           color: '#0284c7',
           border: '1px solid rgba(14, 165, 233, 0.25)',
           borderRadius: 6,
-          padding: compact ? '1px 6px' : '3px 8px',
+          padding: compact ? '2px 7px' : '4px 9px',
           fontSize: compact ? 11 : 12,
           fontWeight: 600,
           cursor: 'pointer',
@@ -47,7 +47,10 @@ export default function NavigationSelector({ addr, style = {}, compact = false }
           maxWidth: '100%',
         }}
       >
-        <span>📍</span>
+        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ flexShrink: 0 }}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
         <span style={{
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -57,12 +60,14 @@ export default function NavigationSelector({ addr, style = {}, compact = false }
         }}>
           {cleanAddr}
         </span>
-        <span style={{ fontSize: 9, opacity: 0.7 }}>▼</span>
+        <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ opacity: 0.7, flexShrink: 0 }}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
       </button>
 
       {/* Version texte nette et propre pour l'impression papier */}
       <span className="nav-selector-print-text" style={{ display: 'none' }}>
-        📍 {cleanAddr}
+        {cleanAddr}
       </span>
 
       {open && (
@@ -79,18 +84,18 @@ export default function NavigationSelector({ addr, style = {}, compact = false }
               marginTop: 4,
               background: 'var(--surface, #ffffff)',
               borderRadius: 8,
-              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08)',
               border: '1px solid var(--border, #e2e8f0)',
               padding: 6,
               zIndex: 1060,
-              minWidth: 200,
+              minWidth: 190,
               display: 'flex',
               flexDirection: 'column',
               gap: 3,
             }}
           >
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3, #94a3b8)', padding: '4px 8px', textTransform: 'uppercase' }}>
-              Lancer l'itinéraire GPS
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3, #94a3b8)', padding: '4px 8px', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Itinéraire GPS
             </div>
 
             <a
@@ -111,10 +116,10 @@ export default function NavigationSelector({ addr, style = {}, compact = false }
                 background: 'transparent',
                 transition: 'background 0.1s',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(14, 165, 233, 0.08)'}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2, rgba(14, 165, 233, 0.08))'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
-              <span style={{ fontSize: 15 }}>🗺️</span> Google Maps
+              Google Maps
             </a>
 
             <a
@@ -135,10 +140,10 @@ export default function NavigationSelector({ addr, style = {}, compact = false }
                 background: 'transparent',
                 transition: 'background 0.1s',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(14, 165, 233, 0.08)'}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2, rgba(14, 165, 233, 0.08))'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
-              <span style={{ fontSize: 15 }}>🚗</span> Waze Navigation
+              Waze Navigation
             </a>
 
             {isIOS && (
@@ -158,10 +163,10 @@ export default function NavigationSelector({ addr, style = {}, compact = false }
                   background: 'transparent',
                   transition: 'background 0.1s',
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(14, 165, 233, 0.08)'}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2, rgba(14, 165, 233, 0.08))'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
-                <span style={{ fontSize: 15 }}>🍎</span> Apple Plans
+                Apple Plans
               </a>
             )}
 
@@ -186,7 +191,7 @@ export default function NavigationSelector({ addr, style = {}, compact = false }
                 width: '100%',
               }}
             >
-              <span>{copied ? '✓' : '📋'}</span> {copied ? 'Adresse copiée !' : 'Copier l\'adresse'}
+              {copied ? 'Adresse copiée !' : 'Copier l\'adresse'}
             </button>
           </div>
         </>

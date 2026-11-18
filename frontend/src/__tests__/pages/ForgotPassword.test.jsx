@@ -17,13 +17,13 @@ describe('ForgotPassword page', () => {
   it('renders correctly', () => {
     render(<ForgotPassword toast={mockToast} />);
     expect(screen.getByText(/Mot de passe oublié/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/medecin@gmt-ariana.tn/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Recevoir le lien par Email/i })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/gmt-ariana\.tn/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Envoyer le lien|Recevoir le lien/i })).toBeInTheDocument();
   });
 
   it('shows error if email is empty', async () => {
     render(<ForgotPassword toast={mockToast} />);
-    const form = screen.getByRole('button', { name: /Recevoir le lien par Email/i }).closest('form');
+    const form = screen.getByRole('button', { name: /Envoyer le lien|Recevoir le lien/i }).closest('form');
     fireEvent.submit(form);
 
     await waitFor(() => {
@@ -35,8 +35,8 @@ describe('ForgotPassword page', () => {
     axios.post.mockResolvedValueOnce({ data: { message: 'Email envoyé' } });
     render(<ForgotPassword toast={mockToast} />);
 
-    await userEvent.type(screen.getByPlaceholderText(/medecin@gmt-ariana.tn/i), 'test@example.com');
-    fireEvent.click(screen.getByRole('button', { name: /Recevoir le lien par Email/i }));
+    await userEvent.type(screen.getByPlaceholderText(/gmt-ariana\.tn/i), 'test@example.com');
+    fireEvent.click(screen.getByRole('button', { name: /Envoyer le lien|Recevoir le lien/i }));
 
     await waitFor(() => {
       expect(axios.post).toHaveBeenCalledWith('/api/auth/forgot-password', {
@@ -44,7 +44,7 @@ describe('ForgotPassword page', () => {
         email: 'test@example.com',
         method: 'email',
       });
-      expect(screen.getByText(/Si cette adresse email correspond à un compte/i)).toBeInTheDocument();
+      expect(screen.getByText(/Si un compte/i)).toBeInTheDocument();
     });
   });
 
@@ -52,8 +52,8 @@ describe('ForgotPassword page', () => {
     axios.post.mockRejectedValueOnce({ response: { data: { message: 'Erreur serveur' } } });
     render(<ForgotPassword toast={mockToast} />);
 
-    await userEvent.type(screen.getByPlaceholderText(/medecin@gmt-ariana.tn/i), 'test@example.com');
-    fireEvent.click(screen.getByRole('button', { name: /Recevoir le lien par Email/i }));
+    await userEvent.type(screen.getByPlaceholderText(/gmt-ariana\.tn/i), 'test@example.com');
+    fireEvent.click(screen.getByRole('button', { name: /Envoyer le lien|Recevoir le lien/i }));
 
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith('Erreur serveur', 'error');

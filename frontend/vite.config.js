@@ -13,6 +13,7 @@ export default defineConfig({
       },
       includeAssets: ['icon-192.png', 'icon-512.png', 'logo-gmt.png'],
       workbox: {
+        importScripts: ['/sw-push.js'],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         cleanupOutdatedCaches: true,
         navigateFallback: 'index.html',

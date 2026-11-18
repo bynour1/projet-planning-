@@ -8,10 +8,10 @@ import { vi } from 'vitest';
 // ── Mock axios globally ────────────────────────────────────────
 vi.mock('axios', () => ({
   default: {
-    get:     vi.fn(),
-    post:    vi.fn(),
-    put:     vi.fn(),
-    delete:  vi.fn(),
+    get:     vi.fn().mockResolvedValue({ data: [] }),
+    post:    vi.fn().mockResolvedValue({ data: {} }),
+    put:     vi.fn().mockResolvedValue({ data: {} }),
+    delete:  vi.fn().mockResolvedValue({ data: {} }),
     defaults: { headers: { common: {} } },
   },
 }));

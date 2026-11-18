@@ -34,14 +34,14 @@ describe('Users page', () => {
   it('shows create user button', async () => {
     axios.get.mockResolvedValueOnce({ data: USERS_DATA });
     renderWithProviders(<Users toast={mockToast} />);
-    await waitFor(() => expect(screen.getByText('+ Créer un utilisateur')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Nouvel utilisateur')).toBeInTheDocument());
   });
 
   it('opens create user modal on button click', async () => {
     axios.get.mockResolvedValueOnce({ data: USERS_DATA });
     renderWithProviders(<Users toast={mockToast} />);
-    await waitFor(() => screen.getByText('+ Créer un utilisateur'));
-    await userEvent.click(screen.getByText('+ Créer un utilisateur'));
+    await waitFor(() => screen.getByText('Nouvel utilisateur'));
+    await userEvent.click(screen.getByText('Nouvel utilisateur'));
     expect(screen.getByText('Créer un utilisateur')).toBeInTheDocument();
   });
 

@@ -14,7 +14,7 @@ function StatCard({ icon, label, value, subtext, color, onClick }) {
         background: 'var(--surface)',
         border: '1px solid var(--border)',
         borderRadius: 14,
-        padding: '18px 20px',
+        padding: '14px 16px',
         boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
         cursor: onClick ? 'pointer' : 'default',
         transition: 'all 0.2s ease',
@@ -23,6 +23,7 @@ function StatCard({ icon, label, value, subtext, color, onClick }) {
         justifyContent: 'space-between',
         position: 'relative',
         overflow: 'hidden',
+        minHeight: 104,
       }}
       onMouseEnter={e => {
         if (onClick) {
@@ -39,29 +40,30 @@ function StatCard({ icon, label, value, subtext, color, onClick }) {
         }
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{
-          width: 42, height: 42, borderRadius: 10,
+          width: 38, height: 38, borderRadius: 10,
           background: `${color}15`, color: color,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 20, border: `1px solid ${color}30`,
+          fontSize: 18, border: `1px solid ${color}30`,
         }}>
           {icon}
         </div>
         {subtext && (
           <span style={{
-            fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20,
+            fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
             background: `${color}12`, color: color,
+            whiteSpace: 'nowrap',
           }}>
             {subtext}
           </span>
         )}
       </div>
       <div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.5px' }}>
+        <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.5px' }}>
           {value}
         </div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginTop: 2 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginTop: 2, lineHeight: 1.3 }}>
           {label}
         </div>
       </div>
@@ -171,7 +173,7 @@ export default function Dashboard({ toast }) {
   useEffect(() => {
     const off = on?.('calendar_refresh', () => {
       load();
-      toast?.('📅 Calendrier mis à jour en temps réel', 'info');
+      toast?.('Calendrier mis à jour en temps réel', 'info');
     });
     return () => off?.();
   }, [on, load, toast]);
@@ -182,21 +184,22 @@ export default function Dashboard({ toast }) {
   const todayFormatted = format(new Date(), 'EEEE d MMMM yyyy', { locale: fr });
 
   const TYPE_COLORS = {
-    ponctuel:  { bg: '#eff6ff', border: '#3b82f6', text: '#1d4ed8', label: 'Ponctuel', icon: '📌' },
-    reunion:   { bg: '#f0fdf4', border: '#22c55e', text: '#15803d', label: 'Réunion', icon: '👥' },
-    formation: { bg: '#fefce8', border: '#eab308', text: '#854d0e', label: 'Formation', icon: '🎓' },
-    conges:    { bg: '#fef2f2', border: '#ef4444', text: '#b91c1c', label: 'Congés', icon: '🏖️' },
-    autre:     { bg: '#faf5ff', border: '#a855f7', text: '#7e22ce', label: 'Autre', icon: '🔔' },
+    ponctuel:  { bg: '#eff6ff', border: '#3b82f6', text: '#1d4ed8', label: 'Ponctuel' },
+    reunion:   { bg: '#f0fdf4', border: '#22c55e', text: '#15803d', label: 'Réunion' },
+    formation: { bg: '#fefce8', border: '#eab308', text: '#854d0e', label: 'Formation' },
+    conges:    { bg: '#fef2f2', border: '#ef4444', text: '#b91c1c', label: 'Congés' },
+    autre:     { bg: '#faf5ff', border: '#a855f7', text: '#7e22ce', label: 'Autre' },
   };
 
   const ROLE_CONFIG = {
-    administrateur: { label: 'Administrateur', icon: '🛡️', color: '#0ea5e9' },
-    medecin:        { label: 'Médecin du travail', icon: '👨‍⚕️', color: '#10b981' },
-    technicien:     { label: 'Technicien de santé', icon: '🔧', color: '#8b5cf6' },
-    chauffeur:      { label: 'Chauffeur Clino', icon: '🚗', color: '#f97316' },
+    administrateur: { label: 'Administrateur', color: '#0ea5e9' },
+    medecin:        { label: 'Médecin du travail', color: '#10b981' },
+    technicien:     { label: 'Technicien de santé', color: '#8b5cf6' },
+    chauffeur:      { label: 'Chauffeur Clino', color: '#f97316' },
+    hse:            { label: 'Responsable HSE', color: '#d97706' },
   };
 
-  const roleMeta = ROLE_CONFIG[user?.role] || { label: user?.role || 'Utilisateur', icon: '👤', color: '#0ea5e9' };
+  const roleMeta = ROLE_CONFIG[user?.role] || { label: user?.role || 'Utilisateur', color: '#0ea5e9' };
 
   function getDateBadge(dateStr) {
     try {
@@ -244,16 +247,15 @@ export default function Dashboard({ toast }) {
               letterSpacing: 0.5,
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 5
             }}>
-              <span>{roleMeta.icon}</span> {roleMeta.label}
+              {roleMeta.label}
             </span>
             <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>
               ● Connecté en direct · GMT Ariana
             </span>
           </div>
           <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0, color: 'var(--text)', letterSpacing: -0.5 }}>
-            Bonjour, {user?.prenom || 'Système'} 👋
+            Bonjour, {user?.prenom || 'Collaborateur'}
           </h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-2)', textTransform: 'capitalize' }}>
             {todayFormatted} · Tableau de bord exécutif, statistiques & activités du jour
@@ -267,14 +269,14 @@ export default function Dashboard({ toast }) {
             onClick={() => navigate('/planning')}
             style={{ fontWeight: 700, fontSize: 12.5, padding: '8px 14px', borderRadius: 10 }}
           >
-            📋 Planning
+            Planning
           </button>
           <button
             className="btn btn-outline btn-sm"
             onClick={() => navigate('/entreprises')}
             style={{ fontWeight: 700, fontSize: 12.5, padding: '8px 14px', borderRadius: 10 }}
           >
-            🏢 Entreprises
+            Entreprises
           </button>
           <button
             className="btn btn-primary btn-sm"
@@ -296,16 +298,20 @@ export default function Dashboard({ toast }) {
             }}
             title="Actualiser les données"
           >
-            {refreshing ? '⏳ Actualisation...' : '🔄 Actualiser'}
+            {refreshing ? 'Actualisation...' : 'Actualiser'}
           </button>
         </div>
       </div>
 
       {/* ─── Executive KPI Cards ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: 12 }}>
         {isAdmin && (
           <StatCard
-            icon="👥"
+            icon={(
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            )}
             label="Utilisateurs"
             value={stats.users}
             subtext="Membres"
@@ -314,7 +320,11 @@ export default function Dashboard({ toast }) {
           />
         )}
         <StatCard
-          icon="🏢"
+          icon={(
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          )}
           label="Interventions (Entreprises conventionnées)"
           value={stats.entreprises}
           subtext="Conventionnées"
@@ -322,7 +332,11 @@ export default function Dashboard({ toast }) {
           onClick={() => navigate('/entreprises')}
         />
         <StatCard
-          icon="📅"
+          icon={(
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          )}
           label="Événements"
           value={stats.events}
           subtext="Calendrier"
@@ -330,7 +344,12 @@ export default function Dashboard({ toast }) {
           onClick={() => navigate('/planning')}
         />
         <StatCard
-          icon="🚗"
+          icon={(
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 17a2 2 0 100-4 2 2 0 000 4zm8 0a2 2 0 100-4 2 2 0 000 4z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 9l2-4h10l3 4h3a1 1 0 011 1v6a1 1 0 01-1 1h-1a3 3 0 01-6 0H10a3 3 0 01-6 0H3a1 1 0 01-1-1v-6a1 1 0 011-1h1z" />
+            </svg>
+          )}
           label="Clino Mobile"
           value={stats.clino}
           subtext="Missions"
@@ -349,23 +368,20 @@ export default function Dashboard({ toast }) {
           {todayEvents.length > 0 && (
             <div className="card" style={{ borderLeft: '4px solid #10b981', padding: '18px 20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 18 }}>⚡</span>
-                  <div>
-                    <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text)' }}>
-                      Programme d'aujourd'hui
-                    </h3>
-                    <p style={{ fontSize: 11.5, color: 'var(--text-2)', margin: '2px 0 0' }}>
-                      {todayEvents.length} visite(s) médicale(s) prévue(s) ce jour
-                    </p>
-                  </div>
+                <div>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text)' }}>
+                    Programme d'aujourd'hui
+                  </h3>
+                  <p style={{ fontSize: 11.5, color: 'var(--text-2)', margin: '2px 0 0' }}>
+                    {todayEvents.length} visite(s) médicale(s) prévue(s) ce jour
+                  </p>
                 </div>
                 <button
                   className="btn btn-ghost btn-sm"
                   onClick={() => navigate('/planning')}
                   style={{ fontSize: 11.5, color: 'var(--primary)' }}
                 >
-                  Voir tout ➔
+                  Voir tout ›
                 </button>
               </div>
 
@@ -384,8 +400,8 @@ export default function Dashboard({ toast }) {
                         {ev.titre || 'Visite médicale'}
                       </div>
                       <div style={{ fontSize: 11.5, color: 'var(--text-2)', marginTop: 2 }}>
-                        {ev.adresse ? `📍 ${ev.adresse}` : 'Site principal'}
-                        {ev.medecin_nom && ` · 👨‍⚕️ ${ev.medecin_nom}`}
+                        {ev.adresse ? ev.adresse : 'Site principal'}
+                        {ev.medecin_nom && ` · Dr. ${ev.medecin_nom}`}
                       </div>
                     </div>
                     {ev.heure_debut && (
@@ -393,7 +409,7 @@ export default function Dashboard({ toast }) {
                         fontSize: 11, fontWeight: 800, background: '#dcfce7', color: '#15803d',
                         padding: '2px 8px', borderRadius: 6, whiteSpace: 'nowrap'
                       }}>
-                        ⏰ {ev.heure_debut.slice(0, 5)}
+                        {ev.heure_debut.slice(0, 5)}
                       </span>
                     )}
                   </div>
@@ -407,7 +423,7 @@ export default function Dashboard({ toast }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div>
                 <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text)' }}>
-                  📋 Prochaines Visites Médicales
+                  Prochaines visites médicales
                 </h3>
                 <p style={{ fontSize: 11.5, color: 'var(--text-2)', margin: '2px 0 0' }}>
                   Planning des consultations et examens médicaux assignés
@@ -418,20 +434,19 @@ export default function Dashboard({ toast }) {
                 onClick={() => navigate('/planning')}
                 style={{ fontSize: 11.5 }}
               >
-                Planning complet ➔
+                Planning complet ›
               </button>
             </div>
 
             {myPlanning.length === 0 ? (
               <div style={{
-                padding: '20px 16px', background: 'var(--surface2)', borderRadius: 10,
+                padding: '24px 16px', background: 'var(--surface2)', borderRadius: 10,
                 textAlign: 'center', border: '1px dashed var(--border)'
               }}>
-                <span style={{ fontSize: 22 }}>📅</span>
-                <p style={{ fontWeight: 600, fontSize: 13, margin: '6px 0 2px', color: 'var(--text)' }}>
+                <p style={{ fontWeight: 600, fontSize: 13, margin: '0 0 2px', color: 'var(--text)' }}>
                   Aucune visite médicale programmée pour le moment
                 </p>
-                <p style={{ fontSize: 11.5, color: 'var(--text-2)', margin: '0 0 10px' }}>
+                <p style={{ fontSize: 11.5, color: 'var(--text-2)', margin: '0 0 12px' }}>
                   Vous pouvez ajouter une nouvelle visite médicale au calendrier.
                 </p>
                 <button
@@ -439,7 +454,7 @@ export default function Dashboard({ toast }) {
                   onClick={() => navigate('/planning')}
                   style={{ fontSize: 11.5 }}
                 >
-                  ➕ Ajouter une visite
+                  Ajouter une visite
                 </button>
               </div>
             ) : (
@@ -458,7 +473,7 @@ export default function Dashboard({ toast }) {
                         {p.titre || p.type_visite || 'Visite médicale'}
                       </div>
                       <div style={{ fontSize: 11.5, color: 'var(--text-2)', marginTop: 2 }}>
-                        📅 {p.date} {p.heure_debut ? `· ⏰ ${p.heure_debut}` : ''} {p.medecin_nom ? `· 👨‍⚕️ ${p.medecin_nom}` : ''} {p.adresse ? `· 📍 ${p.adresse}` : ''}
+                        {p.date} {p.heure_debut ? `· ${p.heure_debut}` : ''} {p.medecin_nom ? `· Dr. ${p.medecin_nom}` : ''} {p.adresse ? `· ${p.adresse}` : ''}
                       </div>
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '2px 7px', borderRadius: 6, whiteSpace: 'nowrap' }}>
@@ -475,7 +490,7 @@ export default function Dashboard({ toast }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div>
                 <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text)' }}>
-                  🏢 Interventions (Entreprises Conventionnées)
+                  Interventions (Entreprises conventionnées)
                 </h3>
                 <p style={{ fontSize: 11.5, color: 'var(--text-2)', margin: '2px 0 0' }}>
                   Annuaire des entreprises partenaires sous convention d'intervention
@@ -486,7 +501,7 @@ export default function Dashboard({ toast }) {
                 onClick={() => navigate('/entreprises')}
                 style={{ fontSize: 11.5, color: 'var(--primary)' }}
               >
-                Gérer ({stats.entreprises}) ➔
+                Gérer ({stats.entreprises}) ›
               </button>
             </div>
 
@@ -526,15 +541,15 @@ export default function Dashboard({ toast }) {
                             background: isOldYear ? '#fee2e2' : '#e0f2fe',
                             color: isOldYear ? '#991b1b' : '#0369a1',
                           }}>
-                            📅 {annee}
+                            {annee}
                           </span>
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 3 }}>
-                          {ent.secteur ? `🏷️ ${ent.secteur}` : 'Secteur général'}
-                          {ent.adresse ? ` · 📍 ${ent.adresse}` : ''}
+                          {ent.secteur || 'Secteur général'}
+                          {ent.adresse ? ` · ${ent.adresse}` : ''}
                           <span style={{ display: 'block', marginTop: 3, color: 'var(--text-3)' }}>
-                            👥 Effectif : <strong>{vf}/{eff} vus</strong> ({aFaire} en attente)
-                            {ent.renouvelable ? ' · 🔄 Renouvelable' : ''}
+                            Effectif : <strong>{vf}/{eff} vus</strong> ({aFaire} en attente)
+                            {ent.renouvelable ? ' · Renouvelable' : ''}
                           </span>
                         </div>
                       </div>
@@ -557,7 +572,7 @@ export default function Dashboard({ toast }) {
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          📅 Planifier
+                          Planifier
                         </button>
                         <span style={{ fontSize: 10.5, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>
                           Conventionnée
@@ -590,15 +605,12 @@ export default function Dashboard({ toast }) {
                 color: '#ffffff',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 18 }}>📢</span>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 14, color: '#fff' }}>
-                      Annonces & Événements
-                    </div>
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)' }}>
-                      {upcomingEvents.length} événement(s) à venir
-                    </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: '#fff' }}>
+                    Annonces & Événements
+                  </div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)' }}>
+                    {upcomingEvents.length} événement(s) à venir
                   </div>
                 </div>
                 <span style={{ fontSize: 10.5, background: 'rgba(255,255,255,0.2)', padding: '2px 7px', borderRadius: 12, fontWeight: 700 }}>
@@ -646,11 +658,11 @@ export default function Dashboard({ toast }) {
                             fontSize: 10, fontWeight: 700, padding: '1px 6px',
                             borderRadius: 8, background: tc.bg, color: tc.text,
                           }}>
-                            {tc.icon} {tc.label}
+                            {tc.label}
                           </span>
                           {ev.lieu && (
                             <span style={{ fontSize: 11, color: 'var(--text-2)' }}>
-                              📍 {ev.lieu}
+                              {ev.lieu}
                             </span>
                           )}
                         </div>
@@ -665,15 +677,15 @@ export default function Dashboard({ toast }) {
           {/* Raccourcis Métier */}
           <div className="card" style={{ padding: '18px 20px' }}>
             <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px', color: 'var(--text)' }}>
-              ⚡ Raccourcis Métier
+              Raccourcis métier
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
-                { title: '📅 Planning Médical', desc: 'Gestion des visites périodiques et d\'embauche', path: '/planning', color: '#10b981' },
-                { title: '🏢 Entreprises Conventionnées', desc: 'Fiches et suivi des entreprises partenaires', path: '/entreprises', color: '#0ea5e9' },
-                { title: '🚗 Clino Mobile', desc: 'Tournées médicales et visites sur site', path: '/clino', color: '#8b5cf6' },
-                { title: '💬 Chat d\'Équipe', desc: 'Échanges internes et partage de documents', path: '/chat', color: '#f59e0b' },
+                { title: 'Planning Médical', desc: 'Gestion des visites périodiques et d\'embauche', path: '/planning', color: '#10b981' },
+                { title: 'Entreprises Conventionnées', desc: 'Fiches et suivi des entreprises partenaires', path: '/entreprises', color: '#0ea5e9' },
+                { title: 'Clino Mobile', desc: 'Tournées médicales et visites sur site', path: '/clino', color: '#8b5cf6' },
+                { title: 'Messagerie d\'Équipe', desc: 'Échanges internes et partage de documents', path: '/chat', color: '#f59e0b' },
               ].map(item => (
                 <div
                   key={item.title}
@@ -695,7 +707,7 @@ export default function Dashboard({ toast }) {
                       {item.desc}
                     </div>
                   </div>
-                  <span style={{ fontSize: 12, color: item.color, fontWeight: 700 }}>➔</span>
+                  <span style={{ fontSize: 14, color: item.color, fontWeight: 700 }}>›</span>
                 </div>
               ))}
             </div>

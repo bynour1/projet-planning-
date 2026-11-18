@@ -18,7 +18,9 @@ router.get('/', authenticate, async (req, res) => {
     const [rows] = await db.query(`
       SELECT e.*,
         CONCAT(m.prenom, ' ', m.nom) AS medecin_nom,
-        CONCAT(t.prenom, ' ', t.nom) AS technicien_nom
+        m.telephone AS medecin_tel,
+        CONCAT(t.prenom, ' ', t.nom) AS technicien_nom,
+        t.telephone AS technicien_tel
       FROM events e
       LEFT JOIN users m ON m.id = e.medecin_id
       LEFT JOIN users t ON t.id = e.technicien_id

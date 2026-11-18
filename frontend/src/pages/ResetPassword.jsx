@@ -50,10 +50,15 @@ export default function ResetPassword({ toast }) {
       background:'linear-gradient(135deg,#e0f2fe,#f0f9ff,#ecfdf5)', padding:16 }}>
       <div style={{ width:'100%', maxWidth:420 }}>
         <div style={{ textAlign:'center', marginBottom:28 }}>
-          <div style={{ width:56, height:56, background:'var(--primary)', borderRadius:16,
+          <div style={{ width:52, height:52, background:'var(--primary)', color:'#fff', borderRadius:14,
             display:'inline-flex', alignItems:'center', justifyContent:'center',
-            fontSize:28, marginBottom:12 }}>🏥</div>
-          <h1 style={{ fontSize:20, fontWeight:800 }}>Planning Médical</h1>
+            marginBottom:12, boxShadow:'0 4px 14px rgba(2,132,199,.25)' }}>
+            <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </div>
+          <h1 style={{ fontSize:20, fontWeight:800, margin:0, color:'var(--text)' }}>Planning Médical</h1>
+          <p style={{ fontSize:13, color:'var(--text-2)', marginTop:4 }}>GMT Ariana — Médecine du Travail</p>
         </div>
         <div className="card" style={{ boxShadow:'var(--shadow-lg)' }}>{content}</div>
       </div>
@@ -69,7 +74,14 @@ export default function ResetPassword({ toast }) {
 
   if (step==='invalid') return wrap(
     <div style={{ textAlign:'center', padding:'8px 0' }}>
-      <div style={{ fontSize:48, marginBottom:12 }}>⛔</div>
+      <div style={{
+        width: 54, height: 54, borderRadius: '50%', background: '#fee2e2', color: '#dc2626',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px'
+      }}>
+        <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </div>
       <h3 style={{ fontSize:17, fontWeight:700, color:'var(--danger)', marginBottom:8 }}>Lien invalide ou expiré</h3>
       <p style={{ fontSize:13, color:'var(--text-2)', marginBottom:20 }}>
         Le lien de réinitialisation est invalide ou a expiré.
@@ -77,7 +89,7 @@ export default function ResetPassword({ toast }) {
       <a href="/forgot-password" style={{
         display:'inline-block', padding:'9px 20px', background:'var(--primary)',
         color:'#fff', borderRadius:8, textDecoration:'none', fontSize:14, fontWeight:600,
-      }}>🔁 Demander un nouveau lien</a>
+      }}>Demander un nouveau lien</a>
       <br/>
       <a href="/login" style={{ fontSize:13, color:'var(--text-3)', marginTop:12, display:'inline-block' }}>
         ← Retour à la connexion
@@ -87,25 +99,28 @@ export default function ResetPassword({ toast }) {
 
   if (step==='done') return wrap(
     <div style={{ textAlign:'center', padding:'8px 0' }}>
-      <div style={{ width:64, height:64, background:'var(--accent-lt)', borderRadius:'50%',
+      <div style={{ width:56, height:56, background:'#f0fdf4', color:'#16a34a', border:'2px solid #bbf7d0', borderRadius:'50%',
         display:'inline-flex', alignItems:'center', justifyContent:'center',
-        fontSize:32, marginBottom:16 }}>✅</div>
-      <h3 style={{ fontSize:17, fontWeight:700, marginBottom:8 }}>Mot de passe réinitialisé !</h3>
+        marginBottom:16 }}>
+        <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
+      <h3 style={{ fontSize:17, fontWeight:700, marginBottom:8 }}>Mot de passe réinitialisé</h3>
       <p style={{ fontSize:13, color:'var(--text-2)', marginBottom:20 }}>
         Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.
       </p>
       <a href="/login" style={{
         display:'inline-block', padding:'10px 24px', background:'var(--primary)',
         color:'#fff', borderRadius:8, textDecoration:'none', fontSize:14, fontWeight:600,
-      }}>🔐 Se connecter</a>
+      }}>Se connecter</a>
     </div>
   );
 
   return wrap(
     <>
       <div style={{ textAlign:'center', marginBottom:20 }}>
-        <div style={{ fontSize:40 }}>🔑</div>
-        <h2 style={{ fontSize:17, fontWeight:700, marginTop:8 }}>Nouveau mot de passe</h2>
+        <h2 style={{ fontSize:18, fontWeight:700, margin:0, color:'var(--text)' }}>Nouveau mot de passe</h2>
         {email && <p style={{ fontSize:13, color:'var(--text-2)', marginTop:4 }}>Pour : <strong>{email}</strong></p>}
       </div>
       <form onSubmit={handleReset} style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -117,8 +132,17 @@ export default function ResetPassword({ toast }) {
               required style={{ paddingRight:40 }}/>
             <button type="button" onClick={()=>setShowPwd(v=>!v)}
               style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)',
-                background:'none', border:'none', cursor:'pointer', fontSize:16 }}>
-              {showPwd?'🙈':'👁'}
+                background:'none', border:'none', cursor:'pointer', color:'var(--text-3)', display:'flex', alignItems:'center' }}>
+              {showPwd ? (
+                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              )}
             </button>
           </div>
           {form.new_password && (
@@ -145,7 +169,7 @@ export default function ResetPassword({ toast }) {
         </div>
         <button className="btn btn-primary" type="submit"
           disabled={loading||!form.new_password||!form.confirm} style={{ height:42 }}>
-          {loading ? <span className="spinner" style={{ width:18, height:18 }}/> : '🔐 Mettre à jour le mot de passe'}
+          {loading ? <span className="spinner" style={{ width:18, height:18 }}/> : 'Mettre à jour le mot de passe'}
         </button>
       </form>
     </>

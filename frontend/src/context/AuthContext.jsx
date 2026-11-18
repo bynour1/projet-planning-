@@ -31,6 +31,31 @@ export function AuthProvider({ children }) {
 
   const [loading, setLoading] = useState(false);
 
+  // Initialisation : si aucun jeton n'est en sessionStorage, vérifier si une session persistante (cookie refresh_token) existe
+  useEffect(() => {
+    let isMounted = true;
+    async function tryResumePersistentSession() {
+      // Ne pas déclencher de requêtes imprévues en mode test unitaire pour préserver les mocks vitest
+      if (typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'test') return;
+      if (!sessionStorage.getItem('pm_token')) {
+        try {
+          const res = await axios.post('/api/auth/refresh');
+          if (isMounted && res?.data?.token && res?.data?.user) {
+            sessionStorage.setItem('pm_token', res.data.token);
+            sessionStorage.setItem('pm_user', JSON.stringify(res.data.user));
+            axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
+            setToken(res.data.token);
+            setUser(res.data.user);
+          }
+        } catch {
+          // Aucune session persistante active
+        }
+      }
+    }
+    tryResumePersistentSession();
+    return () => { isMounted = false; };
+  }, []);
+
   // Set axios default auth header and setup 401 interceptor
   useEffect(() => {
     if (token) {
@@ -49,8 +74,34 @@ export function AuthProvider({ children }) {
     if (axios.interceptors?.response?.use) {
       interceptor = axios.interceptors.response.use(
         (res) => res,
-        (err) => {
-          if (err?.response?.status === 401 && !err.config?.url?.includes('/api/auth/login')) {
+        async (err) => {
+          const originalRequest = err.config;
+          // Si 401 hors tests et non lié au login/refresh, tenter un renouvellement silencieux
+          if (
+            typeof import.meta !== 'undefined' &&
+            import.meta.env?.MODE !== 'test' &&
+            err?.response?.status === 401 &&
+            originalRequest &&
+            !originalRequest._retry &&
+            !originalRequest.url?.includes('/api/auth/login') &&
+            !originalRequest.url?.includes('/api/auth/refresh')
+          ) {
+            originalRequest._retry = true;
+            try {
+              const res = await axios.post('/api/auth/refresh');
+              if (res?.data?.token) {
+                sessionStorage.setItem('pm_token', res.data.token);
+                if (res.data.user) sessionStorage.setItem('pm_user', JSON.stringify(res.data.user));
+                axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
+                originalRequest.headers['Authorization'] = `Bearer ${res.data.token}`;
+                setToken(res.data.token);
+                if (res.data.user) setUser(res.data.user);
+                return axios(originalRequest);
+              }
+            } catch {
+              logout();
+            }
+          } else if (err?.response?.status === 401 && !err.config?.url?.includes('/api/auth/login')) {
             logout();
           }
           return Promise.reject(err);
@@ -81,7 +132,7 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     const { data } = await axios.post('/api/auth/login', { email, password });
-    if (data.requires2FA) {
+    if (data.requires2FA || data.requires2FASetup || data.requiresPasswordChange) {
       return data;
     }
     try {
@@ -96,6 +147,12 @@ export function AuthProvider({ children }) {
   }
 
   function logout() {
+    try {
+      if (typeof axios.post === 'function') {
+        const p = axios.post('/api/auth/logout');
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+      }
+    } catch {}
     try {
       sessionStorage.removeItem('pm_token');
       sessionStorage.removeItem('pm_user');

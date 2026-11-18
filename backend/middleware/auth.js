@@ -23,6 +23,16 @@ const authenticate = async (req, res, next) => {
     const token = auth.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
+    // A temporary 2FA token must NEVER be allowed to access full authenticated routes
+    if (decoded.is_2fa_temp) {
+      return res.status(401).json({ message: 'Token de session complet requis' });
+    }
+
+    // A temporary first-login temporary token must NEVER access regular authenticated routes
+    if (decoded.is_first_login_temp) {
+      return res.status(403).json({ message: 'Accès restreint : changement de mot de passe requis' });
+    }
+
     // In test environment, skip DB queries for fast unit testing
     if (process.env.NODE_ENV === 'test') {
       req.user = decoded;

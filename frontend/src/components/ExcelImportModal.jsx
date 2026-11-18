@@ -327,8 +327,9 @@ export default function ExcelImportModal({ onClose, onSuccess, toast }) {
 
               {result.errors?.length > 0 && (
                 <div style={{ maxWidth: 600, margin: '0 auto 20px auto', textAlign: 'left', background: '#fee2e2', padding: 14, borderRadius: 12, border: '1px solid #fca5a5' }}>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: '#991b1b', marginBottom: 6 }}>
-                    ⚠️ {result.errors.length} avertissement(s) ou ligne(s) non importée(s) :
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#991b1b', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    <span>{result.errors.length} avertissement(s) ou ligne(s) non importée(s) :</span>
                   </div>
                   <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: '#7f1d1d' }}>
                     {result.errors.map((e, idx) => (
@@ -437,10 +438,13 @@ export default function ExcelImportModal({ onClose, onSuccess, toast }) {
                     borderRadius: 10,
                     fontSize: 12.5,
                     marginBottom: 16,
-                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
                   }}
                 >
-                  ⚠️ {error}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  <span>{error}</span>
                 </div>
               )}
 

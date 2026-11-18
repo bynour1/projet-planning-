@@ -10,8 +10,8 @@ const swaggerSpec = {
 ### Documentation Interactive de l'API GMT Ariana
 Plateforme de planification médicale du travail (GMT Ariana).
 - **Authentification** : JWT Bearer Token, Biométrie WebAuthn (Face ID / Empreinte), 2FA.
-- **WhatsApp Gratuit** : Liens directs préformatés pour reset mot de passe et partage d'accès.
-- **Rôles** : \`administrateur\`, \`medecin\`, \`technicien\`, \`chauffeur\`.
+- **Messagerie sécurisée** : Envoi direct et sécurisé d'e-mails pour mots de passe et alertes.
+- **Rôles** : 'administrateur', 'medecin', 'technicien', 'chauffeur', 'hse'.
     `,
     contact: {
       name: 'GMT Ariana Administration',
@@ -19,6 +19,7 @@ Plateforme de planification médicale du travail (GMT Ariana).
     },
   },
   servers: [
+    { url: '/', description: 'Serveur Actuel (Dynamique)' },
     { url: 'http://localhost:8083', description: 'Serveur Local de Développement' },
     { url: 'https://projet-planning.onrender.com', description: 'Serveur de Production (Render)' },
   ],
@@ -130,26 +131,24 @@ Plateforme de planification médicale du travail (GMT Ariana).
     },
     '/api/auth/forgot-password': {
       post: {
-        tags: ['Auth'],
-        summary: 'Mot de passe oublié (Lien WhatsApp direct ou Email)',
-        description: 'Génère un token sécurisé de réinitialisation et retourne un lien direct WhatsApp (`whatsapp_link`) ou envoie un e-mail.',
+        summary: 'Mot de passe oublié (Envoi de lien sécurisé par e-mail)',
+        description: 'Génère un token sécurisé de réinitialisation et envoie un e-mail à l utilisateur.',
         requestBody: {
           required: true,
           content: {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['identifier'],
+                required: ['email'],
                 properties: {
-                  identifier: { type: 'string', example: '98123456 ou doctor@gmt-ariana.tn' },
-                  method: { type: 'string', enum: ['email', 'phone'], example: 'phone' },
+                  email: { type: 'string', example: 'doctor@gmt-ariana.tn' },
                 },
               },
             },
           },
         },
         responses: {
-          200: { description: 'Lien WhatsApp généré avec succès' },
+          200: { description: 'E-mail de réinitialisation expédié avec succès' },
         },
       },
     },
@@ -198,7 +197,7 @@ Plateforme de planification médicale du travail (GMT Ariana).
       },
       post: {
         tags: ['Users'],
-        summary: 'Créer un utilisateur avec identifiants et lien WhatsApp (Admin)',
+        summary: 'Créer un utilisateur avec identifiants expédiés par e-mail (Admin)',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -228,11 +227,11 @@ Plateforme de planification médicale du travail (GMT Ariana).
     '/api/users/{id}/resend-welcome': {
       post: {
         tags: ['Users'],
-        summary: 'Renvoyer les identifiants et regénérer l accès WhatsApp (Admin)',
+        summary: 'Renvoyer les identifiants d accès par e-mail (Admin)',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: {
-          200: { description: 'Accès regénérés' },
+          200: { description: 'Identifiants expédiés par e-mail' },
         },
       },
     },
@@ -428,6 +427,41 @@ Plateforme de planification médicale du travail (GMT Ariana).
   },
 };
 
+// ─── Middleware de protection Swagger en production ─────────────
+function swaggerAuthMiddleware(req, res, next) {
+  // En environnement de développement ou de test, toujours ouvert
+  if (process.env.NODE_ENV !== 'production') {
+    return next();
+  }
+
+  // Désactivation explicite si SWAGGER_ENABLED=false
+  if (process.env.SWAGGER_ENABLED === 'false') {
+    return res.status(404).json({ message: 'Documentation API désactivée en production' });
+  }
+
+  // Protection par authentification HTTP Basic si SWAGGER_USER / SWAGGER_PASS sont configurés
+  const swaggerUser = (process.env.SWAGGER_USER || '').trim();
+  const swaggerPass = (process.env.SWAGGER_PASS || '').trim();
+
+  if (swaggerUser && swaggerPass) {
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Basic ')) {
+      res.setHeader('WWW-Authenticate', 'Basic realm="Documentation API GMT Ariana (Restreint)"');
+      return res.status(401).send('Authentification requise pour accéder à la documentation Swagger');
+    }
+
+    const credentials = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
+    const [user, pass] = credentials.split(':');
+
+    if (user !== swaggerUser || pass !== swaggerPass) {
+      res.setHeader('WWW-Authenticate', 'Basic realm="Documentation API GMT Ariana (Restreint)"');
+      return res.status(401).send('Identifiants Swagger invalides');
+    }
+  }
+
+  next();
+}
+
 function setupSwagger(app) {
   const options = {
     customCss: `
@@ -438,12 +472,12 @@ function setupSwagger(app) {
     customfavIcon: '/icon-192.png',
   };
 
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, options));
-  app.get('/api-docs.json', (req, res) => {
+  app.use('/api-docs', swaggerAuthMiddleware, swaggerUi.serve, swaggerUi.setup(swaggerSpec, options));
+  app.get('/api-docs.json', swaggerAuthMiddleware, (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.send(swaggerSpec);
   });
   console.log('[Swagger] 📖 Documentation OpenAPI active sur /api-docs');
 }
 
-module.exports = { setupSwagger, swaggerSpec };
+module.exports = { setupSwagger, swaggerSpec, swaggerAuthMiddleware };

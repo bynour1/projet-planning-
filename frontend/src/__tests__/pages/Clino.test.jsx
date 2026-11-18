@@ -53,13 +53,13 @@ describe('Clino Mobile page', () => {
 
   it('shows programme tab', async () => {
     setup();
-    await waitFor(() => expect(screen.getByText(/Programme jour/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Programme du jour/i)).toBeInTheDocument());
   });
 
   it('switches to programme view', async () => {
     setup();
-    await waitFor(() => screen.getByText(/Programme jour/i));
-    await userEvent.click(screen.getByText(/Programme jour/i));
+    await waitFor(() => screen.getByText(/Programme du jour/i));
+    await userEvent.click(screen.getByText(/Programme du jour/i));
     expect(screen.getByText(/tournée.*au programme/i)).toBeInTheDocument();
   });
 
@@ -73,11 +73,11 @@ describe('Clino Mobile page', () => {
 
   it('filters by category dropdown (Médecins / Techniciens)', async () => {
     setup();
-    await waitFor(() => screen.getByText('👥 Tous les intervenants'));
-    const roleSelect = screen.getByDisplayValue('👥 Tous les intervenants');
+    await waitFor(() => screen.getByText('Tous les intervenants'));
+    const roleSelect = screen.getByDisplayValue('Tous les intervenants');
     expect(roleSelect).toBeInTheDocument();
     await userEvent.selectOptions(roleSelect, 'medecin');
-    expect(screen.getByText('👨‍⚕️ Médecins uniquement')).toBeInTheDocument();
+    expect(screen.getByText('Médecins')).toBeInTheDocument();
   });
 
   it('opens modal on + Programme click', async () => {
@@ -89,9 +89,9 @@ describe('Clino Mobile page', () => {
 
   it('shows delete confirmation dialog', async () => {
     setup(MOCK_ADMIN);
-    await waitFor(() => screen.getAllByText('🗑'));
-    await userEvent.click(screen.getAllByText('🗑')[0]);
-    expect(screen.getByText(/Supprimer/i)).toBeInTheDocument();
+    await waitFor(() => screen.getAllByTitle('Supprimer'));
+    await userEvent.click(screen.getAllByTitle('Supprimer')[0]);
+    expect(screen.getByText(/Confirmer la suppression|Supprimer/i)).toBeInTheDocument();
   });
 
   it('displays week separation header and day names prominently', async () => {

@@ -25,10 +25,48 @@ function UserModal({ user: editUser, onSave, onClose }) {
   }
 
   const roleConfig = {
-    medecin:        { icon: '👨‍⚕️', label: 'Médecin',        color: '#10b981', bg: '#f0fdf4', border: '#bbf7d0' },
-    technicien:     { icon: '🔧', label: 'Technicien',     color: '#8b5cf6', bg: '#f5f3ff', border: '#ddd6fe' },
-    administrateur: { icon: '🛡️', label: 'Administrateur', color: '#0ea5e9', bg: '#f0f9ff', border: '#bae6fd' },
-    chauffeur:      { icon: '🚗', label: 'Chauffeur',      color: '#f97316', bg: '#fff7ed', border: '#fed7aa' },
+    medecin: {
+      label: 'Médecin', color: '#10b981', bg: '#f0fdf4', border: '#bbf7d0', desc: 'Médecin du travail',
+      icon: (
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+      )
+    },
+    technicien: {
+      label: 'Technicien', color: '#8b5cf6', bg: '#f5f3ff', border: '#ddd6fe', desc: 'Technicien de santé',
+      icon: (
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      )
+    },
+    hse: {
+      label: 'HSE', color: '#d97706', bg: '#fffbeb', border: '#fde68a', desc: 'Hygiène, Sécurité et Environnement',
+      icon: (
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      )
+    },
+    chauffeur: {
+      label: 'Chauffeur', color: '#f97316', bg: '#fff7ed', border: '#fed7aa', desc: 'Chauffeur Clino',
+      icon: (
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 17a2 2 0 100-4 2 2 0 000 4zm8 0a2 2 0 100-4 2 2 0 000 4z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9l2-4h10l3 4h3a1 1 0 011 1v6a1 1 0 01-1 1h-1a3 3 0 01-6 0H10a3 3 0 01-6 0H3a1 1 0 01-1-1v-6a1 1 0 011-1h1z" />
+        </svg>
+      )
+    },
+    administrateur: {
+      label: 'Admin', color: '#0ea5e9', bg: '#f0f9ff', border: '#bae6fd', desc: 'Administrateur système',
+      icon: (
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      )
+    },
   };
   const rc = roleConfig[form.role] || roleConfig.medecin;
   const initials = `${(form.prenom?.[0]||'').toUpperCase()}${(form.nom?.[0]||'').toUpperCase()}`;
@@ -46,10 +84,10 @@ function UserModal({ user: editUser, onSave, onClose }) {
         }}>
           {/* Avatar dynamique */}
           <div style={{
-            width: 54, height: 54, borderRadius: '50%',
+            width: 50, height: 50, borderRadius: '50%',
             background: rc.bg, border: `2px solid ${rc.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: initials ? 18 : 24, fontWeight: 800, color: rc.color,
+            fontSize: initials ? 16 : 20, fontWeight: 800, color: rc.color,
             flexShrink: 0, transition: 'all .2s',
           }}>
             {initials || rc.icon}
@@ -87,12 +125,11 @@ function UserModal({ user: editUser, onSave, onClose }) {
             <div style={{
               display: 'flex', alignItems: 'flex-start', gap: 10,
               padding: '10px 14px',
-              background: 'linear-gradient(135deg,#e0f2fe,#f0fdf4)',
-              border: '1px solid #bae6fd', borderRadius: 10,
+              background: 'var(--surface2)',
+              border: '1px solid var(--border)', borderRadius: 10,
             }}>
-              <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>📧</span>
-              <span style={{ fontSize: 12.5, color: '#0369a1', lineHeight: 1.5 }}>
-                Un <strong>e-mail officiel GMT Ariana</strong> avec identifiant, mot de passe initial et code d'activation sera automatiquement expédié.
+              <span style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.5 }}>
+                Un e-mail officiel GMT Ariana avec identifiant, mot de passe initial et code d'activation sera automatiquement expédié.
               </span>
             </div>
           )}
@@ -130,17 +167,14 @@ function UserModal({ user: editUser, onSave, onClose }) {
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5, display: 'block' }}>
               Adresse email <span style={{ color: '#ef4444' }}>*</span>
             </label>
-            <div style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 15 }}>✉️</span>
-              <input
-                className="input"
-                type="email"
-                placeholder="exemple@gmail.com"
-                value={form.email}
-                onChange={e => set('email', e.target.value)}
-                style={{ paddingLeft: 36, height: 40 }}
-              />
-            </div>
+            <input
+              className="input"
+              type="email"
+              placeholder="exemple@gmail.com"
+              value={form.email}
+              onChange={e => set('email', e.target.value)}
+              style={{ height: 40 }}
+            />
           </div>
 
           {/* Téléphone */}
@@ -156,7 +190,7 @@ function UserModal({ user: editUser, onSave, onClose }) {
                 borderRight: 'none', fontSize: 13, fontWeight: 700,
                 color: 'var(--text-2)', whiteSpace: 'nowrap', flexShrink: 0,
               }}>
-                🇹🇳 +216
+                +216
               </div>
               <input
                 className="input"
@@ -178,23 +212,23 @@ function UserModal({ user: editUser, onSave, onClose }) {
             </div>
           </div>
 
-          {/* Mot de passe initial (création uniquement) */}
+          {/* Sécurité du mot de passe (généré et expédié exclusivement par e-mail) */}
           {!isEdit && (
-            <div className="form-group" style={{ margin: 0 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5, display: 'block' }}>
-                Mot de passe initial (optionnel)
-              </label>
-              <input
-                className="input"
-                type="text"
-                placeholder="Laisser vide pour générer automatiquement (ex: Med@4827)"
-                value={form.password || ''}
-                onChange={e => set('password', e.target.value)}
-                style={{ height: 40 }}
-              />
-              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
-                💡 Si vide, un mot de passe sécurisé sera généré et affiché à l'écran pour l'envoyer sur WhatsApp.
-              </div>
+            <div style={{
+              background: 'var(--surface2)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              padding: '12px 14px',
+              fontSize: 12,
+              color: 'var(--text-2)',
+              lineHeight: 1.45,
+            }}>
+              <strong style={{ color: 'var(--text)', display: 'block', marginBottom: 2 }}>
+                Sécurité & Authentification E-mail
+              </strong>
+              <span>
+                Pour garantir la sécurité, aucun mot de passe n'est saisi par l'administrateur. Le mot de passe temporaire et le code d'activation sont générés automatiquement par le système et transmis par e-mail au collaborateur.
+              </span>
             </div>
           )}
 
@@ -203,28 +237,39 @@ function UserModal({ user: editUser, onSave, onClose }) {
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'block' }}>
               Rôle <span style={{ color: '#ef4444' }}>*</span>
             </label>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
               {Object.entries(roleConfig).map(([key, cfg]) => (
                 <button
                   key={key}
                   type="button"
+                  title={cfg.desc || cfg.label}
                   onClick={() => set('role', key)}
                   style={{
-                    flex: 1, padding: '10px 8px', borderRadius: 10, cursor: 'pointer',
+                    padding: '9px 4px', borderRadius: 10, cursor: 'pointer',
                     border: `2px solid ${form.role === key ? cfg.color : 'var(--border)'}`,
                     background: form.role === key ? cfg.bg : 'var(--surface)',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                     transition: 'all .15s', outline: 'none',
                   }}
                 >
-                  <span style={{ fontSize: 20 }}>{cfg.icon}</span>
+                  <span style={{ color: form.role === key ? cfg.color : 'var(--text-3)' }}>{cfg.icon}</span>
                   <span style={{
                     fontSize: 11, fontWeight: 700,
                     color: form.role === key ? cfg.color : 'var(--text-2)',
+                    whiteSpace: 'nowrap',
                   }}>{cfg.label}</span>
                 </button>
               ))}
             </div>
+            {form.role === 'hse' && (
+              <div style={{
+                marginTop: 8, padding: '7px 11px', borderRadius: 8,
+                background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text-2)',
+                fontSize: 12,
+              }}>
+                <strong>Responsable HSE :</strong> Hygiène, Sécurité et Environnement.
+              </div>
+            )}
           </div>
 
           {/* Statut (modification uniquement) */}
@@ -234,7 +279,7 @@ function UserModal({ user: editUser, onSave, onClose }) {
                 Statut du compte
               </label>
               <div style={{ display: 'flex', gap: 8 }}>
-                {[['1','✅  Actif','#10b981','#f0fdf4'],['0','⛔  Inactif','#ef4444','#fef2f2']].map(([v,l,c,bg]) => (
+                {[['1','Actif','#10b981','#f0fdf4'],['0','Inactif','#ef4444','#fef2f2']].map(([v,l,c,bg]) => (
                   <button
                     key={v}
                     type="button"
@@ -271,7 +316,7 @@ function UserModal({ user: editUser, onSave, onClose }) {
           >
             {saving
               ? <><span className="spinner" style={{ width: 15, height: 15 }}/> Enregistrement…</>
-              : <>{isEdit ? '💾 Mettre à jour' : '✅ Créer le compte'}</>}
+              : (isEdit ? 'Mettre à jour' : 'Créer le compte')}
           </button>
         </div>
       </div>
@@ -281,33 +326,37 @@ function UserModal({ user: editUser, onSave, onClose }) {
 
 function CredentialsModal({ data, onClose, toast }) {
   const [copied, setCopied] = useState(false);
-  if (!data) return null;
+  const [modalData, setModalData] = useState(data);
+  const [resending, setResending] = useState(false);
+  if (!modalData) return null;
 
   const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://projet-planning-pi.vercel.app';
-  const fullName = `${data.prenom || ''} ${data.nom || ''}`.trim() || 'Collaborateur';
-  const phoneRaw = (data.telephone || '').replace(/[^\d+]/g, '');
-  let waPhone = phoneRaw;
-  if (!waPhone.startsWith('+')) {
-    waPhone = waPhone.replace(/^0+/, '');
-    if (waPhone.length === 8) waPhone = '216' + waPhone;
-  } else {
-    waPhone = waPhone.replace(/^\+/, '');
-  }
+  const fullName = `${modalData.prenom || ''} ${modalData.nom || ''}`.trim() || 'Collaborateur';
 
-  const shareText = `🏥 *GMT Ariana — Planning Médical*\n\nBonjour *${fullName}*,\nVotre compte d'accès a été créé avec succès.\n\n🔗 *Lien de connexion :* ${appUrl}/login\n📧 *Identifiant :* ${data.email}\n🔑 *Mot de passe initial :* ${data.tempPassword}\n🔒 *Code confirmation (OTP) :* ${data.otp || 'Non requis'}\n\n⚠️ _Lors de votre première connexion, il vous sera demandé de modifier votre mot de passe._`;
+  const shareText = `🏥 GMT Ariana — Planning Médical\n\nBonjour ${fullName},\nVotre compte d'accès au portail GMT Ariana a été configuré :\n\n🔗 Lien d'accès : ${appUrl}/login\n📧 Identifiant : ${modalData.email}\n🔑 Mot de passe provisoire : Transmis directement sur votre adresse e-mail (valable 48h)\n\n⚠️ Lors de votre 1ère connexion, il vous sera demandé de définir votre mot de passe personnel.\nEn cas de besoin, contactez l'administration.`;
 
   function copyText() {
     navigator.clipboard.writeText(shareText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
-    toast && toast('Informations copiées dans le presse-papier !', 'success');
+    toast && toast('Informations d\'accès copiées dans le presse-papier !', 'success');
   }
 
-  function openWhatsApp() {
-    const url = waPhone
-      ? `https://wa.me/${waPhone}?text=${encodeURIComponent(shareText)}`
-      : `https://wa.me/?text=${encodeURIComponent(shareText)}`;
-    window.open(url, '_blank');
+  async function handleResend() {
+    const id = modalData.userId || modalData.id;
+    if (!id) return toast && toast('Identifiant manquant', 'error');
+    setResending(true);
+    try {
+      const res = await axios.post(`/api/users/${id}/resend-welcome`);
+      if (res.data) {
+        toast && toast(res.data.message || `Accès renvoyé par email à ${res.data.email}`, 'success');
+        setModalData(res.data);
+      }
+    } catch (err) {
+      toast && toast(err.response?.data?.message || 'Erreur lors du renvoi de l\'accès', 'error');
+    } finally {
+      setResending(false);
+    }
   }
 
   return (
@@ -317,12 +366,13 @@ function CredentialsModal({ data, onClose, toast }) {
           background: 'linear-gradient(135deg, #0284c7, #0ea5e9)',
           padding: '20px 24px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 28 }}>🔑</span>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Accès Compte & Partage WhatsApp</h3>
-              <p style={{ margin: '2px 0 0', fontSize: 12, opacity: 0.9 }}>Transmission directe à l'utilisateur</p>
-            </div>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>
+              Transmission des accès par e-mail
+            </h3>
+            <p style={{ margin: '2px 0 0', fontSize: 12, opacity: 0.9 }}>
+              Accès envoyé par email à {modalData.email}
+            </p>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer' }}>✕</button>
         </div>
@@ -330,67 +380,89 @@ function CredentialsModal({ data, onClose, toast }) {
         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Status banner */}
           <div style={{
-            padding: '10px 14px', borderRadius: 8, fontSize: 12.5, lineHeight: 1.4,
-            background: data.email_sent ? '#f0fdf4' : '#fffbeb',
-            border: `1px solid ${data.email_sent ? '#bbf7d0' : '#fde68a'}`,
-            color: data.email_sent ? '#166534' : '#92400e',
-            display: 'flex', alignItems: 'flex-start', gap: 8
+            padding: '12px 14px', borderRadius: 8, fontSize: 13, lineHeight: 1.45,
+            background: modalData.email_sent ? '#f0fdf4' : '#fef2f2',
+            border: `1px solid ${modalData.email_sent ? '#bbf7d0' : '#fecaca'}`,
+            color: modalData.email_sent ? '#166534' : '#991b1b',
+            display: 'flex', alignItems: 'flex-start', gap: 10
           }}>
-            <span style={{ fontSize: 16 }}>{data.email_sent ? '✅' : '⚠️'}</span>
-            <span>
-              {data.email_sent
-                ? `E-mail envoyé avec succès à ${data.email}`
-                : `E-mail automatique non expédié (${data.email_error || 'Configuration SMTP non active'}). Transmettez directement les accès ci-dessous via WhatsApp.`}
-            </span>
+            <span style={{ fontSize: 18 }}>{modalData.email_sent ? '✉️' : '⚠️'}</span>
+            <div style={{ flex: 1 }}>
+              <strong style={{ display: 'block', fontSize: 13.5 }}>
+                {modalData.email_sent
+                  ? `Accès envoyé par email à ${modalData.email}`
+                  : `Échec de l'envoi par e-mail à ${modalData.email}`}
+              </strong>
+              <div style={{ marginTop: 3, fontSize: 12 }}>
+                {modalData.email_sent
+                  ? `Le mot de passe provisoire et le lien d'accès sécurisé ont été transmis par e-mail. Le mot de passe est valable pendant 48 heures.`
+                  : `L'envoi par e-mail a échoué (${modalData.email_error || 'Vérifier la configuration SMTP'}). Utilisez le bouton ci-dessous pour renvoyer l'accès.`}
+              </div>
+              {!modalData.email_sent && (
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resending}
+                  className="btn btn-primary"
+                  style={{ marginTop: 10, height: 34, fontSize: 12, padding: '0 14px' }}
+                >
+                  {resending ? 'Génération et renvoi...' : 'Renvoyer l\'accès'}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Credentials box */}
           <div style={{ background: 'var(--surface2)', padding: 16, borderRadius: 10, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 13 }}><strong>Collaborateur :</strong> {fullName} {data.role ? `(${data.role})` : ''}</div>
-            <div style={{ fontSize: 13 }}><strong>Email (Identifiant) :</strong> <code style={{ color: 'var(--primary)', fontWeight: 700 }}>{data.email}</code></div>
-            <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div><strong>Mot de passe initial :</strong> <code style={{ background: '#dcfce7', color: '#166534', padding: '3px 8px', borderRadius: 4, fontWeight: 800, fontSize: 14 }}>{data.tempPassword}</code></div>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={() => {
-                  navigator.clipboard.writeText(data.tempPassword);
-                  toast && toast('Mot de passe copié', 'success');
-                }}
-              >
-                Copier 📋
-              </button>
+            <div style={{ fontSize: 13 }}><strong>Collaborateur :</strong> {fullName} {modalData.role ? `(${modalData.role.toUpperCase()})` : ''}</div>
+            <div style={{ fontSize: 13 }}><strong>Email (Identifiant) :</strong> <code style={{ color: 'var(--primary)', fontWeight: 700 }}>{modalData.email}</code></div>
+
+            {/* Mot de passe confidentiel : transmis par e-mail à l'utilisateur, jamais affiché à l'admin */}
+            <div style={{
+              background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 8, padding: '12px 14px',
+              display: 'flex', flexDirection: 'column', gap: 6
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 15 }}>🔒</span>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#166534', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Mot de passe confidentiel
+                </div>
+              </div>
+              <div style={{ fontSize: 12.5, color: '#14532d', lineHeight: 1.45 }}>
+                Le mot de passe provisoire a été généré de manière sécurisée et <strong>transmis directement par e-mail au collaborateur</strong>.
+              </div>
+              <div style={{
+                marginTop: 2,
+                padding: '6px 10px',
+                borderRadius: 6,
+                background: '#dcfce7',
+                fontSize: 11.5,
+                color: '#166534',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}>
+                <span>🛡️</span>
+                <span>Politique de sécurité : L'administrateur ne voit jamais le mot de passe.</span>
+              </div>
             </div>
-            {data.otp && (
-              <div style={{ fontSize: 13 }}><strong>Code OTP :</strong> <code style={{ letterSpacing: 2, fontWeight: 700 }}>{data.otp}</code></div>
-            )}
           </div>
 
           {/* Action buttons */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
             <button
-              onClick={openWhatsApp}
-              style={{
-                width: '100%', padding: '12px 16px', background: '#25D366', color: '#fff',
-                border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 14, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                boxShadow: '0 2px 8px rgba(37,211,102,.3)'
-              }}
-            >
-              <span style={{ fontSize: 20 }}>💬</span> Envoyer les accès sur WhatsApp (Gratuit)
-            </button>
-
-            <button
               onClick={copyText}
               className="btn btn-outline"
               style={{ width: '100%', padding: '10px 16px', justifyContent: 'center', fontWeight: 700 }}
             >
-              {copied ? '✅ Message copié dans le presse-papier !' : '📋 Copier le message d\'accès'}
+              {copied ? 'Accès copiés dans le presse-papier !' : 'Copier les accès du compte'}
             </button>
           </div>
         </div>
 
         <div style={{ padding: '12px 24px', background: 'var(--bg)', borderTop: '1px solid var(--border)', textAlign: 'right' }}>
-          <button className="btn btn-outline" onClick={onClose}>Fermer</button>
+          <button className="btn btn-primary" onClick={onClose} style={{ minWidth: 100 }}>Fermer</button>
         </div>
       </div>
     </div>
@@ -418,7 +490,7 @@ export default function Users({ toast }) {
   async function handleCreated(data) {
     setModal(null);
     await load();
-    if (data?.tempPassword) {
+    if (data?.email) {
       setCredentialsModal(data);
     } else {
       toast(data?.message || 'Compte créé avec succès !', 'success');
@@ -429,7 +501,7 @@ export default function Users({ toast }) {
     try {
       const res = await axios.post(`/api/users/${u.id}/resend-welcome`);
       await load();
-      if (res.data?.tempPassword) {
+      if (res.data?.email) {
         setCredentialsModal(res.data);
       } else {
         toast(res.data?.message || `E-mail d'accès renvoyé à ${u.email}`, 'success');
@@ -439,41 +511,22 @@ export default function Users({ toast }) {
     }
   }
 
-  async function handleResetPassword(u) {
-    const custom = window.prompt(`Définir un nouveau mot de passe pour ${u.prenom} ${u.nom} (minimum 6 caractères) :\n\nLaissez vide pour générer automatiquement un mot de passe aléatoire :`);
-    if (custom === null) return;
-    try {
-      const res = await axios.post(`/api/users/${u.id}/reset-password`, { password: custom || undefined });
-      await load();
-      setCredentialsModal(res.data);
-    } catch (err) {
-      toast(err.response?.data?.message || 'Erreur réinitialisation', 'error');
-    }
-  }
-
-  function openWhatsAppForUser(u) {
-    const fullName = `${u.prenom || ''} ${u.nom || ''}`.trim() || 'Collaborateur';
-    const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://projet-planning-pi.vercel.app';
-    let phone = (u.telephone || '').replace(/[^\d+]/g, '');
-    if (!phone.startsWith('+')) {
-      phone = phone.replace(/^0+/, '');
-      if (phone.length === 8) phone = '216' + phone;
-    } else {
-      phone = phone.replace(/^\+/, '');
-    }
-    const msg = `🏥 *GMT Ariana — Planning Médical*\n\nBonjour *${fullName}*,\nVoici le lien d'accès à votre espace Planning GMT Ariana :\n🔗 *Lien :* ${appUrl}/login\n📧 *Identifiant :* ${u.email}\n\nSi vous avez besoin d'aide ou de réinitialiser votre mot de passe, contactez l'administration.`;
-    const url = phone
-      ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`
-      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
-    window.open(url, '_blank');
-  }
-
   async function handleDelete(id) {
     try { await axios.delete(`/api/users/${id}`); setConfirm(null); load(); toast('Supprimé', 'success'); }
     catch (err) { toast(err.response?.data?.message || 'Erreur', 'error'); }
   }
 
   function roleBadge(role) {
+    if (role === 'hse') {
+      return (
+        <span
+          className="badge"
+          style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', fontWeight: 700 }}
+        >
+          HSE
+        </span>
+      );
+    }
     const map = {
       administrateur: ['badge-blue',   'Admin'],
       medecin:        ['badge-green',  'Médecin'],
@@ -495,6 +548,7 @@ export default function Users({ toast }) {
     actifs:       users.filter(u => u.is_active).length,
     medecins:     users.filter(u => u.role === 'medecin').length,
     techniciens:  users.filter(u => u.role === 'technicien').length,
+    hse:          users.filter(u => u.role === 'hse').length,
     chauffeurs:   users.filter(u => u.role === 'chauffeur').length,
   };
 
@@ -537,10 +591,10 @@ export default function Users({ toast }) {
             <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600 }}>• Annuaire du personnel médical</span>
           </div>
           <h2 style={{ fontSize: 24, fontWeight: 900, color: 'var(--text)', letterSpacing: -0.5, margin: 0 }}>
-            👥 Utilisateurs
+            Utilisateurs
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4, margin: 0 }}>
-            Gérer les membres de l'équipe, rôles (médecins, techniciens, chauffeurs, administrateurs) et accès au planning.
+            Gérer les membres de l'équipe, rôles (médecins, techniciens, HSE, chauffeurs, administrateurs) et accès au planning.
           </p>
         </div>
 
@@ -559,7 +613,7 @@ export default function Users({ toast }) {
               boxShadow: '0 4px 14px rgba(14,165,233,.35)',
             }}
           >
-            <span>➕</span> + Créer un utilisateur
+            <span>Nouvel utilisateur</span>
           </button>
         </div>
       </div>
@@ -571,6 +625,7 @@ export default function Users({ toast }) {
           { label: 'Actifs',      value: stats.actifs,      color: '#10b981' },
           { label: 'Médecins',    value: stats.medecins,    color: '#10b981' },
           { label: 'Techniciens', value: stats.techniciens, color: '#8b5cf6' },
+          { label: 'HSE',         value: stats.hse,         color: '#d97706' },
           { label: 'Chauffeurs',  value: stats.chauffeurs,  color: '#f97316' },
         ].map(s => (
           <div key={s.label} style={{
@@ -585,9 +640,9 @@ export default function Users({ toast }) {
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-        <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder="🔍 Rechercher..." value={search} onChange={e => setSearch(e.target.value)} />
+        <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder="Rechercher..." value={search} onChange={e => setSearch(e.target.value)} />
         <div style={{ display: 'flex', gap: 2, background: 'var(--bg)', borderRadius: 8, padding: 3, overflowX: 'auto' }}>
-          {[['all','Tous'],['medecin','Médecins'],['technicien','Techniciens'],['administrateur','Admins'],['chauffeur','Chauffeurs']].map(([v,l]) => (
+          {[['all','Tous'],['medecin','Médecins'],['technicien','Techniciens'],['hse','HSE'],['chauffeur','Chauffeurs'],['administrateur','Admins']].map(([v,l]) => (
             <button key={v} className={`btn btn-sm ${filter === v ? 'btn-primary' : 'btn-ghost'}`}
               onClick={() => setFilter(v)} style={{ padding: '4px 10px', fontSize: 12, whiteSpace: 'nowrap' }}>{l}</button>
           ))}
@@ -597,7 +652,7 @@ export default function Users({ toast }) {
       {loading ? (
         <div className="loading-center"><div className="spinner" /></div>
       ) : filtered.length === 0 ? (
-        <div className="empty-state"><div className="empty-icon">👥</div><p>Aucun utilisateur trouvé</p></div>
+        <div className="empty-state"><p>Aucun utilisateur trouvé</p></div>
       ) : (
         <div className="table-wrap">
           <table>
@@ -605,7 +660,6 @@ export default function Users({ toast }) {
               <tr>
                 <th>Nom</th><th>Email</th><th>Téléphone</th><th>Rôle</th><th>Statut</th><th>Créé le</th><th>Actions</th>
               </tr>
-
             </thead>
             <tbody>
               {filtered.map(u => (
@@ -620,14 +674,21 @@ export default function Users({ toast }) {
                   <td style={{ fontSize: 13 }}>{u.email}</td>
                   <td style={{ fontSize: 13, color: 'var(--text-2)' }}>
                     {u.telephone
-                      ? <span>📞 {u.telephone}</span>
+                      ? <span>{u.telephone}</span>
                       : <span style={{ color: 'var(--text-3)', fontStyle: 'italic' }}>—</span>}
                   </td>
                   <td>{roleBadge(u.role)}</td>
                   <td>
-                    <span className={`badge ${u.is_active ? 'badge-green' : 'badge-red'}`}>
-                      {u.is_active ? '● Actif' : '○ Inactif'}
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                      <span className={`badge ${u.is_active ? 'badge-green' : 'badge-red'}`}>
+                        {u.is_active ? '● Actif' : '○ Inactif'}
+                      </span>
+                      {u.totp_enabled ? (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0' }}>
+                          2FA active
+                        </span>
+                      ) : null}
+                    </div>
                   </td>
                   <td style={{ fontSize: 12, color: 'var(--text-2)' }}>
                     {new Date(u.created_at).toLocaleDateString('fr')}
@@ -635,40 +696,53 @@ export default function Users({ toast }) {
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button
-                        className="btn btn-sm"
-                        style={{ background: '#25D366', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: 6, fontWeight: 700 }}
-                        title="Partager le lien d'accès sur WhatsApp (Gratuit)"
-                        onClick={() => openWhatsAppForUser(u)}
-                      >
-                        💬
-                      </button>
-                      <button
                         className="btn btn-outline btn-sm"
-                        title="Réinitialiser le mot de passe et voir les accès"
-                        onClick={() => handleResetPassword(u)}
-                      >
-                        🔑
-                      </button>
-                      <button
-                        className="btn btn-outline btn-sm"
+                        style={{ padding: '4px 8px' }}
                         title="Renvoyer l'e-mail avec nouveaux identifiants"
                         onClick={() => handleResendEmail(u)}
                       >
-                        ✉️
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
                       </button>
-                      <button className="btn btn-outline btn-sm" title="Modifier" onClick={() => setModal(u)}>
-                        ✏️
+                      <button className="btn btn-outline btn-sm" style={{ padding: '4px 8px' }} title="Modifier" onClick={() => setModal(u)}>
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
                       </button>
+                      {u.totp_enabled ? (
+                        <button
+                          className="btn btn-outline btn-sm"
+                          style={{ borderColor: '#f59e0b', color: '#d97706', padding: '4px 8px' }}
+                          title="Réinitialiser la double authentification (2FA)"
+                          onClick={async () => {
+                            if (window.confirm(`Réinitialiser la 2FA pour ${u.prenom} ${u.nom} ?\nL'utilisateur pourra se reconnecter avec son mot de passe et reconfigurer la 2FA.`)) {
+                              try {
+                                const { data } = await axios.post(`/api/users/${u.id}/reset-2fa`);
+                                toast(data.message || '2FA réinitialisée avec succès', 'success');
+                                load();
+                              } catch (err) {
+                                toast(err.response?.data?.message || 'Erreur réinitialisation 2FA', 'error');
+                              }
+                            }
+                          }}
+                        >
+                          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                          </svg>
+                        </button>
+                      ) : null}
                       {u.id !== me?.id && (
-                        <button className="btn btn-danger btn-sm" title="Supprimer" onClick={() => setConfirm(u.id)}>
-                          🗑
+                        <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} title="Supprimer" onClick={() => setConfirm(u.id)}>
+                          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
                         </button>
                       )}
                     </div>
                   </td>
                 </tr>
               ))}
-
             </tbody>
           </table>
         </div>

@@ -79,18 +79,67 @@ self.addEventListener('fetch', (e) => {
   );
 });
 
+// Web Push Notification event handler
+self.addEventListener('push', (event) => {
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (err) {
+      data = { body: event.data.text() };
+    }
+  }
+
+  const title = data.title || 'Notification GMT Ariana';
+  const receivedAt = data.data?.receivedAt || new Date().toISOString();
+
+  const options = {
+    body: data.body || 'Nouvelle alerte disponible.',
+    icon: data.icon || '/icon-192.png',
+    badge: data.badge || '/logo-gmt.png',
+    vibrate: [150, 75, 150],
+    data: {
+      url: data.data?.url || data.url || '/',
+      receivedAt,
+      ...data.data,
+    },
+    tag: data.tag || 'gmt-alert-' + Date.now(),
+    renotify: true,
+  };
+
+  const notificationPromise = self.registration.showNotification(title, options);
+  const broadcastPromise = self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+    clients.forEach((client) => {
+      client.postMessage({
+        type: 'PUSH_RECEIVED',
+        payload: {
+          title,
+          body: options.body,
+          receivedAt,
+          url: options.data.url,
+        },
+      });
+    });
+  });
+
+  event.waitUntil(Promise.all([notificationPromise, broadcastPromise]));
+});
+
 // PWA Notification click handler
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
+  const targetUrl = e.notification.data?.url || '/';
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
-        if (client.url.includes('/') && 'focus' in client) {
-          return client.focus();
+        if ('focus' in client) {
+          if (client.url.includes(targetUrl) || targetUrl === '/') {
+            return client.focus();
+          }
         }
       }
       if (clients.openWindow) {
-        return clients.openWindow('/');
+        return clients.openWindow(targetUrl);
       }
     })
   );

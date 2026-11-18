@@ -27,17 +27,15 @@ describe('useAuth — initial state', () => {
     sessionStorage.setItem('pm_token', TOKEN);
     axios.get.mockResolvedValueOnce({ data: USER });
     const { result } = renderHook(() => useAuth(), { wrapper });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.user?.email).toBe('admin@planning.com');
+    await waitFor(() => expect(result.current.user?.email).toBe('admin@planning.com'));
   });
 
   it('logs out if token invalid', async () => {
     sessionStorage.setItem('pm_token', 'bad');
     axios.get.mockRejectedValueOnce({ response: { status: 401 } });
     const { result } = renderHook(() => useAuth(), { wrapper });
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(sessionStorage.getItem('pm_token')).toBeNull());
     expect(result.current.user).toBeNull();
-    expect(sessionStorage.getItem('pm_token')).toBeNull();
   });
 });
 

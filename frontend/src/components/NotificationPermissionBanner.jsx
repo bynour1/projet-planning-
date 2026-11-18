@@ -29,15 +29,15 @@ export default function NotificationPermissionBanner() {
       const res = await requestNotificationPermission();
       setPermission(res);
       if (res === 'granted') {
-        toast('🔔 Notifications activées avec succès !', 'success');
+        toast('Notifications activées avec succès !', 'success');
       } else if (res === 'denied') {
-        toast('⚠️ Les notifications ont été refusées dans votre navigateur.', 'warning');
+        toast('Les notifications ont été refusées dans votre navigateur.', 'warning');
       }
     } else if (typeof Notification !== 'undefined' && Notification.requestPermission) {
       const res = await Notification.requestPermission();
       setPermission(res);
       if (res === 'granted') {
-        toast('🔔 Notifications activées avec succès !', 'success');
+        toast('Notifications activées avec succès !', 'success');
       }
     }
   }
@@ -75,11 +75,11 @@ export default function NotificationPermissionBanner() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: 20,
+            color: '#38bdf8',
             flexShrink: 0,
           }}
         >
-          🔔
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
         </div>
         <div>
           <div style={{ fontWeight: 700, fontSize: 13, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -114,7 +114,8 @@ export default function NotificationPermissionBanner() {
           onMouseOver={(e) => (e.currentTarget.style.background = '#0284c7')}
           onMouseOut={(e) => (e.currentTarget.style.background = '#0ea5e9')}
         >
-          🔔 Autoriser les alertes
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          <span>Autoriser les alertes</span>
         </button>
 
         <button

@@ -38,10 +38,15 @@ router.get('/', authenticate, async (req, res) => {
     let query = `
       SELECT pe.*,
         CONCAT(m.prenom,' ',m.nom) AS medecin_nom,
-        CONCAT(t.prenom,' ',t.nom) AS technicien_nom
+        m.telephone AS medecin_tel,
+        CONCAT(t.prenom,' ',t.nom) AS technicien_nom,
+        t.telephone AS technicien_tel,
+        ent.nom AS entreprise_nom,
+        ent.telephone AS entreprise_tel
       FROM planning_events pe
       LEFT JOIN users m ON m.id = pe.medecin_id
       LEFT JOIN users t ON t.id = pe.technicien_id
+      LEFT JOIN entreprises ent ON ent.id = pe.entreprise_id
     `;
     const params = [];
     if (start && end) {
@@ -64,10 +69,15 @@ router.get('/today', authenticate, async (req, res) => {
     const [rows] = await db.query(`
       SELECT pe.*,
         CONCAT(m.prenom,' ',m.nom) AS medecin_nom,
-        CONCAT(t.prenom,' ',t.nom) AS technicien_nom
+        m.telephone AS medecin_tel,
+        CONCAT(t.prenom,' ',t.nom) AS technicien_nom,
+        t.telephone AS technicien_tel,
+        ent.nom AS entreprise_nom,
+        ent.telephone AS entreprise_tel
       FROM planning_events pe
       LEFT JOIN users m ON m.id = pe.medecin_id
       LEFT JOIN users t ON t.id = pe.technicien_id
+      LEFT JOIN entreprises ent ON ent.id = pe.entreprise_id
       WHERE pe.date = ?
       ORDER BY pe.heure_debut
     `, [today]);
@@ -84,10 +94,15 @@ router.get('/mine', authenticate, async (req, res) => {
     const [rows] = await db.query(`
       SELECT pe.*,
         CONCAT(m.prenom,' ',m.nom) AS medecin_nom,
-        CONCAT(t.prenom,' ',t.nom) AS technicien_nom
+        m.telephone AS medecin_tel,
+        CONCAT(t.prenom,' ',t.nom) AS technicien_nom,
+        t.telephone AS technicien_tel,
+        ent.nom AS entreprise_nom,
+        ent.telephone AS entreprise_tel
       FROM planning_events pe
       LEFT JOIN users m ON m.id = pe.medecin_id
       LEFT JOIN users t ON t.id = pe.technicien_id
+      LEFT JOIN entreprises ent ON ent.id = pe.entreprise_id
       WHERE pe.medecin_id = ? OR pe.technicien_id = ?
       ORDER BY pe.date DESC, pe.heure_debut
     `, [userId, userId]);
@@ -99,7 +114,7 @@ router.get('/mine', authenticate, async (req, res) => {
 
 // POST /api/planning  (Admin only) + email notification
 router.post('/', authenticate, authorize('administrateur'), async (req, res) => {
-  const { titre, date, heure_debut, heure_fin, adresse, medecin_id, technicien_id, programme, is_clino } = req.body;
+  const { titre, date, heure_debut, heure_fin, adresse, medecin_id, technicien_id, programme, is_clino, nb_examines, entreprise_id, type } = req.body;
   if (!date) return res.status(400).json({ message: 'Date requise' });
 
   try {
@@ -112,9 +127,21 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     const clinoFlag = (is_clino === true || is_clino === 1 || is_clino === '1') ? 1 : 0;
     let clino_id = null;
 
+    // Auto-detect entreprise_id if not given
+    let entId = entreprise_id || null;
+    if (!entId && titre && type !== 'evenement') {
+      const [eMatch] = await db.query(
+        'SELECT id FROM entreprises WHERE LOWER(TRIM(nom)) = LOWER(TRIM(?)) OR LOWER(TRIM(?)) LIKE CONCAT(\'%\', LOWER(TRIM(nom)), \'%\') LIMIT 1',
+        [titre, titre]
+      );
+      if (eMatch.length) entId = eMatch[0].id;
+    }
+    const nbExam = nb_examines !== undefined ? parseInt(nb_examines, 10) || 0 : 0;
+    const pType = type || 'visite';
+
     const [result] = await db.query(
-      'INSERT INTO planning_events (titre,date,heure_debut,heure_fin,adresse,medecin_id,technicien_id,commentaire,is_clino,clino_id) VALUES (?,?,?,?,?,?,?,?,?,?)',
-      [titre||null, date, heure_debut||null, heure_fin||null, adresse||null, medecin_id||null, technicien_id||null, programme||null, clinoFlag, null]
+      'INSERT INTO planning_events (titre,date,heure_debut,heure_fin,adresse,medecin_id,technicien_id,commentaire,is_clino,clino_id,nb_examines,entreprise_id,type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [titre||null, date, heure_debut||null, heure_fin||null, adresse||null, medecin_id||null, technicien_id||null, programme||null, clinoFlag, null, nbExam, entId, pType]
     );
     const planningId = result.insertId;
 
@@ -123,8 +150,8 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
       const clinoAdresse = (adresse && adresse.trim()) ? adresse : (titre || 'Visite sur site');
       const clinoComment = titre ? `[Planning] ${titre}` : 'Visite Clino';
       const [cRes] = await db.query(
-        'INSERT INTO clino_mobile (date,heure,adresse,medecin_id,technicien_id,medecin_nom,technicien_nom,commentaire,planning_id) VALUES (?,?,?,?,?,?,?,?,?)',
-        [date, clinoHeure, clinoAdresse, medecin_id||null, technicien_id||null, medecin_nom, technicien_nom, clinoComment, planningId]
+        'INSERT INTO clino_mobile (date,heure,adresse,medecin_id,technicien_id,medecin_nom,technicien_nom,commentaire,planning_id,nb_examines,entreprise_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        [date, clinoHeure, clinoAdresse, medecin_id||null, technicien_id||null, medecin_nom, technicien_nom, clinoComment, planningId, nbExam, entId]
       );
       clino_id = cRes.insertId;
       await db.query('UPDATE planning_events SET clino_id = ? WHERE id = ?', [clino_id, planningId]);
@@ -144,6 +171,8 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
         technicien_nom,
         is_clino: clinoFlag,
         clino_id,
+        nb_examines: nbExam,
+        entreprise_id: entId,
         createdBy: `${req.user.prenom} ${req.user.nom}`,
         creatorId: req.user.id,
       });
@@ -160,6 +189,19 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
       smsText:   (typeof planningSmsText === 'function') ? planningSmsText({ titre, date: fmt(date), heure_debut, heure_fin, adresse }) : null,
     });
 
+    // Web Push notification aux intervenants assignés (sans nom de patient ni donnée médicale)
+    try {
+      const pushService = require('../services/pushService');
+      const targetUserIds = [medecin_id, technicien_id].filter(id => id && Number(id) !== Number(req.user.id));
+      if (targetUserIds.length) {
+        pushService.sendPushToMultipleUsers(targetUserIds, {
+          title: 'Nouveau planning',
+          body: 'Une intervention a été ajoutée à votre planning.',
+          data: { url: '/planning' },
+        }).catch(() => {});
+      }
+    } catch {}
+
     res.status(201).json({ message: 'Intervention créée', id: planningId, clino_id });
   } catch (err) {
     console.error(err);
@@ -167,36 +209,63 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
   }
 });
 
-// PUT /api/planning/:id  (Admin only)
-router.put('/:id', authenticate, authorize('administrateur'), async (req, res) => {
-  const { titre, date, heure_debut, heure_fin, adresse, medecin_id, technicien_id, programme, is_clino } = req.body;
+// PUT /api/planning/:id  (Admin ou Médecin assigné)
+router.put('/:id', authenticate, async (req, res) => {
+  const { titre, date, heure_debut, heure_fin, adresse, medecin_id, technicien_id, programme, is_clino, nb_examines, entreprise_id, type } = req.body;
   try {
     const planningId = req.params.id;
     const [existing] = await db.query('SELECT * FROM planning_events WHERE id = ?', [planningId]);
     if (!existing.length) return res.status(404).json({ message: 'Intervention introuvable' });
 
-    const [medecinRows] = await db.query("SELECT CONCAT(prenom,' ',nom) n FROM users WHERE id=?", [medecin_id || null]);
-    const [technicienRows] = await db.query("SELECT CONCAT(prenom,' ',nom) n FROM users WHERE id=?", [technicien_id || null]);
+    // Seul l'admin ou le médecin assigné à l'intervention peut modifier
+    const isDoc = (req.user.role === 'medecin' && existing[0].medecin_id === req.user.id);
+    if (req.user.role !== 'administrateur' && !isDoc) {
+      return res.status(403).json({ message: 'Accès non autorisé' });
+    }
+
+    const targetMedecinId = medecin_id !== undefined ? (medecin_id || null) : existing[0].medecin_id;
+    const targetTechnicienId = technicien_id !== undefined ? (technicien_id || null) : existing[0].technicien_id;
+
+    const [medecinRows] = await db.query("SELECT CONCAT(prenom,' ',nom) n FROM users WHERE id=?", [targetMedecinId]);
+    const [technicienRows] = await db.query("SELECT CONCAT(prenom,' ',nom) n FROM users WHERE id=?", [targetTechnicienId]);
     const medecin_nom = medecinRows[0]?.n || null;
     const technicien_nom = technicienRows[0]?.n || null;
 
     const clinoFlag = is_clino !== undefined ? ((is_clino === true || is_clino === 1 || is_clino === '1') ? 1 : 0) : existing[0].is_clino;
     let clino_id = existing[0].clino_id;
 
+    let entId = entreprise_id !== undefined ? (entreprise_id || null) : existing[0].entreprise_id;
+    const effectiveTitre = titre !== undefined ? titre : existing[0].titre;
+    const targetType = type !== undefined ? type : (existing[0].type || 'visite');
+    if (!entId && effectiveTitre && targetType !== 'evenement') {
+      const [eMatch] = await db.query(
+        'SELECT id FROM entreprises WHERE LOWER(TRIM(nom)) = LOWER(TRIM(?)) OR LOWER(TRIM(?)) LIKE CONCAT(\'%\', LOWER(TRIM(nom)), \'%\') LIMIT 1',
+        [effectiveTitre, effectiveTitre]
+      );
+      if (eMatch.length) entId = eMatch[0].id;
+    }
+    const nbExam = nb_examines !== undefined ? (parseInt(nb_examines, 10) || 0) : (existing[0].nb_examines || 0);
+
+    const targetDate = date || existing[0].date;
+    const targetHeureDebut = heure_debut !== undefined ? (heure_debut || null) : existing[0].heure_debut;
+    const targetHeureFin = heure_fin !== undefined ? (heure_fin || null) : existing[0].heure_fin;
+    const targetAdresse = adresse !== undefined ? (adresse || null) : existing[0].adresse;
+    const targetCommentaire = programme !== undefined ? (programme || null) : existing[0].commentaire;
+
     if (clinoFlag) {
-      const clinoHeure = (heure_debut && heure_debut.trim()) ? heure_debut : null;
-      const clinoAdresse = (adresse && adresse.trim()) ? adresse : (titre || 'Visite sur site');
-      const clinoComment = titre ? `[Planning] ${titre}` : 'Visite Clino';
+      const clinoHeure = (targetHeureDebut && targetHeureDebut.trim()) ? targetHeureDebut : null;
+      const clinoAdresse = (targetAdresse && targetAdresse.trim()) ? targetAdresse : (effectiveTitre || 'Visite sur site');
+      const clinoComment = effectiveTitre ? `[Planning] ${effectiveTitre}` : 'Visite Clino';
 
       if (clino_id) {
         await db.query(
-          'UPDATE clino_mobile SET date=?,heure=?,adresse=?,medecin_id=?,technicien_id=?,medecin_nom=?,technicien_nom=?,commentaire=?,planning_id=? WHERE id=?',
-          [date, clinoHeure, clinoAdresse, medecin_id||null, technicien_id||null, medecin_nom, technicien_nom, clinoComment, planningId, clino_id]
+          'UPDATE clino_mobile SET date=?,heure=?,adresse=?,medecin_id=?,technicien_id=?,medecin_nom=?,technicien_nom=?,commentaire=?,planning_id=?,nb_examines=?,entreprise_id=? WHERE id=?',
+          [targetDate, clinoHeure, clinoAdresse, targetMedecinId, targetTechnicienId, medecin_nom, technicien_nom, clinoComment, planningId, nbExam, entId, clino_id]
         );
       } else {
         const [cRes] = await db.query(
-          'INSERT INTO clino_mobile (date,heure,adresse,medecin_id,technicien_id,medecin_nom,technicien_nom,commentaire,planning_id) VALUES (?,?,?,?,?,?,?,?,?)',
-          [date, clinoHeure, clinoAdresse, medecin_id||null, technicien_id||null, medecin_nom, technicien_nom, clinoComment, planningId]
+          'INSERT INTO clino_mobile (date,heure,adresse,medecin_id,technicien_id,medecin_nom,technicien_nom,commentaire,planning_id,nb_examines,entreprise_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+          [targetDate, clinoHeure, clinoAdresse, targetMedecinId, targetTechnicienId, medecin_nom, technicien_nom, clinoComment, planningId, nbExam, entId]
         );
         clino_id = cRes.insertId;
       }
@@ -208,8 +277,8 @@ router.put('/:id', authenticate, authorize('administrateur'), async (req, res) =
     }
 
     await db.query(
-      'UPDATE planning_events SET titre=?,date=?,heure_debut=?,heure_fin=?,adresse=?,medecin_id=?,technicien_id=?,commentaire=?,is_clino=?,clino_id=? WHERE id=?',
-      [titre||null, date, heure_debut||null, heure_fin||null, adresse||null, medecin_id||null, technicien_id||null, programme||null, clinoFlag, clino_id, planningId]
+      'UPDATE planning_events SET titre=?,date=?,heure_debut=?,heure_fin=?,adresse=?,medecin_id=?,technicien_id=?,commentaire=?,is_clino=?,clino_id=?,nb_examines=?,entreprise_id=?,type=? WHERE id=?',
+      [effectiveTitre||null, targetDate, targetHeureDebut, targetHeureFin, targetAdresse, targetMedecinId, targetTechnicienId, targetCommentaire, clinoFlag, clino_id, nbExam, entId, targetType, planningId]
     );
 
     const io = req.app.get('io');
@@ -217,7 +286,99 @@ router.put('/:id', authenticate, authorize('administrateur'), async (req, res) =
       io.emit('planning_refresh');
       io.emit('clino_refresh');
     }
+
+    // Web Push notification aux intervenants assignés (sans nom de patient ni donnée médicale)
+    try {
+      const pushService = require('../services/pushService');
+      const targetUserIds = [targetMedecinId, targetTechnicienId].filter(id => id && Number(id) !== Number(req.user.id));
+      if (targetUserIds.length) {
+        pushService.sendPushToMultipleUsers(targetUserIds, {
+          title: 'Planning modifié',
+          body: 'Votre planning a été modifié.',
+          data: { url: '/planning' },
+        }).catch(() => {});
+      }
+    } catch {}
+
     res.json({ message: 'Intervention mise à jour' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// PATCH /api/planning/:id/valider  (Validation du planning par Admin ou Médecin)
+router.patch('/:id/valider', authenticate, async (req, res) => {
+  try {
+    const planningId = req.params.id;
+    const [existing] = await db.query('SELECT * FROM planning_events WHERE id = ?', [planningId]);
+    if (!existing.length) return res.status(404).json({ message: 'Intervention introuvable' });
+
+    const isDoc = (req.user.role === 'medecin' && existing[0].medecin_id === req.user.id);
+    if (req.user.role !== 'administrateur' && !isDoc) {
+      return res.status(403).json({ message: 'Accès non autorisé' });
+    }
+
+    await db.query("UPDATE planning_events SET statut = 'valide' WHERE id = ?", [planningId]);
+
+    const io = req.app.get('io');
+    if (io) io.emit('planning_refresh');
+
+    // Web Push notification de validation (sans nom de patient ni donnée médicale)
+    try {
+      const pushService = require('../services/pushService');
+      const targetUserIds = [existing[0].medecin_id, existing[0].technicien_id].filter(id => id && Number(id) !== Number(req.user.id));
+      if (targetUserIds.length) {
+        pushService.sendPushToMultipleUsers(targetUserIds, {
+          title: 'Planning validé',
+          body: 'Votre planning a été validé.',
+          data: { url: '/planning' },
+        }).catch(() => {});
+      }
+    } catch {}
+
+    res.json({ message: 'Planning validé avec succès' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// PATCH /api/planning/:id/effectif  (Enregistrement rapide de l'effectif examiné)
+router.patch('/:id/effectif', authenticate, async (req, res) => {
+  const { nb_examines, commentaire } = req.body;
+  try {
+    const planningId = req.params.id;
+    const [existing] = await db.query('SELECT * FROM planning_events WHERE id = ?', [planningId]);
+    if (!existing.length) return res.status(404).json({ message: 'Intervention introuvable' });
+
+    if (req.user.role === 'hse') {
+      return res.status(403).json({ message: 'Action non autorisée : la modification des effectifs de patients examinés est réservée au personnel médical.' });
+    }
+    const isDoc = (req.user.role === 'medecin' && existing[0].medecin_id === req.user.id);
+    if (req.user.role !== 'administrateur' && !isDoc) {
+      return res.status(403).json({ message: 'Accès non autorisé' });
+    }
+
+    const nbExam = nb_examines !== undefined ? (parseInt(nb_examines, 10) || 0) : existing[0].nb_examines;
+    const notes = commentaire !== undefined ? commentaire : existing[0].commentaire;
+
+    await db.query('UPDATE planning_events SET nb_examines = ?, commentaire = ? WHERE id = ?', [
+      nbExam,
+      notes,
+      planningId,
+    ]);
+
+    if (existing[0].clino_id) {
+      await db.query('UPDATE clino_mobile SET nb_examines = ? WHERE id = ?', [nbExam, existing[0].clino_id]);
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('planning_refresh');
+      io.emit('clino_refresh');
+    }
+    res.json({ message: 'Effectifs enregistrés avec succès', nb_examines: nbExam });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Erreur serveur' });
@@ -353,7 +514,7 @@ router.get('/feed.ics', async (req, res) => {
 router.delete('/:id', authenticate, authorize('administrateur'), async (req, res) => {
   try {
     const planningId = req.params.id;
-    const [existing] = await db.query('SELECT clino_id FROM planning_events WHERE id = ?', [planningId]);
+    const [existing] = await db.query('SELECT medecin_id, technicien_id, clino_id FROM planning_events WHERE id = ?', [planningId]);
     if (existing.length && existing[0].clino_id) {
       await db.query('DELETE FROM clino_mobile WHERE id = ?', [existing[0].clino_id]);
     }
@@ -365,6 +526,22 @@ router.delete('/:id', authenticate, authorize('administrateur'), async (req, res
       io.emit('planning_refresh');
       io.emit('clino_refresh');
     }
+
+    // Web Push notification d'annulation (sans nom de patient ni donnée médicale)
+    try {
+      if (existing.length) {
+        const pushService = require('../services/pushService');
+        const targetUserIds = [existing[0].medecin_id, existing[0].technicien_id].filter(id => id && Number(id) !== Number(req.user.id));
+        if (targetUserIds.length) {
+          pushService.sendPushToMultipleUsers(targetUserIds, {
+            title: 'Intervention annulée',
+            body: 'Une intervention a été annulée dans votre planning.',
+            data: { url: '/planning' },
+          }).catch(() => {});
+        }
+      }
+    } catch {}
+
     res.json({ message: 'Événement supprimé' });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });

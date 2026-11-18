@@ -78,18 +78,22 @@ function AppShell() {
         {/* Mobile Header Bar (< 768px) */}
         <header className="mobile-topbar">
           <button className="mobile-menu-btn" onClick={() => setMobileOpen(true)} aria-label="Menu">
-            ☰
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
           </button>
           <div className="mobile-topbar-brand">
-            <img src="/logo-gmt.png" alt="GMT Ariana" style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display='none'; }} />
-            <span>GMT Ariana</span>
+            <img src="/logo-gmt.png" alt="GMT Ariana" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display='none'; }} />
+            <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.3px' }}>GMT Ariana</span>
           </div>
           <button
             className="mobile-search-btn"
             onClick={() => window.dispatchEvent(new CustomEvent('open-global-search'))}
             aria-label="Recherche"
           >
-            🔍
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
           </button>
         </header>
 

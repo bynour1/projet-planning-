@@ -24,6 +24,42 @@ function getInitials(nom) {
   return (nom || '').split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
 }
 
+const IconSearch = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>
+);
+
+const IconSend = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+  </svg>
+);
+
+const IconCamera = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+  </svg>
+);
+
+const IconMic = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+  </svg>
+);
+
+const IconChat = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+);
+
+const IconPin = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.89A2 2 0 0 1 15 10.76V6h1a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.89A2 2 0 0 0 5 15.24V17z"/>
+  </svg>
+);
+
 async function downloadAndOpen(url, originalname, mimetype) {
   try {
     const res    = await axios.get(url, { responseType: 'blob' });
@@ -223,7 +259,13 @@ function FileMessage({ content, isMine }) {
 
   return (
     <div onClick={handleOpen} style={{ display: 'flex', alignItems: 'center', gap: 8, background: isMine ? 'rgba(255,255,255,.2)' : 'var(--surface2)', padding: '8px 12px', borderRadius: 8, border: isMine ? 'none' : '1px solid var(--border)', cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.7 : 1, transition: 'opacity .2s' }}>
-      <span style={{ fontSize: 22 }}>{loading ? '⏳' : (data.icon || '📎')}</span>
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: isMine ? '#fff' : 'var(--primary)' }}>
+        {loading ? (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+        ) : (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        )}
+      </span>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: isMine ? '#fff' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>{data.originalname}</div>
         <div style={{ fontSize: 11, color: isMine ? 'rgba(255,255,255,.7)' : 'var(--text-3)' }}>{data.sizeDisplay} · {loading ? 'Ouverture…' : 'Cliquer pour ouvrir'}</div>
@@ -305,6 +347,7 @@ export default function Chat({ toast }) {
   const [recSeconds,      setRecSeconds]      = useState(0);
   const [locating,        setLocating]        = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const [userDirectory,   setUserDirectory]   = useState({});
 
   const bottomRef         = useRef(null);
   const fileInputRef      = useRef(null);
@@ -315,12 +358,21 @@ export default function Chat({ toast }) {
   const typingTimer       = useRef(null);
   const inputRef          = useRef(null);
 
-  /* ── Load history ── */
+  /* ── Load history & Users Directory ── */
   useEffect(() => {
     axios.get('/api/chat/messages?limit=100')
       .then(r => setMessages(r.data))
       .catch(() => toast('Erreur chargement', 'error'));
+
+    axios.get('/api/users')
+      .then(r => {
+        const map = {};
+        (r.data || []).forEach(u => { map[u.id] = u; });
+        setUserDirectory(map);
+      })
+      .catch(() => {});
   }, []);
+
 
   /* ── Socket events ── */
   useEffect(() => {
@@ -639,16 +691,14 @@ export default function Chat({ toast }) {
             width: 36,
             height: 36,
             borderRadius: 10,
-            background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+            background: 'var(--primary)',
             color: '#fff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: 18,
-            boxShadow: '0 2px 8px rgba(2,132,199,0.25)',
             flexShrink: 0
           }}>
-            💬
+            <IconChat size={18} color="#fff" />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -677,17 +727,19 @@ export default function Chat({ toast }) {
             type="button"
             title="Rechercher dans les messages"
             onClick={() => { setSearchOpen(o => !o); setSearchQuery(''); }}
-            style={{ background: searchOpen ? 'var(--primary)' : 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: searchOpen ? '#fff' : 'var(--text-2)', fontSize: 13, transition: 'all .15s' }}
-          >🔎</button>
+            style={{ background: searchOpen ? 'var(--primary)' : 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px', cursor: 'pointer', color: searchOpen ? '#fff' : 'var(--text-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <IconSearch size={14} color={searchOpen ? '#fff' : 'var(--text-2)'} />
+          </button>
           {/* Bouton Infos / Membres / IA sur mobile */}
           <button
             type="button"
             onClick={() => setShowInfo(o => !o)}
             className="btn btn-outline btn-sm"
-            style={{ padding: '5px 9px', fontSize: 12, borderRadius: 8 }}
+            style={{ padding: '5px 10px', fontSize: 12, borderRadius: 8, fontWeight: 700 }}
             title="Membres en ligne & Assistant IA"
           >
-            {showInfo ? '✕' : '👥 Infos'}
+            {showInfo ? '✕' : 'Infos'}
           </button>
         </div>
 
@@ -712,8 +764,8 @@ export default function Chat({ toast }) {
 
         {/* ── Message épinglé ── */}
         {pinnedMsg && (
-          <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border)', background: 'linear-gradient(90deg,#fef9c3,#fefce8)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>📌</span>
+          <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border)', background: '#fffbeb', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <IconPin size={14} color="#92400e" />
             <div style={{ flex: 1 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: '#92400e' }}>Message épinglé · {pinnedMsg.nom}</span>
               <div style={{ fontSize: 12, color: '#78350f', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -731,7 +783,6 @@ export default function Chat({ toast }) {
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 4 }}>
           {filteredMessages.length === 0 && (
             <div className="empty-state">
-              <div className="empty-icon">{searchQuery ? '🔎' : '💬'}</div>
               <p>{searchQuery ? 'Aucun message trouvé' : 'Commencez la conversation'}</p>
             </div>
           )}
@@ -791,7 +842,7 @@ export default function Chat({ toast }) {
                       alignItems: 'center',
                       gap: 5,
                     }}>
-                      📅 {formatMessageDate(msg.created_at)}
+                      {formatMessageDate(msg.created_at)}
                     </span>
                   </div>
                 )}
@@ -872,6 +923,7 @@ export default function Chat({ toast }) {
                           <button type="button" title="Réagir"
                             onClick={() => setEmojiPickerFor(p => p === msg.id ? null : msg.id)}
                             style={actionBtnStyle}>😀</button>
+
                           {/* Reply */}
                           {!msg.isAI && (
                             <button type="button" title="Répondre"
@@ -983,7 +1035,7 @@ export default function Chat({ toast }) {
           {uploading && (
             <div style={{ padding: '10px 14px', background: 'var(--primary-lt)', borderRadius: 10, border: '1px solid var(--primary)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13, color: 'var(--primary-dk)' }}>
-                <span>📤 Envoi du fichier…</span><span>{uploadProg}%</span>
+                <span>Envoi du fichier…</span><span>{uploadProg}%</span>
               </div>
               <div style={{ background: 'var(--border)', borderRadius: 4, height: 6 }}>
                 <div style={{ width: `${uploadProg}%`, background: 'var(--primary)', height: '100%', borderRadius: 4, transition: 'width .2s' }} />
@@ -1009,9 +1061,9 @@ export default function Chat({ toast }) {
         <form onSubmit={handleSend} style={{ padding: '8px 12px', borderTop: '1px solid var(--border)', background: 'var(--surface)', position: 'relative' }}>
           {/* Mode IA indicator */}
           {aiMode && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#6366f1', padding: '4px 10px', background: '#6366f112', borderRadius: 8, marginBottom: 6 }}>
-              <span>🤖 <strong>Mode Assistant IA activé</strong></span>
-              <button type="button" onClick={() => setAiMode(false)} style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Désactiver</button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: 'var(--primary)', padding: '4px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 6 }}>
+              <span><strong>Mode Assistant IA activé</strong></span>
+              <button type="button" onClick={() => setAiMode(false)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Désactiver</button>
             </div>
           )}
 
@@ -1033,9 +1085,9 @@ export default function Chat({ toast }) {
                 marginBottom: 8,
                 background: 'var(--surface)',
                 border: '1px solid var(--border)',
-                borderRadius: 16,
+                borderRadius: 14,
                 padding: '12px 14px',
-                boxShadow: '0 12px 36px rgba(0,0,0,0.18)',
+                boxShadow: 'var(--shadow-lg, 0 12px 36px rgba(0,0,0,0.12))',
                 display: 'flex',
                 gap: 14,
                 zIndex: 95,
@@ -1044,8 +1096,11 @@ export default function Chat({ toast }) {
                 {/* Camera Tile */}
                 <button type="button" onClick={() => { setActionsMenuOpen(false); setCameraModalOpen(true); }}
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
-                  <div style={{ width: 46, height: 46, borderRadius: 14, background: 'linear-gradient(135deg,#0284c7,#0ea5e9)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, boxShadow: '0 3px 8px rgba(2,132,199,0.3)' }}>
-                    📷
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                      <circle cx="12" cy="13" r="4"/>
+                    </svg>
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>Photo</span>
                 </button>
@@ -1053,8 +1108,11 @@ export default function Chat({ toast }) {
                 {/* Document Tile */}
                 <button type="button" onClick={() => { setActionsMenuOpen(false); fileInputRef.current?.click(); }}
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
-                  <div style={{ width: 46, height: 46, borderRadius: 14, background: 'linear-gradient(135deg,#8b5cf6,#a855f7)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, boxShadow: '0 3px 8px rgba(139,92,246,0.3)' }}>
-                    📁
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>Fichier</span>
                 </button>
@@ -1062,19 +1120,28 @@ export default function Chat({ toast }) {
                 {/* Location Tile */}
                 <button type="button" onClick={() => { setActionsMenuOpen(false); handleShareLocation(); }}
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
-                  <div style={{ width: 46, height: 46, borderRadius: 14, background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, boxShadow: '0 3px 8px rgba(16,185,129,0.3)' }}>
-                    📍
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                      <circle cx="12" cy="10" r="3"/>
+                    </svg>
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>GPS</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>Position</span>
                 </button>
 
                 {/* AI Assistant Tile */}
                 <button type="button" onClick={() => { setActionsMenuOpen(false); setAiMode(o => !o); }}
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
-                  <div style={{ width: 46, height: 46, borderRadius: 14, background: aiMode ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'var(--surface2)', color: aiMode ? '#fff' : '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, border: '1px solid #6366f135', boxShadow: aiMode ? '0 3px 8px rgba(99,102,241,0.3)' : 'none' }}>
-                    🤖
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: aiMode ? 'var(--primary)' : 'var(--surface-2)', color: aiMode ? '#fff' : 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)' }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="10" rx="2"/>
+                      <circle cx="12" cy="5" r="2"/>
+                      <path d="M12 7v4"/>
+                      <line x1="8" y1="16" x2="8" y2="16.01"/>
+                      <line x1="16" y1="16" x2="16.01" y2="16"/>
+                    </svg>
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>IA {aiMode ? '✓' : ''}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>IA {aiMode ? '(On)' : ''}</span>
                 </button>
               </div>
             </>
@@ -1112,15 +1179,16 @@ export default function Chat({ toast }) {
                   onClick={cancelVoiceRecording}
                   style={{ color: '#64748b', fontSize: 12, padding: '4px 8px' }}
                 >
-                  🗑️ Annuler
+                  Annuler
                 </button>
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
                   onClick={stopAndSendVoiceRecording}
-                  style={{ background: '#ef4444', borderColor: '#ef4444', borderRadius: 20, padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                  style={{ background: '#ef4444', borderColor: '#ef4444', borderRadius: 20, padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  🚀 Envoyer
+                  <IconSend size={14} color="#fff" />
+                  <span>Envoyer</span>
                 </button>
               </div>
             </div>
@@ -1137,7 +1205,7 @@ export default function Chat({ toast }) {
                   border: 'none',
                   background: actionsMenuOpen ? 'var(--primary)' : 'var(--surface2)',
                   color: actionsMenuOpen ? '#fff' : 'var(--text)',
-                  fontSize: 20,
+                  fontSize: 18,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -1148,7 +1216,7 @@ export default function Chat({ toast }) {
                 }}
                 title="Ajouter photo, fichier, GPS, IA"
               >
-                {actionsMenuOpen ? '✕' : '➕'}
+                {actionsMenuOpen ? '✕' : '+'}
               </button>
 
               {/* Text Input Capsule */}
@@ -1193,20 +1261,18 @@ export default function Chat({ toast }) {
                         height: 38,
                         borderRadius: '50%',
                         border: 'none',
-                        background: '#fef2f2',
-                        color: '#ef4444',
-                        fontSize: 18,
+                        background: 'var(--surface2)',
+                        color: 'var(--text)',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         flexShrink: 0,
-                        boxShadow: '0 1px 3px rgba(239,68,68,0.15)',
                       }}
                       title="Enregistrer un message vocal"
                       aria-label="Enregistrer vocal"
                     >
-                      🎙️
+                      <IconMic size={18} color="var(--text)" />
                     </button>
                     <button
                       type="button"
@@ -1216,20 +1282,18 @@ export default function Chat({ toast }) {
                         height: 38,
                         borderRadius: '50%',
                         border: 'none',
-                        background: '#f0f9ff',
-                        color: '#0284c7',
-                        fontSize: 18,
+                        background: 'var(--surface2)',
+                        color: 'var(--text)',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         flexShrink: 0,
-                        boxShadow: '0 1px 3px rgba(2,132,199,0.15)',
                       }}
                       title="Prendre une photo"
                       aria-label="Prendre photo"
                     >
-                      📷
+                      <IconCamera size={18} color="var(--text)" />
                     </button>
                   </>
                 )}
@@ -1242,21 +1306,19 @@ export default function Chat({ toast }) {
                     height: 40,
                     borderRadius: '50%',
                     border: 'none',
-                    background: !text.trim() || uploading ? 'var(--border)' : (aiMode ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'linear-gradient(135deg,#0284c7,#0ea5e9)'),
+                    background: !text.trim() || uploading ? 'var(--border)' : 'var(--primary)',
                     color: !text.trim() || uploading ? 'var(--text-3)' : '#fff',
-                    fontSize: 17,
-                    fontWeight: 700,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: !text.trim() || uploading ? 'not-allowed' : 'pointer',
                     flexShrink: 0,
-                    boxShadow: text.trim() && !uploading ? '0 3px 10px rgba(2,132,199,0.35)' : 'none',
+                    boxShadow: text.trim() && !uploading ? '0 2px 6px rgba(0,0,0,0.15)' : 'none',
                     transition: 'all .15s',
                   }}
                   title="Envoyer"
                 >
-                  🚀
+                  <IconSend size={16} color={!text.trim() || uploading ? 'var(--text-3)' : '#fff'} />
                 </button>
               </div>
             </div>
@@ -1299,10 +1361,11 @@ export default function Chat({ toast }) {
                   </div>
                   <div style={{ position: 'absolute', bottom: 0, right: 0, width: 8, height: 8, background: '#22c55e', borderRadius: '50%', border: '1.5px solid white' }} />
                 </div>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600 }}>{u.prenom} {u.nom}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.prenom} {u.nom}</div>
                   <div style={{ fontSize: 10, color: 'var(--text-3)', textTransform: 'capitalize' }}>{u.role}</div>
                 </div>
+
               </div>
             ))}
             {onlineUsers.length === 0 && (
@@ -1312,20 +1375,20 @@ export default function Chat({ toast }) {
         </div>
 
         {/* Assistant IA — info */}
-        <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', background: aiMode ? '#6366f108' : 'transparent' }}>
-          <div style={{ fontWeight: 700, fontSize: 12, color: '#6366f1', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-            🤖 Assistant IA
+        <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', background: aiMode ? 'var(--surface-2)' : 'transparent' }}>
+          <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--primary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Assistant IA
           </div>
           <button type="button"
             onClick={() => { setAiMode(o => !o); inputRef.current?.focus(); }}
             style={{
               width: '100%', padding: '7px 10px', borderRadius: 8, cursor: 'pointer',
-              background: aiMode ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'var(--surface2)',
-              color: aiMode ? '#fff' : 'var(--text-2)',
-              border: aiMode ? 'none' : '1px solid var(--border)',
-              fontWeight: 700, fontSize: 12, transition: 'all .2s',
+              background: aiMode ? 'var(--primary)' : 'var(--surface-2)',
+              color: aiMode ? '#fff' : 'var(--text)',
+              border: '1px solid var(--border)',
+              fontWeight: 600, fontSize: 12, transition: 'all .2s',
             }}>
-            {aiMode ? '✓ IA activée — Cliquer pour désactiver' : '⚡ Activer l\'assistant IA'}
+            {aiMode ? 'Assistant IA activé — Cliquer pour désactiver' : 'Activer l\'assistant IA'}
           </button>
           <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.5 }}>
             Posez des questions médicales, demandez un compte-rendu, des informations sur les traitements…
@@ -1334,13 +1397,13 @@ export default function Chat({ toast }) {
 
         {/* Documents acceptés */}
         <div style={{ padding: '12px 14px' }}>
-          <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-2)', marginBottom: 8 }}>📎 Documents acceptés</div>
+          <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--text)', marginBottom: 8 }}>Formats de documents acceptés</div>
           <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.8 }}>
-            <div>🖼 Images (JPG, PNG, GIF)</div>
-            <div>📄 PDF</div>
-            <div>📝 Word (DOC, DOCX)</div>
-            <div>📊 Excel (XLS, XLSX)</div>
-            <div>📃 Texte (TXT, CSV)</div>
+            <div>Images (JPG, PNG, GIF)</div>
+            <div>PDF</div>
+            <div>Word (DOC, DOCX)</div>
+            <div>Excel (XLS, XLSX)</div>
+            <div>Texte (TXT, CSV)</div>
             <div style={{ marginTop: 4, fontWeight: 600, color: 'var(--text-2)' }}>Max : 10 Mo</div>
           </div>
         </div>

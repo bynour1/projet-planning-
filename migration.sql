@@ -94,5 +94,50 @@ CREATE TABLE IF NOT EXISTS entreprise_campagnes_annuelles (
   FOREIGN KEY (entreprise_id) REFERENCES entreprises(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- ─── TOTP 2FA (Double authentification par application) ─────────
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS totp_secret_enc TEXT DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS totp_enabled TINYINT(1) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS totp_last_step BIGINT DEFAULT NULL;
 
+CREATE TABLE IF NOT EXISTS totp_backup_codes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  code_hash VARCHAR(64) NOT NULL,
+  used_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_totp_backup_user (user_id),
+  CONSTRAINT fk_totp_backup_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── APPAREILS DE CONFIANCE (Trusted Devices 30j / 7j Admin) ────
+CREATE TABLE IF NOT EXISTS trusted_devices (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  token_hash VARCHAR(64) NOT NULL,
+  user_agent VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  INDEX idx_trusted_user (user_id),
+  INDEX idx_trusted_token_hash (token_hash),
+  CONSTRAINT fk_trusted_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── SESSIONS PERSISTANTES (Refresh Tokens avec rotation) ───────
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  token_hash VARCHAR(64) NOT NULL,
+  trusted_device_id INT NULL,
+  is_trusted TINYINT(1) DEFAULT 0,
+  user_agent VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  revoked_at DATETIME NULL DEFAULT NULL,
+  INDEX idx_refresh_user (user_id),
+  INDEX idx_refresh_token_hash (token_hash),
+  CONSTRAINT fk_refresh_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

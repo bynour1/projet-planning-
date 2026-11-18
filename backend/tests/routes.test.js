@@ -80,6 +80,7 @@ describe('Planning routes', () => {
     it('creates event and returns 201', async () => {
       db.query.mockResolvedValueOnce([[]]); // medecin name
       db.query.mockResolvedValueOnce([[]]); // tech name
+      db.query.mockResolvedValueOnce([[]]); // entreprise match
       db.query.mockResolvedValueOnce([{ insertId:10 }]); // INSERT
       const res = await request(app).post('/api/planning').set('Authorization',ADM).send({ date:'2026-05-17', titre:'ECG', heure_debut:'09:00' });
       expect(res.status).toBe(201);
@@ -89,6 +90,7 @@ describe('Planning routes', () => {
 
   describe('PUT /api/planning/:id', () => {
     it('403 for technicien', async () => {
+      db.query.mockResolvedValueOnce([[ { id: 1, is_clino: 0, clino_id: null, medecin_id: null } ]]); // existing
       expect((await request(app).put('/api/planning/1').set('Authorization',TEC).send({ date:'2026-05-17' })).status).toBe(403);
     });
     it('updates for admin', async () => {
