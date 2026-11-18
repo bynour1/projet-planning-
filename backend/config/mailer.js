@@ -17,7 +17,7 @@ function validateMailerConfig() {
 
   // Mode Gmail dédié : usage interne sans nom de domaine propre
   if (isGmailMode) {
-    console.warn('[Mailer] ⚠️ Mode Gmail dédié : usage interne, environ 500 emails/jour');
+    console.warn('[Mailer] ⚠️ Mode Gmail dédié : usage interne, ~500 emails/jour');
 
     if (isProd) {
       const missing = [];
@@ -36,7 +36,7 @@ function validateMailerConfig() {
       const match = emailFrom.match(/<([^>]+)>/) || [null, emailFrom];
       const rawFrom = (match[1] || emailFrom).trim().toLowerCase();
       if (rawFrom !== emailUser.toLowerCase()) {
-        console.warn(`[Mailer AVERTISSEMENT] Gmail impose que l'expéditeur corresponde à EMAIL_USER (${emailUser}). EMAIL_FROM actuel (${rawFrom}) pourrait être ignoré ou altéré par Gmail.`);
+        console.warn(`[Mailer AVERTISSEMENT] Gmail impose que l'expéditeur corresponde à EMAIL_USER (${emailUser}). EMAIL_FROM actuel (${rawFrom}) a une adresse différente.`);
       }
     }
 
@@ -239,6 +239,9 @@ function getFromAddress(prefix = 'Administration') {
       const rawFrom = (match[1] || fromConfig).trim().toLowerCase();
       if (emailUser && rawFrom !== emailUser.toLowerCase()) {
         console.warn(`[Mailer AVERTISSEMENT] Gmail impose que l'expéditeur corresponde à EMAIL_USER (${emailUser}). EMAIL_FROM (${rawFrom}) a une adresse différente.`);
+        const nameMatch = fromConfig.match(/^"([^"]+)"|^([^<]+)</);
+        const displayName = nameMatch ? (nameMatch[1] || nameMatch[2]).trim() : `GMT Ariana — ${prefix}`;
+        return `"${displayName}" <${emailUser}>`;
       }
       if (fromConfig.includes('<') && fromConfig.includes('>')) {
         return fromConfig;

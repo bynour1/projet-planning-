@@ -25,7 +25,7 @@ async function main() {
   console.log('================================================================');
 
   if (isGmail) {
-    console.warn('\n⚠️ Mode Gmail dédié : usage interne, environ 500 emails/jour');
+    console.warn('\n⚠️ Mode Gmail dédié : usage interne, ~500 emails/jour');
   }
 
   if (!recipient || !recipient.includes('@') || !recipient.includes('.')) {
@@ -42,11 +42,26 @@ async function main() {
   const from    = (process.env.EMAIL_FROM || '').trim();
   const replyTo = (process.env.EMAIL_REPLY_TO || '').trim() || undefined;
 
-  const effectiveFrom = from || (isGmail && user ? `"GMT Ariana" <${user}>` : '');
+  let effectiveFrom = from || (isGmail && user ? `"GMT Ariana" <${user}>` : '');
+  if (isGmail && user) {
+    if (from) {
+      const match = from.match(/<([^>]+)>/) || [null, from];
+      const rawFromEmail = (match[1] || from).trim();
+      if (rawFromEmail.toLowerCase() !== user.toLowerCase()) {
+        console.warn(`\n⚠️ AVERTISSEMENT : Gmail impose que l'expéditeur corresponde à EMAIL_USER (${user}).`);
+        console.warn(`   EMAIL_FROM actuel (${rawFromEmail}) a une adresse différente. Expéditeur effectif : ${user}.`);
+        const nameMatch = from.match(/^"([^"]+)"|^([^<]+)</);
+        const displayName = nameMatch ? (nameMatch[1] || nameMatch[2]).trim() : 'GMT Ariana';
+        effectiveFrom = `"${displayName}" <${user}>`;
+      }
+    } else {
+      effectiveFrom = `"GMT Ariana" <${user}>`;
+    }
+  }
 
   console.log(`\n📋 Paramètres détectés :`);
   console.log(`   - Fournisseur  : ${isGmail ? 'Gmail (service: gmail)' : 'Brevo SMTP standard'}`);
-  console.log(`   - Serveur SMTP : ${host}:${port} (secure: ${secure})`);
+  console.log(`   - Serveur SMTP : ${isGmail ? 'service: gmail' : `${host}:${port} (secure: ${secure})`}`);
   console.log(`   - Identifiant  : ${user ? user.slice(0, 4) + '***' : '(NON DÉFINI)'}`);
   console.log(`   - Expéditeur   : ${effectiveFrom || '(NON DÉFINI)'}`);
   console.log(`   - Destinataire : ${recipient}`);
@@ -57,16 +72,12 @@ async function main() {
   // 1. Validation de l'expéditeur
   if (isGmail) {
     // Mode Gmail dédié : l'expéditeur est EMAIL_USER (règle Google)
-    if (!effectiveFrom) {
-      console.error('\n❌ ERREUR : La variable EMAIL_USER ou EMAIL_FROM est requise dans backend/.env !');
+    if (!user) {
+      console.error('\n❌ ERREUR : La variable EMAIL_USER est requise en mode Gmail dédié dans backend/.env !');
       process.exit(1);
     }
     const match = effectiveFrom.match(/<([^>]+)>/) || [null, effectiveFrom];
     const rawFromEmail = (match[1] || effectiveFrom).trim();
-    if (user && rawFromEmail.toLowerCase() !== user.toLowerCase()) {
-      console.warn(`\n⚠️ AVERTISSEMENT : Gmail impose que l'expéditeur corresponde à EMAIL_USER (${user}).`);
-      console.warn(`   EMAIL_FROM actuel (${rawFromEmail}) a une adresse différente et sera probablement écrasé par Gmail.`);
-    }
     console.log(`\n🔒 Mode Gmail validé : Expéditeur "${rawFromEmail}" (pas de blocage @gmail.com).`);
   } else {
     // Mode Brevo standard : validation du domaine professionnel
