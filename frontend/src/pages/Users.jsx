@@ -348,157 +348,11 @@ function UserModal({ user: editUser, onSave, onClose }) {
   );
 }
 
-function CredentialsModal({ data, onClose, toast }) {
-  const [copied, setCopied] = useState(false);
-  const [modalData, setModalData] = useState(data);
-  const [resending, setResending] = useState(false);
-  if (!modalData) return null;
-
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://projet-planning-pi.vercel.app';
-  const fullName = `${modalData.prenom || ''} ${modalData.nom || ''}`.trim() || 'Collaborateur';
-
-  const shareText = `🏥 GMT Ariana — Planning Médical\n\nBonjour ${fullName},\nVotre compte d'accès au portail GMT Ariana a été configuré :\n\n🔗 Lien d'accès : ${appUrl}/login\n📧 Identifiant : ${modalData.email}\n🔑 Mot de passe provisoire : Transmis directement sur votre adresse e-mail (valable 48h)\n\n⚠️ Lors de votre 1ère connexion, il vous sera demandé de définir votre mot de passe personnel.\nEn cas de besoin, contactez l'administration.`;
-
-  function copyText() {
-    navigator.clipboard.writeText(shareText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
-    toast && toast('Informations d\'accès copiées dans le presse-papier !', 'success');
-  }
-
-  async function handleResend() {
-    const id = modalData.userId || modalData.id;
-    if (!id) return toast && toast('Identifiant manquant', 'error');
-    setResending(true);
-    try {
-      const res = await axios.post(`/api/users/${id}/resend-welcome`);
-      if (res.data) {
-        toast && toast(res.data.message || `Accès renvoyé par email à ${res.data.email}`, 'success');
-        setModalData(res.data);
-      }
-    } catch (err) {
-      toast && toast(err.response?.data?.message || 'Erreur lors du renvoi de l\'accès', 'error');
-    } finally {
-      setResending(false);
-    }
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 490, padding: 0, overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-        <div style={{
-          background: 'linear-gradient(135deg, #0284c7, #0ea5e9)',
-          padding: '20px 24px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-        }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>
-              Transmission des accès par e-mail
-            </h3>
-            <p style={{ margin: '2px 0 0', fontSize: 12, opacity: 0.9 }}>
-              Accès envoyé par email à {modalData.email}
-            </p>
-          </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer' }}>✕</button>
-        </div>
-
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Status banner */}
-          <div style={{
-            padding: '12px 14px', borderRadius: 8, fontSize: 13, lineHeight: 1.45,
-            background: modalData.email_sent ? '#f0fdf4' : '#fef2f2',
-            border: `1px solid ${modalData.email_sent ? '#bbf7d0' : '#fecaca'}`,
-            color: modalData.email_sent ? '#166534' : '#991b1b',
-            display: 'flex', alignItems: 'flex-start', gap: 10
-          }}>
-            <span style={{ fontSize: 18 }}>{modalData.email_sent ? '✉️' : '⚠️'}</span>
-            <div style={{ flex: 1 }}>
-              <strong style={{ display: 'block', fontSize: 13.5 }}>
-                {modalData.email_sent
-                  ? `Accès envoyé par email à ${modalData.email}`
-                  : `Échec de l'envoi par e-mail à ${modalData.email}`}
-              </strong>
-              <div style={{ marginTop: 3, fontSize: 12 }}>
-                {modalData.email_sent
-                  ? `Le mot de passe provisoire et le lien d'accès sécurisé ont été transmis par e-mail. Le mot de passe est valable pendant 48 heures.`
-                  : `L'envoi par e-mail a échoué (${modalData.email_error || 'Vérifier la configuration SMTP'}). Utilisez le bouton ci-dessous pour renvoyer l'accès.`}
-              </div>
-              {!modalData.email_sent && (
-                <button
-                  type="button"
-                  onClick={handleResend}
-                  disabled={resending}
-                  className="btn btn-primary"
-                  style={{ marginTop: 10, height: 34, fontSize: 12, padding: '0 14px' }}
-                >
-                  {resending ? 'Génération et renvoi...' : 'Renvoyer l\'accès'}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Credentials box */}
-          <div style={{ background: 'var(--surface2)', padding: 16, borderRadius: 10, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 13 }}><strong>Collaborateur :</strong> {fullName} {modalData.role ? `(${modalData.role.toUpperCase()})` : ''}</div>
-            <div style={{ fontSize: 13 }}><strong>Email (Identifiant) :</strong> <code style={{ color: 'var(--primary)', fontWeight: 700 }}>{modalData.email}</code></div>
-
-            {/* Mot de passe confidentiel : transmis par e-mail à l'utilisateur, jamais affiché à l'admin */}
-            <div style={{
-              background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 8, padding: '12px 14px',
-              display: 'flex', flexDirection: 'column', gap: 6
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 15 }}>🔒</span>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#166534', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Mot de passe confidentiel
-                </div>
-              </div>
-              <div style={{ fontSize: 12.5, color: '#14532d', lineHeight: 1.45 }}>
-                Le mot de passe provisoire a été généré de manière sécurisée et <strong>transmis directement par e-mail au collaborateur</strong>.
-              </div>
-              <div style={{
-                marginTop: 2,
-                padding: '6px 10px',
-                borderRadius: 6,
-                background: '#dcfce7',
-                fontSize: 11.5,
-                color: '#166534',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6
-              }}>
-                <span>🛡️</span>
-                <span>Politique de sécurité : L'administrateur ne voit jamais le mot de passe.</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Action buttons */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-            <button
-              onClick={copyText}
-              className="btn btn-outline"
-              style={{ width: '100%', padding: '10px 16px', justifyContent: 'center', fontWeight: 700 }}
-            >
-              {copied ? 'Accès copiés dans le presse-papier !' : 'Copier les accès du compte'}
-            </button>
-          </div>
-        </div>
-
-        <div style={{ padding: '12px 24px', background: 'var(--bg)', borderTop: '1px solid var(--border)', textAlign: 'right' }}>
-          <button className="btn btn-primary" onClick={onClose} style={{ minWidth: 100 }}>Fermer</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function Users({ toast }) {
   const { user: me } = useAuth();
   const [users,   setUsers]   = useState([]);
   const [modal,   setModal]   = useState(null);
   const [confirm, setConfirm] = useState(null);
-  const [credentialsModal, setCredentialsModal] = useState(null);
   const [search,  setSearch]  = useState('');
   const [loading, setLoading] = useState(true);
   const [filter,  setFilter]  = useState('all');
@@ -520,10 +374,10 @@ export default function Users({ toast }) {
   async function handleCreated(data) {
     setModal(null);
     await load();
-    if (data?.email) {
-      setCredentialsModal(data);
+    if (data?.email_sent === false) {
+      toast('Compte créé avec succès ! Note : L\'e-mail d\'accès n\'a pas pu être délivré.', 'warning');
     } else {
-      toast(data?.message || 'Compte créé avec succès !', 'success');
+      toast('Compte créé avec succès ! Les accès ont été envoyés par e-mail au collaborateur.', 'success');
     }
   }
 
@@ -531,13 +385,13 @@ export default function Users({ toast }) {
     try {
       const res = await axios.post(`/api/users/${u.id}/resend-welcome`);
       await load();
-      if (res.data?.email) {
-        setCredentialsModal(res.data);
+      if (res.data?.email_sent === false) {
+        toast('Nouveaux identifiants générés, mais l\'e-mail n\'a pas pu être acheminé.', 'warning');
       } else {
-        toast(res.data?.message || `E-mail d'accès renvoyé à ${u.email}`, 'success');
+        toast(`E-mail d'accès renvoyé avec succès à ${u.email}`, 'success');
       }
     } catch (err) {
-      toast(err.response?.data?.message || 'Erreur lors du renvoi', 'error');
+      toast(err.response?.data?.message || 'Erreur lors du renvoi de l\'e-mail', 'error');
     }
   }
 
@@ -780,9 +634,6 @@ export default function Users({ toast }) {
 
       {modal !== null && (
         <UserModal user={modal?.id ? modal : null} onSave={modal?.id ? () => { setModal(null); load(); toast('Mis à jour', 'success'); } : handleCreated} onClose={() => setModal(null)} />
-      )}
-      {credentialsModal && (
-        <CredentialsModal data={credentialsModal} onClose={() => setCredentialsModal(null)} toast={toast} />
       )}
       {confirm && (
         <ConfirmDialog title="Supprimer l'utilisateur ?" message="Cette action est irréversible." danger

@@ -178,7 +178,7 @@ router.post('/', authenticate, authorize('administrateur'), emailGlobalIpLimiter
     res.status(201).json({
       message: emailSent
         ? `Accès envoyé par email à ${cleanEmail}`
-        : `Compte créé avec succès ! Attention : E-mail non délivré (${emailError || 'Vérifier la configuration SMTP'}).`,
+        : 'Compte créé avec succès ! (L\'envoi de l\'e-mail d\'accès a rencontré une difficulté)',
       userId: result.insertId,
       id: result.insertId,
       email: cleanEmail,
@@ -187,7 +187,7 @@ router.post('/', authenticate, authorize('administrateur'), emailGlobalIpLimiter
       role,
       telephone: telephone || null,
       email_sent: !!emailSent,
-      email_error: emailError || null,
+      email_error: emailSent ? null : 'Échec de transmission de l\'e-mail',
     });
   } catch (err) {
     console.error('[Create User Error]:', err.message);
@@ -252,7 +252,7 @@ router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), em
     res.json({
       message: emailSent
         ? `Accès envoyé par email à ${user.email}`
-        : `Nouveaux accès générés. Attention : E-mail non délivré (${emailError || 'Vérifier la configuration SMTP'}).`,
+        : 'Nouveaux identifiants générés. (L\'envoi de l\'e-mail a rencontré une difficulté)',
       userId: user.id,
       id: user.id,
       email: user.email,
@@ -261,7 +261,7 @@ router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), em
       role: user.role,
       telephone: user.telephone,
       email_sent: !!emailSent,
-      email_error: emailError || null,
+      email_error: emailSent ? null : 'Échec de transmission de l\'e-mail',
     });
   } catch (err) {
     console.error('[resend-welcome error]:', err.message);
@@ -324,7 +324,7 @@ router.post('/:id/reset-password', authenticate, authorize('administrateur'), em
     res.json({
       message: emailSent
         ? `Accès envoyé par email à ${user.email}`
-        : `Mot de passe réinitialisé. Attention : E-mail non délivré (${emailError || 'Vérifier la configuration SMTP'}).`,
+        : 'Mot de passe réinitialisé. (L\'envoi de l\'e-mail a rencontré une difficulté)',
       userId: user.id,
       id: user.id,
       email: user.email,
@@ -333,7 +333,7 @@ router.post('/:id/reset-password', authenticate, authorize('administrateur'), em
       role: user.role,
       telephone: user.telephone,
       email_sent: !!emailSent,
-      email_error: emailError || null,
+      email_error: emailSent ? null : 'Échec de transmission de l\'e-mail',
     });
   } catch (err) {
     console.error('[reset-password error]:', err.message);

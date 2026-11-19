@@ -2608,7 +2608,7 @@ function NouvelleVisiteModal({ entreprise, medecins = [], techniciens = [], pati
 }
 
 // ── Entreprise detail panel ───────────────────────────────────
-function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifier, onReload, onDelete, toast, initialHsePatient }) {
+function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifier, onReload, onDelete, toast, initialHsePatient, initialTab }) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'administrateur';
   const isHSE = user?.role === 'hse';
@@ -2624,7 +2624,9 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
   const [showExcelPatientModal, setShowExcelPatientModal] = useState(false);
   const [showPatientDocsModal, setShowPatientDocsModal] = useState(null);
   const [confirmDelPatient, setConfirmDelPatient] = useState(null);
-  const [activeTab, setActiveTab] = useState('patients'); // 'patients' | 'rapports_hse' | 'visites' | 'avis' | 'campagnes'
+  const [activeTab, setActiveTab] = useState(initialTab || (initialHsePatient ? 'rapports_hse' : 'patients')); // 'patients' | 'rapports_hse' | 'visites' | 'avis' | 'campagnes'
+  const [showOverview, setShowOverview] = useState(true);
+  const [patientViewMode, setPatientViewMode] = useState(typeof window !== 'undefined' && window.innerWidth < 768 ? 'cards' : 'table');
   const [showVisiteModal, setShowVisiteModal] = useState(false);
   const [showHseModal, setShowHseModal] = useState(initialHsePatient ? { patient: initialHsePatient } : null); // null | true | { patient: p }
   const [confirmDelVisite, setConfirmDelVisite] = useState(null);
@@ -2634,6 +2636,10 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
   const [showAvis, setShowAvis] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
   const [startingNewCampaign, setStartingNewCampaign] = useState(false);
+
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
 
   const { on } = useSocket() || {};
 
@@ -2926,6 +2932,94 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
           </div>
         </div>
 
+        {/* Onglets principaux - Positionnés en haut pour un accès immédiat sur smartphone */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 6,
+            marginTop: 14,
+            paddingTop: 12,
+            borderTop: '1px solid var(--border)',
+            overflowX: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'none',
+          }}
+        >
+          {[
+            ['patients', `Salariés / Patients (${patients.length})`, 'var(--primary)'],
+            ['rapports_hse', `Visites de Poste & Lieux HSE (${visitesHse.length})`, '#0284c7'],
+            ['visites', `Historique des Visites (${visitesMedicales.length})`, '#059669'],
+            ['avis', `Avis & Remarques (${avis.length})`, '#ea580c'],
+            ['campagnes', `Campagnes (${entreprise.campagnes?.length || 0})`, '#8b5cf6'],
+          ].map(([tKey, label, accentColor]) => (
+            <button
+              key={tKey}
+              type="button"
+              onClick={() => setActiveTab(tKey)}
+              style={{
+                padding: '8px 14px',
+                borderRadius: 8,
+                border: activeTab === tKey ? `2px solid ${accentColor}` : '1px solid var(--border)',
+                background: activeTab === tKey ? 'var(--surface2)' : 'transparent',
+                fontWeight: activeTab === tKey ? 800 : 600,
+                color: activeTab === tKey ? accentColor : 'var(--text-2)',
+                fontSize: 12.5,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Barre de résumé compacte & dépliable pour la convention et les chiffres */}
+        <div style={{ marginTop: 10 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '7px 12px',
+              background: 'var(--surface2)',
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+              cursor: 'pointer',
+              flexWrap: 'wrap',
+              gap: 8,
+            }}
+            onClick={() => setShowOverview(!showOverview)}
+            title="Cliquer pour afficher ou masquer la convention et les indicateurs"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
+              <span style={{ fontWeight: 700, color: 'var(--text)' }}>
+                Effectif : <strong style={{ color: 'var(--primary)' }}>{parseInt(entreprise.effectif_total, 10) || patients.length}</strong>
+              </span>
+              <span>·</span>
+              <span style={{ color: '#16a34a', fontWeight: 600 }}>
+                Visites faites : <strong>{parseInt(entreprise.nb_visites_faites, 10) || 0}</strong>
+              </span>
+              {entreprise.convensionne && (
+                <>
+                  <span>·</span>
+                  <span style={{ color: '#059669', fontWeight: 700 }}>Convention active</span>
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ padding: '2px 8px', fontSize: 11, fontWeight: 700, color: 'var(--primary)' }}
+            >
+              {showOverview ? '▲ Masquer détails convention' : '▼ Voir convention & bilan'}
+            </button>
+          </div>
+
+          {showOverview && (
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {/* Alerte si nouvelle année atteinte */}
         {isNouvelleAnnee && (
           <div
@@ -3148,48 +3242,12 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
             {entreprise.description}
           </p>
         )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Tabs Switcher */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 6,
-          borderBottom: '1px solid var(--border)',
-          padding: '0 clamp(12px, 3vw, 24px)',
-          background: 'var(--surface)',
-          flexShrink: 0,
-          overflowX: 'auto',
-          WebkitOverflowScrolling: 'touch',
-        }}
-      >
-        {[
-          ['patients', `Salariés / Patients (${patients.length})`],
-          ['rapports_hse', `Visites de Poste & Lieux HSE (${visitesHse.length})`],
-          ['visites', `Historique des Visites (${visitesMedicales.length})`],
-          ['avis', `Avis & Remarques (${avis.length})`],
-          ['campagnes', `Campagnes (${entreprise.campagnes?.length || 0})`],
-        ].map(([tKey, label]) => (
-          <button
-            key={tKey}
-            type="button"
-            onClick={() => setActiveTab(tKey)}
-            style={{
-              padding: '12px 16px',
-              border: 'none',
-              background: 'none',
-              borderBottom: activeTab === tKey ? '3px solid var(--primary)' : '3px solid transparent',
-              fontWeight: activeTab === tKey ? 800 : 600,
-              color: activeTab === tKey ? 'var(--primary)' : 'var(--text-2)',
-              fontSize: 13,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Tab Content */}
 
       {/* Tab Content */}
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: 'clamp(12px, 3vw, 24px)' }}>
@@ -3376,36 +3434,210 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
               </div>
             ) : (
               <>
-                {/* Indication défilement tactile sur smartphone */}
+                {/* Switcher vue cartes vs tableau sur mobile */}
                 <div
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    marginBottom: 6,
-                    fontSize: 11.5,
+                    marginBottom: 12,
+                    fontSize: 12,
                     color: 'var(--text-3)',
-                    padding: '0 2px',
+                    flexWrap: 'wrap',
+                    gap: 8,
                   }}
                 >
-                  <span>{filteredPatients.length} salarié(s) listé(s)</span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
-                    <span>↔</span>
-                    <span>Balayer pour voir toutes les colonnes (Docs, Actions)</span>
-                  </span>
+                  <span style={{ fontWeight: 700, color: 'var(--text)' }}>{filteredPatients.length} salarié(s) listé(s)</span>
+                  <div style={{ display: 'flex', gap: 4, background: 'var(--surface2)', borderRadius: 8, padding: 3, border: '1px solid var(--border)' }}>
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${patientViewMode === 'cards' ? 'btn-primary' : 'btn-ghost'}`}
+                      onClick={() => setPatientViewMode('cards')}
+                      style={{ padding: '3px 10px', fontSize: 11.5, borderRadius: 6, fontWeight: 700 }}
+                    >
+                      📱 Vue Cartes
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${patientViewMode === 'table' ? 'btn-primary' : 'btn-ghost'}`}
+                      onClick={() => setPatientViewMode('table')}
+                      style={{ padding: '3px 10px', fontSize: 11.5, borderRadius: 6, fontWeight: 700 }}
+                    >
+                      📊 Tableau
+                    </button>
+                  </div>
                 </div>
 
-                <div
-                  style={{
-                    border: '1px solid var(--border)',
-                    borderRadius: 12,
-                    background: 'var(--surface)',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-                    overflow: 'hidden',
-                    width: '100%',
-                  }}
-                >
-                <div className="table-scrollable-container">
+                {patientViewMode === 'cards' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', gap: 12 }}>
+                    {filteredPatients.map((p) => {
+                      const resBadge = RESULTATS_APTITUDE.find((r) => r.value === p.resultat_visite) || RESULTATS_APTITUDE[0];
+                      return (
+                        <div
+                          key={p.id}
+                          style={{
+                            background: 'var(--surface)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 14,
+                            padding: '14px 16px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 10,
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <span
+                                  style={{
+                                    padding: '2px 7px',
+                                    borderRadius: 6,
+                                    background: '#eff6ff',
+                                    border: '1px solid #bfdbfe',
+                                    fontSize: 11,
+                                    fontWeight: 800,
+                                    color: '#1d4ed8',
+                                    fontFamily: 'monospace',
+                                  }}
+                                >
+                                  {p.matricule || `DOS-${String(p.id).padStart(4, '0')}`}
+                                </span>
+                                <strong style={{ fontSize: 14.5, color: 'var(--text)' }}>
+                                  {p.nom} {p.prenom}
+                                </strong>
+                              </div>
+                              <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 3 }}>
+                                {p.genre === 'F' ? 'Femme' : 'Homme'} {p.cin ? `· CIN : ${p.cin}` : ''} {p.telephone ? `· 📞 ${p.telephone}` : ''}
+                              </div>
+                            </div>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 800,
+                                padding: '3px 8px',
+                                borderRadius: 8,
+                                background: resBadge.bg,
+                                color: resBadge.color,
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {resBadge.label}
+                            </span>
+                          </div>
+
+                          <div style={{ background: 'var(--surface2)', padding: '8px 12px', borderRadius: 8, fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                            <div>
+                              <span style={{ color: 'var(--text-3)' }}>Poste : </span>
+                              <strong style={{ color: 'var(--text)' }}>{p.poste || '—'}</strong>
+                              {p.departement && <span style={{ color: 'var(--text-2)' }}> · {p.departement}</span>}
+                            </div>
+                            <span style={{ fontSize: 11, background: 'var(--surface)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)' }}>
+                              {p.type_visite || 'Visite Périodique'}
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span style={{
+                              fontSize: 10,
+                              padding: '2px 6px',
+                              borderRadius: 4,
+                              background: p.has_visio ? '#e0f2fe' : 'var(--surface2)',
+                              color: p.has_visio ? '#0369a1' : 'var(--text-3)',
+                              border: p.has_visio ? '1px solid #bae6fd' : '1px solid var(--border)',
+                              fontWeight: 700,
+                            }}>
+                              Visio {p.has_visio ? '✓' : ''}
+                            </span>
+                            <span style={{
+                              fontSize: 10,
+                              padding: '2px 6px',
+                              borderRadius: 4,
+                              background: p.has_audio ? '#ccfbf1' : 'var(--surface2)',
+                              color: p.has_audio ? '#0f766e' : 'var(--text-3)',
+                              border: p.has_audio ? '1px solid #99f6e4' : '1px solid var(--border)',
+                              fontWeight: 700,
+                            }}>
+                              Audio {p.has_audio ? '✓' : ''}
+                            </span>
+                            <span style={{
+                              fontSize: 10,
+                              padding: '2px 6px',
+                              borderRadius: 4,
+                              background: p.has_ecg ? '#ffe4e6' : 'var(--surface2)',
+                              color: p.has_ecg ? '#be123c' : 'var(--text-3)',
+                              border: p.has_ecg ? '1px solid #fecdd3' : '1px solid var(--border)',
+                              fontWeight: 700,
+                            }}>
+                              ECG {p.has_ecg ? '✓' : ''}
+                            </span>
+                            {p.date_derniere_visite && (
+                              <span style={{ fontSize: 11, color: 'var(--text-3)', marginLeft: 'auto' }}>
+                                Visite : {String(p.date_derniere_visite).slice(0, 10)}
+                              </span>
+                            )}
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 2 }}>
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              style={{
+                                padding: '4px 10px',
+                                fontSize: 11.5,
+                                fontWeight: 700,
+                                borderRadius: 7,
+                                borderColor: (p.nb_documents || 0) > 0 ? '#3b82f6' : 'var(--border)',
+                                color: (p.nb_documents || 0) > 0 ? '#1d4ed8' : 'var(--text-2)',
+                                background: (p.nb_documents || 0) > 0 ? '#eff6ff' : 'transparent',
+                              }}
+                              onClick={() => setShowPatientDocsModal(p)}
+                            >
+                              📄 Docs ({p.nb_documents || 0})
+                            </button>
+
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              {!isHSE && (
+                                <button
+                                  type="button"
+                                  className="btn btn-outline btn-sm"
+                                  style={{ padding: '4px 10px', fontSize: 11.5, fontWeight: 700 }}
+                                  onClick={() => setShowPatientModal({ patient: p })}
+                                >
+                                  <IconEdit size={13} />
+                                  <span>Modifier</span>
+                                </button>
+                              )}
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ padding: '4px 8px', color: 'var(--danger)' }}
+                                  onClick={() => setConfirmDelPatient(p)}
+                                  title="Supprimer ce salarié"
+                                >
+                                  <IconTrash size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      border: '1px solid var(--border)',
+                      borderRadius: 12,
+                      background: 'var(--surface)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                      overflow: 'hidden',
+                      width: '100%',
+                    }}
+                  >
+                  <div className="table-scrollable-container">
                   <table
                     className="table"
                     style={{
@@ -3661,10 +3893,11 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
                 </table>
               </div>
             </div>
-            </>
-            )}
-          </div>
+          )}
+          </>
         )}
+      </div>
+    )}
 
         {/* TAB HSE: RAPPORTS DE VISITE DE POSTE & DE LIEUX */}
         {activeTab === 'rapports_hse' && (
@@ -4446,6 +4679,7 @@ export default function Entreprises({ toast }) {
   const [filterConv, setFilterConv] = useState('all');
   const [filterCampagne, setFilterCampagne] = useState('all');
   const [selected, setSelected] = useState(null);
+  const [selectedTab, setSelectedTab] = useState('patients');
   const [modal, setModal] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [quickBilan, setQuickBilan] = useState(null);
@@ -4674,8 +4908,10 @@ export default function Entreprises({ toast }) {
           entreprise={ent}
           toast={toast}
           initialHsePatient={initialHsePatient}
+          initialTab={selectedTab}
           onClose={() => {
             setSelected(null);
+            setSelectedTab('patients');
             setInitialHsePatient(null);
           }}
           onPlanifier={() =>
@@ -5012,10 +5248,10 @@ export default function Entreprises({ toast }) {
         {/* Sélecteur de Vue */}
         <div style={{ display: 'flex', gap: 4, background: 'var(--surface2)', borderRadius: 10, padding: 4, border: '1px solid var(--border)', flexWrap: 'wrap' }}>
           {[
-            ['list', 'Cartes'],
-            ['table', 'Tableau & Suivi'],
-            ['detailed', 'Entreprises & Salariés'],
-            ['map', 'Carte'],
+            ['list', '🏢 Entreprises'],
+            ['detailed', '👥 Salariés'],
+            ['table', '📊 Tableau & Suivi'],
+            ['map', '🗺️ Carte'],
           ].map(([v, l]) => (
             <button
               key={v}
@@ -5026,7 +5262,14 @@ export default function Entreprises({ toast }) {
                   loadAllPatients();
                 }
               }}
-              style={{ padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap', fontWeight: viewMode === v ? 800 : 600, borderRadius: 8 }}
+              style={{
+                padding: '6px 13px',
+                fontSize: 12,
+                whiteSpace: 'nowrap',
+                fontWeight: viewMode === v ? 800 : 600,
+                borderRadius: 8,
+                ...(v === 'detailed' && viewMode !== 'detailed' ? { color: 'var(--primary)', fontWeight: 700 } : {})
+              }}
             >
               {l}
             </button>
@@ -5707,8 +5950,18 @@ export default function Entreprises({ toast }) {
                   {/* ── Widget Indicateurs ── */}
                   <div style={{ padding: '12px 14px', background: 'var(--surface2)', borderRadius: 12, margin: '12px 0', border: '1px solid var(--border)' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, textAlign: 'center', marginBottom: 10 }}>
-                      <div style={{ background: 'var(--surface)', padding: '6px 4px', borderRadius: 8, border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700 }}>Effectif</div>
+                      <div
+                        style={{ background: 'var(--surface)', padding: '6px 4px', borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer' }}
+                        onClick={(evt) => {
+                          evt.stopPropagation();
+                          setSelectedTab('patients');
+                          setSelected(e.id);
+                        }}
+                        title="Voir la liste des salariés de cette entreprise"
+                      >
+                        <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                          <IconUsers size={11} /> Effectif
+                        </div>
                         <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--primary)', marginTop: 1 }}>{eff}</div>
                       </div>
                       <div style={{ background: 'var(--surface)', padding: '6px 4px', borderRadius: 8, border: '1px solid var(--border)' }}>
@@ -5748,6 +6001,31 @@ export default function Entreprises({ toast }) {
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={(evt) => {
+                        evt.stopPropagation();
+                        setSelectedTab('patients');
+                        setSelected(e.id);
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        color: 'var(--primary)',
+                        borderColor: 'var(--primary)',
+                        background: 'var(--primary-lt)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        borderRadius: 6,
+                      }}
+                      title="Consulter directement la liste des salariés"
+                    >
+                      <IconUsers size={13} />
+                      <span>Salariés ({eff})</span>
+                    </button>
                     {isAdmin && (
                       <button
                         className="btn btn-sm"

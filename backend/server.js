@@ -150,6 +150,9 @@ io.on('connection', (socket) => {
 // Expose io to routes if needed
 app.set('io', io);
 
+// Faire confiance au reverse proxy (Render / Nginx / Cloudflare) pour l'IP client et rate limiting
+app.set('trust proxy', 1);
+
 // ─── Express Middleware ───────────────────────────────────────
 const compression = require('compression');
 const helmet      = require('helmet');

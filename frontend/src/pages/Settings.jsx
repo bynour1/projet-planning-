@@ -164,6 +164,38 @@ export default function Settings({ toast }) {
     }
   }
 
+  async function handleRevokeDevice(deviceId) {
+    if (!window.confirm('Voulez-vous retirer cet appareil de confiance ?')) return;
+    setRevokingDeviceId(deviceId);
+    try {
+      await axios.delete(`/api/auth/trusted-devices/${deviceId}`);
+      toast?.('Appareil retiré avec succès', 'success');
+      await fetchTrustedDevices();
+    } catch (err) {
+      toast?.(err.response?.data?.message || 'Erreur lors du retrait de l’appareil', 'error');
+    } finally {
+      setRevokingDeviceId(null);
+    }
+  }
+
+  async function handleRevokeAllDevices() {
+    if (!window.confirm('Êtes-vous sûr de vouloir vous déconnecter de tous vos appareils ?')) return;
+    setRevokingAll(true);
+    try {
+      const { data } = await axios.post('/api/auth/trusted-devices/revoke-all');
+      if (data?.token) {
+        try { sessionStorage.setItem('pm_token', data.token); } catch {}
+        axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+      }
+      toast?.('Tous les appareils ont été déconnectés', 'success');
+      await fetchTrustedDevices();
+    } catch (err) {
+      toast?.(err.response?.data?.message || 'Erreur lors de la déconnexion', 'error');
+    } finally {
+      setRevokingAll(false);
+    }
+  }
+
   useEffect(() => {
     if (activeTab === 'securite') {
       fetchTrustedDevices();
@@ -1536,10 +1568,111 @@ export default function Settings({ toast }) {
             )}
           </div>
 
+          {/* Mes appareils & sessions actives */}
+          <div className="card settings-card" style={{ padding: 'clamp(16px, 3vw, 24px)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>📱</span>
+                  <span>Mes appareils</span>
+                </h3>
+                <p style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4, marginBottom: 0 }}>
+                  Consultez vos sessions et appareils de confiance enregistrés sur votre compte.
+                </p>
+              </div>
 
+              {trustedDevices.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={handleRevokeAllDevices}
+                  disabled={revokingAll}
+                  style={{ color: 'var(--danger)', borderColor: 'var(--danger)', minHeight: 34, fontSize: 12 }}
+                >
+                  {revokingAll ? 'Déconnexion...' : 'Déconnecter tous les appareils'}
+                </button>
+              )}
+            </div>
 
+            {loadingDevices ? (
+              <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
+                Chargement des appareils...
+              </div>
+            ) : trustedDevices.length === 0 ? (
+              <div style={{
+                padding: '16px',
+                borderRadius: 8,
+                background: 'var(--surface2)',
+                border: '1px solid var(--border)',
+                fontSize: 13,
+                color: 'var(--text-3)',
+                textAlign: 'center'
+              }}>
+                Aucun appareil de confiance enregistré pour le moment.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {trustedDevices.map((dev) => (
+                  <div
+                    key={dev.id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '12px 14px',
+                      borderRadius: 8,
+                      background: 'var(--surface2)',
+                      border: '1px solid var(--border)',
+                      flexWrap: 'wrap',
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 20 }}>
+                        {/iPhone|Android|Mobile/i.test(dev.user_agent || '') ? '📱' : '💻'}
+                      </span>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)' }}>
+                            {dev.device_name || 'Appareil reconnu'}
+                          </span>
+                          {dev.is_current && (
+                            <span style={{
+                              fontSize: 10,
+                              fontWeight: 800,
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              background: '#dcfce7',
+                              color: '#166534',
+                            }}>
+                              Cet appareil
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>
+                          {dev.last_used_at ? (
+                            `Dernière activité le ${new Date(dev.last_used_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+                          ) : (
+                            `Enregistré le ${new Date(dev.created_at).toLocaleDateString('fr-FR')}`
+                          )}
+                        </div>
+                      </div>
+                    </div>
 
-
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => handleRevokeDevice(dev.id)}
+                      disabled={revokingDeviceId === dev.id}
+                      style={{ padding: '4px 10px', fontSize: 11.5, color: 'var(--danger)', borderColor: 'var(--border)' }}
+                    >
+                      {revokingDeviceId === dev.id ? 'Retrait...' : 'Retirer'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
