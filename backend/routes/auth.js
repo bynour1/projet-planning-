@@ -10,11 +10,13 @@ const crypto   = require('crypto');
 const { sendOTP, sendSMS, sendPasswordReset, testEmailConnection, formatWhatsAppLink } = require('../config/mailer');
 const {
   emailRateLimiter,
+  emailGlobalIpLimiter,
   totpVerifyLimiter,
   totpUserActionLimiter,
   totpLimiter,
   webauthnOptionsLimiter,
   webauthnVerifyLimiter,
+  webauthnGlobalIpLimiter,
 } = require('../middleware/security');
 const {
   generateRegistrationOptions,
@@ -661,7 +663,7 @@ router.post('/2fa/disable', authenticate, totpUserActionLimiter, async (req, res
     await db.query('UPDATE users SET totp_enabled = 0, totp_secret_enc = NULL, totp_last_step = NULL WHERE id = ?', [user.id]);
     await db.query('DELETE FROM totp_backup_codes WHERE user_id = ?', [user.id]);
     await revokeTrustedDevicesForUser(db, user.id);
-    res.clearCookie('trusted_device', { path: '/' });
+    res.clearCookie('trusted_device', getCookieOptions(0));
     invalidateUserCache(user.id);
 
     res.json({ success: true, message: 'Double authentification désactivée avec succès' });
@@ -747,7 +749,7 @@ router.delete('/biometric/credentials/:id', authenticate, async (req, res) => {
 
 // 3. POST /api/auth/biometric/register/options (authentifié)
 // Génère les options FIDO2 d'enregistrement d'une nouvelle clé biométrique
-router.post('/biometric/register/options', authenticate, webauthnOptionsLimiter, async (req, res) => {
+router.post('/biometric/register/options', authenticate, webauthnGlobalIpLimiter, webauthnOptionsLimiter, async (req, res) => {
   try {
     const config = getWebAuthnConfig();
     const [existingCreds] = await db.query(
@@ -796,7 +798,7 @@ router.post('/biometric/register/options', authenticate, webauthnOptionsLimiter,
 
 // 4. POST /api/auth/biometric/register/verify (authentifié)
 // Valide cryptographiquement la nouvelle empreinte/passkey
-router.post('/biometric/register/verify', authenticate, webauthnVerifyLimiter, async (req, res) => {
+router.post('/biometric/register/verify', authenticate, webauthnGlobalIpLimiter, webauthnVerifyLimiter, async (req, res) => {
   const { response, deviceName } = req.body;
   if (!response || !response.response || !response.response.clientDataJSON) {
     return res.status(400).json({ message: 'Données de réponse biométrique invalides' });
@@ -853,7 +855,7 @@ router.post('/biometric/register/verify', authenticate, webauthnVerifyLimiter, a
 
 // 5. POST /api/auth/biometric/login/options (public)
 // Anti-énumération : même forme exacte que le compte existe ou non
-router.post('/biometric/login/options', webauthnOptionsLimiter, async (req, res) => {
+router.post('/biometric/login/options', webauthnGlobalIpLimiter, webauthnOptionsLimiter, async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const config = getWebAuthnConfig();
 
@@ -925,7 +927,7 @@ router.post('/biometric/login/options', webauthnOptionsLimiter, async (req, res)
 
 // 6. POST /api/auth/biometric/login/verify (public)
 // Validation cryptographique et délivrance de la session
-router.post('/biometric/login/verify', webauthnVerifyLimiter, async (req, res) => {
+router.post('/biometric/login/verify', webauthnGlobalIpLimiter, webauthnVerifyLimiter, async (req, res) => {
   const { response } = req.body;
   if (!response || !response.response || !response.response.clientDataJSON) {
     return res.status(400).json({ message: 'Données biométriques invalides' });
@@ -1140,7 +1142,7 @@ router.post('/change-password', authenticate, async (req, res) => {
 
     // Révocation de tous les appareils de confiance et sessions actives lors du changement de mot de passe
     await revokeTrustedDevicesForUser(db, req.user.id);
-    res.clearCookie('trusted_device', { path: '/' });
+    res.clearCookie('trusted_device', getCookieOptions(0));
 
     // Force disconnect all other devices/sockets in real time
     const io = req.app.get('io');
@@ -1206,8 +1208,8 @@ router.post('/force-change-password', authenticateOrFirstLoginTempToken, async (
     // Révocation de toutes les sessions existantes et appareils de confiance
     await revokeTrustedDevicesForUser(db, user.id);
     await db.query('DELETE FROM refresh_tokens WHERE user_id = ?', [user.id]);
-    res.clearCookie('trusted_device', { path: '/' });
-    res.clearCookie('refresh_token', { path: '/' });
+    res.clearCookie('trusted_device', getCookieOptions(0));
+    res.clearCookie('refresh_token', getCookieOptions(0));
     invalidateUserCache(user.id);
 
     const io = req.app.get('io');
@@ -1280,7 +1282,7 @@ router.post('/force-change-password', authenticateOrFirstLoginTempToken, async (
 // ─── MOT DE PASSE OUBLIÉ & RÉINITIALISATION ──────────────────────
 
 // POST /api/auth/forgot-password (public) — Rate limit & Anti-énumération
-router.post('/forgot-password', emailRateLimiter, async (req, res) => {
+router.post('/forgot-password', emailGlobalIpLimiter, emailRateLimiter, async (req, res) => {
   const { email, identifier } = req.body;
   const input = String(identifier || email || '').trim().toLowerCase();
   const successMsg = 'Si cette adresse email correspond à un compte actif, un lien de réinitialisation vous a été envoyé par email.';
@@ -1362,7 +1364,7 @@ router.get('/services-status', authenticate, async (req, res) => {
 });
 
 // POST /api/auth/test-email (Test direct de la configuration email Brevo — Administrateurs uniquement)
-router.post('/test-email', authenticate, emailRateLimiter, async (req, res) => {
+router.post('/test-email', authenticate, emailGlobalIpLimiter, emailRateLimiter, async (req, res) => {
   if (req.user?.role !== 'administrateur') {
     return res.status(403).json({ message: 'Accès réservé aux administrateurs' });
   }
@@ -1442,8 +1444,8 @@ router.post('/reset-password', async (req, res) => {
     if (userId) {
       await revokeTrustedDevicesForUser(db, userId);
       await db.query('DELETE FROM webauthn_credentials WHERE user_id = ?', [userId]);
-      res.clearCookie('trusted_device', { path: '/' });
-      res.clearCookie('refresh_token', { path: '/' });
+      res.clearCookie('trusted_device', getCookieOptions(0));
+      res.clearCookie('refresh_token', getCookieOptions(0));
       invalidateUserCache(userId);
       const io = req.app.get('io');
       if (io) {
@@ -1470,7 +1472,7 @@ router.post('/refresh', async (req, res) => {
   try {
     const result = await rotateRefreshToken(db, rawRefreshToken, req.headers['user-agent']);
     if (!result.valid) {
-      res.clearCookie('refresh_token', { path: '/' });
+      res.clearCookie('refresh_token', getCookieOptions(0));
       return res.status(401).json({ message: 'Session expirée ou invalide. Veuillez vous reconnecter.' });
     }
 
@@ -1519,7 +1521,7 @@ router.post('/logout', async (req, res) => {
       const tokenHash = crypto.createHash('sha256').update(String(rawRefreshToken)).digest('hex');
       await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = ?', [tokenHash]).catch(() => {});
     }
-    res.clearCookie('refresh_token', { path: '/' });
+    res.clearCookie('refresh_token', getCookieOptions(0));
     res.json({ success: true, message: 'Déconnexion réussie' });
   } catch {
     res.json({ success: true });
@@ -1571,8 +1573,8 @@ router.post('/trusted-devices/revoke-all', authenticate, async (req, res) => {
     invalidateUserCache(req.user.id);
 
     // Supprimer les cookies sur le client appelant
-    res.clearCookie('trusted_device', { path: '/' });
-    res.clearCookie('refresh_token', { path: '/' });
+    res.clearCookie('trusted_device', getCookieOptions(0));
+    res.clearCookie('refresh_token', getCookieOptions(0));
 
     // Notifier Socket.io pour forcer la déconnexion en temps réel des autres clients
     const io = req.app.get('io');

@@ -1349,29 +1349,35 @@ export default function Chat({ toast }) {
 
         {/* En ligne */}
         <div style={{ padding: 14, borderBottom: '1px solid var(--border)' }}>
-          <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-2)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-            En ligne · {onlineUsers.length}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {onlineUsers.map(u => (
-              <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ position: 'relative' }}>
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: roleColor(u.role) + '22', color: roleColor(u.role), fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {(u.prenom?.[0] || '').toUpperCase()}{(u.nom?.[0] || '').toUpperCase()}
-                  </div>
-                  <div style={{ position: 'absolute', bottom: 0, right: 0, width: 8, height: 8, background: '#22c55e', borderRadius: '50%', border: '1.5px solid white' }} />
+          {(() => {
+            const uniqueUsers = Array.from(new Map(onlineUsers.map(u => [u.id, u])).values());
+            return (
+              <>
+                <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-2)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                  En ligne · {uniqueUsers.length}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.prenom} {u.nom}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-3)', textTransform: 'capitalize' }}>{u.role}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {uniqueUsers.map(u => (
+                    <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ position: 'relative' }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: roleColor(u.role) + '22', color: roleColor(u.role), fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {(u.prenom?.[0] || '').toUpperCase()}{(u.nom?.[0] || '').toUpperCase()}
+                        </div>
+                        <div style={{ position: 'absolute', bottom: 0, right: 0, width: 8, height: 8, background: '#22c55e', borderRadius: '50%', border: '1.5px solid white' }} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.prenom} {u.nom}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-3)', textTransform: 'capitalize' }}>{u.role}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {uniqueUsers.length === 0 && (
+                    <div style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'center', marginTop: 8 }}>Aucun utilisateur en ligne</div>
+                  )}
                 </div>
-
-              </div>
-            ))}
-            {onlineUsers.length === 0 && (
-              <div style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'center', marginTop: 8 }}>Aucun utilisateur en ligne</div>
-            )}
-          </div>
+              </>
+            );
+          })()}
         </div>
 
         {/* Assistant IA — info */}

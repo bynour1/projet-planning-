@@ -309,3 +309,44 @@ Internet
 | Frontend | 5173 | 5173 | ClusterIP |
 | MySQL | 3306 | 3306 | Headless |
 | Ingress | — | — | 80/443 |
+
+---
+
+## 🍪 Cookies et Déploiement Cross-Domain (Vercel & Render)
+
+Lors du déploiement séparé du frontend (ex: Vercel `https://projet-planning-pi.vercel.app`) et du backend (ex: Render `https://projet-planning.onrender.com`), la gestion des cookies sécurisés `httpOnly` (`trusted_device` et `refresh_token`) est gérée selon deux approches :
+
+### 1. Solution Recommandée : Rewrite Vercel (Reverse Proxy First-Party)
+C'est la solution active par défaut dans `frontend/vercel.json` :
+```json
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://projet-planning.onrender.com/api/$1" },
+    { "source": "/socket.io/(.*)", "destination": "https://projet-planning.onrender.com/socket.io/$1" }
+  ]
+}
+```
+* **Avantages** : Les requêtes vers `/api/*` sont émises vers le même domaine d'origine. Les cookies sont traités comme des cookies **first-party**.
+* **Compatibilité** : Fonctionne nativement sur **iOS Safari (ITP)**, macOS, Android et navigateurs stricts sans blocage des cookies tiers.
+* **Sécurité** : `SameSite=Lax` garantit une protection CSRF maximale.
+
+### 2. Solution Alternative : Cross-Domain Direct (`SameSite=None; Secure`)
+Si le frontend interroge directement le domaine backend Render sans rewrite Vercel :
+* Définir la variable d'environnement sur Render : `COOKIE_SAMESITE=none`.
+* Les cookies sont alors émis avec `SameSite=None; Secure; HttpOnly`.
+* Côté client, Axios et `fetch` doivent inclure `withCredentials: true` (déjà autorisé via `corsOptions.credentials = true` sur le serveur).
+
+---
+
+## 🛡️ Limites Anti-Abus & Rate Limiting
+
+Pour protéger l'application contre les attaques par déni de service et la force brute, des paliers de limitation stricts sont appliqués :
+* **WebAuthn / Biométrie** :
+  * Limite par compte + IP : 20 options et 10 vérifications / 15 min.
+  * Limite globale par IP seule : **60 requêtes / 15 min** (`webauthnGlobalIpLimiter`).
+* **Envois d'E-mails (Inscription, Mot de passe oublié, Renvoi accès)** :
+  * Limite par adresse e-mail + IP : 5 demandes / 15 min.
+  * Limite globale par IP seule : **30 envois / heure** (`emailGlobalIpLimiter`).
+* **Double Authentification (TOTP)** :
+  * 5 tentatives / 15 min par compte verrouillé.
+

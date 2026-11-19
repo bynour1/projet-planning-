@@ -15,9 +15,16 @@ async function main() {
   const recipient = (process.argv[2] || '').trim();
   const emailProvider = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
   const isGmail = emailProvider === 'gmail';
+  const isBrevoApi = emailProvider === 'brevo-api' || emailProvider === 'brevo_api';
+  const isResend = emailProvider === 'resend';
+  const isHttpApi = isBrevoApi || isResend;
 
   console.log('================================================================');
-  if (isGmail) {
+  if (isBrevoApi) {
+    console.log('🧪 GMT Ariana — Test d\'envoi API HTTPS Brevo (Port 443 - Anti-blocage Render)');
+  } else if (isResend) {
+    console.log('🧪 GMT Ariana — Test d\'envoi API HTTPS Resend (Port 443)');
+  } else if (isGmail) {
     console.log('🧪 GMT Ariana — Test d\'envoi SMTP Gmail dédié');
   } else {
     console.log('🧪 GMT Ariana — Test d\'envoi SMTP Professionnel (Brevo)');
@@ -26,12 +33,50 @@ async function main() {
 
   if (isGmail) {
     console.warn('\n⚠️ Mode Gmail dédié : usage interne, ~500 emails/jour');
+  } else if (isBrevoApi) {
+    console.log('\n🌐 Mode Brevo API actif : aucun port SMTP sortant requis (contourne le timeout Render)');
   }
 
   if (!recipient || !recipient.includes('@') || !recipient.includes('.')) {
     console.error('\n❌ Erreur : Veuillez fournir une adresse email de test valide.');
     console.error('👉 Usage : node scripts/test-email.js destinataire@exemple.com\n');
     process.exit(1);
+  }
+
+  // Si mode API HTTP (Brevo API ou Resend), utiliser testEmailConnection de ../config/mailer
+  if (isHttpApi) {
+    const { testEmailConnection, getFromAddress } = require('../config/mailer');
+    const fromAddr = getFromAddress('Test Système');
+    const apiKey = isBrevoApi ? (process.env.BREVO_API_KEY || '').trim() : (process.env.RESEND_API_KEY || '').trim();
+    const keyName = isBrevoApi ? 'BREVO_API_KEY' : 'RESEND_API_KEY';
+
+    console.log(`\n📋 Paramètres détectés :`);
+    console.log(`   - Fournisseur  : ${isBrevoApi ? 'Brevo API (HTTPS port 443)' : 'Resend API (HTTPS port 443)'}`);
+    console.log(`   - Clé API (${keyName}) : ${apiKey ? apiKey.slice(0, 6) + '***' : '(NON DÉFINIE)'}`);
+    console.log(`   - Expéditeur   : ${fromAddr}`);
+    console.log(`   - Destinataire : ${recipient}`);
+
+    if (!apiKey) {
+      console.error(`\n❌ ERREUR : La variable ${keyName} est requise dans backend/.env !`);
+      process.exit(1);
+    }
+
+    console.log(`\n⏳ Test de connexion et envoi en cours via API HTTPS...`);
+    const result = await testEmailConnection(recipient);
+    if (!result.ok) {
+      console.error(`\n❌ Échec du test :`, result.error || result);
+      process.exit(1);
+    }
+
+    console.log('\n================================================================');
+    console.log('🎉 E-MAIL ENVOYÉ AVEC SUCCÈS VIA API HTTPS !');
+    console.log('================================================================');
+    console.log(`🆔 Message ID   : ${result.messageId}`);
+    console.log(`📧 Expéditeur   : ${fromAddr}`);
+    console.log(`📬 Destinataire : ${recipient}`);
+    console.log(`🌐 Mode utilisé : ${result.mode}`);
+    console.log('================================================================\n');
+    return;
   }
 
   const host    = isGmail ? 'smtp.gmail.com' : (process.env.EMAIL_HOST || 'smtp-relay.brevo.com').trim();

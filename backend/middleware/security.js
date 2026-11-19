@@ -46,6 +46,17 @@ const emailRateLimiter = rateLimit({
   legacyHeaders:   false,
 });
 
+// Emails : limite globale par IP seule (max 30 envois / 1 heure par IP)
+const emailGlobalIpLimiter = rateLimit({
+  windowMs:       60 * 60 * 1000,
+  max:            30,
+  skip:           () => process.env.NODE_ENV === 'test' && !process.env.TEST_RATE_LIMIT,
+  keyGenerator:   (req) => req.ip,
+  message:        { message: "Trop d'envois d'e-mails depuis cette adresse IP. Réessayez plus tard." },
+  standardHeaders: true,
+  legacyHeaders:   false,
+});
+
 // TOTP 2FA Verify (Route publique) : rate limit STRICT par userId extrait du tempToken signé
 // Ne JAMAIS utiliser req.body.userId qui peut être falsifié par un attaquant
 const jwt = require('jsonwebtoken');
@@ -123,6 +134,17 @@ const webauthnVerifyLimiter = rateLimit({
   legacyHeaders:   false,
 });
 
+// WebAuthn : limite globale par IP seule (max 60 requêtes / 15 minutes par IP)
+const webauthnGlobalIpLimiter = rateLimit({
+  windowMs:       15 * 60 * 1000,
+  max:            60,
+  skip:           () => process.env.NODE_ENV === 'test' && !process.env.TEST_RATE_LIMIT,
+  keyGenerator:   (req) => req.ip,
+  message:        { message: 'Trop de requêtes biométriques depuis cette adresse IP. Réessayez dans 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders:   false,
+});
+
 // ─── Input Validators ─────────────────────────────────────────
 
 const validateLogin = [
@@ -169,8 +191,10 @@ module.exports = {
   totpVerifyLimiter,
   totpUserActionLimiter,
   emailRateLimiter,
+  emailGlobalIpLimiter,
   webauthnOptionsLimiter,
   webauthnVerifyLimiter,
+  webauthnGlobalIpLimiter,
   apiLimiter,
   validateLogin,
   validateRegister,

@@ -87,6 +87,8 @@ export default function Settings({ toast }) {
   const [subscribingPush, setSubscribingPush] = useState(false);
   const [diagnosticLoading, setDiagnosticLoading] = useState(false);
   const [activationError, setActivationError] = useState(null);
+  const [technicalPushError, setTechnicalPushError] = useState(null);
+  const [isBrave, setIsBrave] = useState(false);
   const [notifPreferences, setNotifPreferences] = useState(() => {
     try {
       const saved = localStorage.getItem('gmt_notif_preferences');
@@ -190,6 +192,12 @@ export default function Settings({ toast }) {
     }
   }, [notificationPermission]);
 
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.brave && typeof navigator.brave.isBrave === 'function') {
+      navigator.brave.isBrave().then(val => setIsBrave(Boolean(val))).catch(() => {});
+    }
+  }, []);
+
   // ─── Diagnostic Push & Service Worker Logic ───
   const isIOS = typeof window !== 'undefined' && (
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -235,11 +243,12 @@ export default function Settings({ toast }) {
       setPushSubscription(currentSub);
 
       // 3. Statut Abonnement Serveur & 4. Date Dernier Push
+      let isSub = false;
       try {
         const { data } = await axios.post('/api/push/status', {
           endpoint: currentSub?.endpoint || null,
         });
-        setServerSubscribed(Boolean(data?.isSubscribed));
+        isSub = Boolean(data?.isSubscribed);
         if (data?.lastPushAt) {
           setLastPushDate(data.lastPushAt);
           try { localStorage.setItem('gmt_last_push_received_at', data.lastPushAt); } catch {}
@@ -251,6 +260,26 @@ export default function Settings({ toast }) {
         }
       } catch (err) {
         console.warn('[Push Diagnostic] Erreur appel /api/push/status:', err);
+      }
+
+      // 5. Si l'abonnement existe côté navigateur mais pas côté serveur, ré-enregistre-le automatiquement
+      if (currentSub && !isSub) {
+        try {
+          await axios.post('/api/push/subscribe', {
+            subscription: currentSub,
+          });
+          isSub = true;
+        } catch (syncErr) {
+          console.warn('[Push Diagnostic] Erreur ré-enregistrement automatique:', syncErr);
+        }
+      }
+
+      setServerSubscribed(isSub);
+
+      // S'il existe et qu'il est enregistré côté serveur, efface l'ancienne erreur
+      if (currentSub && isSub) {
+        setActivationError(null);
+        setTechnicalPushError(null);
       }
     } finally {
       setDiagnosticLoading(false);
@@ -272,8 +301,12 @@ export default function Settings({ toast }) {
           try { localStorage.setItem('gmt_last_push_received_at', received); } catch {}
         }
       };
-      navigator.serviceWorker.addEventListener('message', messageHandler);
-      return () => navigator.serviceWorker.removeEventListener('message', messageHandler);
+      navigator.serviceWorker?.addEventListener?.('message', messageHandler);
+      return () => {
+        try {
+          navigator.serviceWorker?.removeEventListener?.('message', messageHandler);
+        } catch (_) {}
+      };
     }
   }, []);
 
@@ -317,20 +350,9 @@ export default function Settings({ toast }) {
         status: 'blocked',
         badge: 'Bloquées par le navigateur',
         title: 'Notifications bloquées',
-        desc: 'Les alertes sont bloquées dans les paramètres de votre navigateur. Autorisez-les via le cadenas 🔒 pour recevoir vos alertes.',
-        badgeBg: '#fef2f2',
-        badgeColor: '#991b1b',
-        border: '#fecaca',
-        actionType: 'retry',
-      };
-    }
-
-    if (activationError) {
-      return {
-        status: 'error',
-        badge: 'Erreur',
-        title: 'Activation interrompue',
-        desc: activationError,
+        desc: isBrave
+          ? 'Dans Brave, activez « Utiliser les services Google pour les notifications push » dans les réglages, ou utilisez Chrome ou Edge.'
+          : 'Les alertes sont bloquées dans les paramètres de votre navigateur. Autorisez-les via le cadenas 🔒 pour recevoir vos alertes.',
         badgeBg: '#fef2f2',
         badgeColor: '#991b1b',
         border: '#fecaca',
@@ -351,6 +373,21 @@ export default function Settings({ toast }) {
       };
     }
 
+    if (activationError) {
+      return {
+        status: 'unavailable',
+        badge: 'Indisponible',
+        title: 'Notifications indisponibles',
+        desc: isBrave
+          ? 'Dans Brave, activez « Utiliser les services Google pour les notifications push » dans les réglages, ou utilisez Chrome ou Edge.'
+          : 'Les notifications ne sont pas disponibles pour le moment. Réessayez dans quelques minutes.',
+        badgeBg: '#f1f5f9',
+        badgeColor: '#475569',
+        border: '#cbd5e1',
+        actionType: 'retry',
+      };
+    }
+
     return {
       status: 'inactive',
       badge: 'Non activées',
@@ -361,7 +398,7 @@ export default function Settings({ toast }) {
       border: '#cbd5e1',
       actionType: 'enable',
     };
-  }, [currentNotifPerm, serverSubscribed, isIOS, isStandalone, activationError]);
+  }, [currentNotifPerm, serverSubscribed, isIOS, isStandalone, activationError, isBrave]);
 
   async function handleEnablePush() {
     setSubscribingPush(true);
@@ -371,8 +408,11 @@ export default function Settings({ toast }) {
     const timeoutHandle = setTimeout(() => {
       if (!isDone) {
         setSubscribingPush(false);
-        setActivationError("L'activation a pris trop de temps (délai de 10 s dépassé).");
-        toast("Délai d'enregistrement dépassé. Veuillez réessayer.", 'warning');
+        const userMsg = isBrave
+          ? 'Dans Brave, activez « Utiliser les services Google pour les notifications push » dans les réglages, ou utilisez Chrome ou Edge.'
+          : 'Les notifications ne sont pas disponibles pour le moment. Réessayez dans quelques minutes.';
+        setActivationError(userMsg);
+        toast(userMsg, 'info');
       }
     }, 10000);
 
@@ -409,44 +449,71 @@ export default function Settings({ toast }) {
         throw new Error('PushManager indisponible. Veuillez recharger la page.');
       }
 
-      let vapidPublicKey;
-      try {
+      // 1. Lire d'abord l'abonnement existant (registration.pushManager.getSubscription())
+      let sub = await reg.pushManager.getSubscription();
+
+      // 2. Si aucun abonnement n'existe dans le navigateur, on s'abonne via PushManager
+      if (!sub) {
         const { data: keyData } = await axios.get('/api/push/public-key');
-        vapidPublicKey = keyData?.publicKey;
-      } catch (keyErr) {
-        if (keyErr.response?.status === 404) {
-          throw new Error('Le serveur backend est en cours de mise à jour sur Render. Veuillez patienter 1 à 2 minutes ou vérifier le statut du déploiement.');
+        const vapidPublicKey = keyData?.publicKey;
+
+        if (!vapidPublicKey) {
+          throw new Error('Clé de notification introuvable');
         }
-        throw new Error(keyErr.response?.data?.message || keyErr.message || 'Impossible de contacter le serveur pour la configuration push.');
+
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        });
       }
 
-      if (!vapidPublicKey) {
-        throw new Error('Clé de notification introuvable sur le serveur.');
+      if (!sub) {
+        throw new Error('Impossible de récupérer l’abonnement push.');
       }
-
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-      });
 
       setPushSubscription(sub);
 
+      // 3. Enregistrer l'abonnement côté serveur
       await axios.post('/api/push/subscribe', {
         subscription: sub,
       });
 
       setServerSubscribed(true);
       setActivationError(null);
+      setTechnicalPushError(null);
       toast('Notifications activées avec succès !', 'success');
       await checkPushDiagnostic();
     } catch (err) {
       console.error('[Push Subscription Error]:', err);
-      const is404 = err.response?.status === 404;
-      const userMessage = is404
-        ? 'Le serveur backend est en cours de mise à jour sur Render. Veuillez patienter 1 à 2 minutes.'
-        : (err.message || "Erreur lors de l'activation des notifications.");
+
+      // Si pushManager.subscribe échoue, vérifier si un abonnement valide n'existe pas malgré tout
+      let fallbackSub = null;
+      try {
+        const reg = await navigator?.serviceWorker?.getRegistration();
+        if (reg?.pushManager) {
+          fallbackSub = await reg.pushManager.getSubscription();
+        }
+      } catch (_) {}
+
+      if (fallbackSub) {
+        try {
+          await axios.post('/api/push/subscribe', { subscription: fallbackSub });
+          setPushSubscription(fallbackSub);
+          setServerSubscribed(true);
+          setActivationError(null);
+          setTechnicalPushError(null);
+          toast('Notifications activées avec succès !', 'success');
+          await checkPushDiagnostic();
+          return;
+        } catch (_) {}
+      }
+
+      setTechnicalPushError(err.response?.data?.message || err.message || 'Erreur technique push');
+      const userMessage = isBrave
+        ? 'Dans Brave, activez « Utiliser les services Google pour les notifications push » dans les réglages, ou utilisez Chrome ou Edge.'
+        : 'Les notifications ne sont pas disponibles pour le moment. Réessayez dans quelques minutes.';
       setActivationError(userMessage);
-      toast(userMessage, 'error');
+      toast(userMessage, 'info');
     } finally {
       isDone = true;
       clearTimeout(timeoutHandle);
@@ -479,15 +546,32 @@ export default function Settings({ toast }) {
     setTestingPush(true);
     setTestPushResult(null);
     try {
+      let endpoint = pushSubscription?.endpoint || null;
+      if (!endpoint && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.getRegistration();
+          const sub = await reg?.pushManager?.getSubscription();
+          if (sub) {
+            endpoint = sub.endpoint;
+            setPushSubscription(sub);
+          }
+        } catch (_) {}
+      }
+
       const { data } = await axios.post('/api/push/test', {
-        endpoint: pushSubscription?.endpoint || null,
+        endpoint,
       });
 
       setTestPushResult({
         success: true,
-        message: 'Notification push transmise avec succès par le serveur ! (VAPID 201)',
+        message: 'Notification envoyée avec succès sur votre appareil.',
         details: data,
       });
+
+      // Le test réussi confirme que l'abonnement est actif et enregistré côté serveur
+      setServerSubscribed(true);
+      setActivationError(null);
+      setTechnicalPushError(null);
 
       const now = new Date().toISOString();
       setLastPushDate(now);
@@ -496,17 +580,18 @@ export default function Settings({ toast }) {
       if (testNotification) {
         testNotification('Notification GMT Ariana', 'Le système d\'alertes push fonctionne parfaitement sur votre appareil.');
       }
-      toast('Push serveur envoyé avec succès !', 'success');
+      toast('Notification de test envoyée avec succès !', 'success');
     } catch (err) {
-      const is404 = err.response?.status === 404;
-      const errorMsg = is404
-        ? 'La route de notification n\'est pas encore active sur le serveur (mise à jour Render en cours). Réessayez dans 1 à 2 minutes.'
-        : (err.response?.data?.message || err.message || 'Échec de l\'envoi du push de test.');
+      console.error('[Push Test Error]:', err);
+      setTechnicalPushError(err.response?.data?.message || err.message || 'Erreur push de test');
+      const userMessage = isBrave
+        ? 'Dans Brave, activez « Utiliser les services Google pour les notifications push » dans les réglages, ou utilisez Chrome ou Edge.'
+        : 'Les notifications ne sont pas disponibles pour le moment. Réessayez dans quelques minutes.';
       setTestPushResult({
         success: false,
-        message: errorMsg,
+        message: userMessage,
       });
-      toast(errorMsg, 'error');
+      toast(userMessage, 'info');
     } finally {
       setTestingPush(false);
     }
@@ -807,7 +892,7 @@ export default function Settings({ toast }) {
     },
     {
       id: 'systeme',
-      label: 'Informations',
+      label: 'À propos',
       icon: (
         <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -1405,14 +1490,12 @@ export default function Settings({ toast }) {
                   borderRadius: '50%',
                   background: (user?.has_biometric || biometricCredentials.length > 0) ? '#16a34a' : '#94a3b8'
                 }} />
-                {(user?.has_biometric || biometricCredentials.length > 0)
-                  ? `Activée${biometricCredentials.length > 1 ? ` (${biometricCredentials.length})` : ''}`
-                  : 'Non activée'}
+                {(user?.has_biometric || biometricCredentials.length > 0) ? 'Activée' : 'Non activée'}
               </span>
             </div>
 
             <p style={{ fontSize: 12.5, color: 'var(--text-2)', marginBottom: 14, lineHeight: 1.5 }}>
-              Connectez-vous avec votre empreinte, Face ID ou Windows Hello sur cet appareil.
+              Connectez-vous rapidement et en toute sécurité avec votre empreinte, Face ID ou Windows Hello sur cet appareil.
             </p>
 
             {!isBiometricSupported ? (
@@ -1427,260 +1510,33 @@ export default function Settings({ toast }) {
                 La connexion rapide n'est pas disponible sur ce navigateur ou cet appareil.
               </div>
             ) : (
-              <div>
-                {!user?.has_biometric && biometricCredentials.length === 0 && (
-                  <div style={{
-                    padding: '9px 12px',
-                    borderRadius: 6,
-                    background: 'var(--surface2)',
-                    border: '1px solid var(--border)',
-                    fontSize: 12,
-                    color: 'var(--text-2)',
-                    marginBottom: 12,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8
-                  }}>
-                    <span>💡</span>
-                    <span>Réactivez votre connexion rapide avec le protocole sécurisé FIDO2 sur cet appareil.</span>
-                  </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {(user?.has_biometric || biometricCredentials.length > 0) ? (
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => handleRemoveBiometric()}
+                    disabled={bioLoading}
+                    style={{ minHeight: 40, padding: '8px 18px', fontSize: 13 }}
+                  >
+                    {bioLoading ? 'Traitement...' : 'Désactiver la connexion rapide'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleRegisterBiometric}
+                    disabled={bioLoading}
+                    style={{ minHeight: 40, padding: '8px 20px', fontSize: 13 }}
+                  >
+                    {bioLoading ? 'Vérification en cours...' : 'Activer la connexion rapide'}
+                  </button>
                 )}
-
-                {/* Liste des appareils enregistrés */}
-                {biometricCredentials.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-                    {biometricCredentials.map((cred) => (
-                      <div
-                        key={cred.id}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '10px 14px',
-                          background: 'var(--surface2)',
-                          borderRadius: 8,
-                          border: '1px solid var(--border)',
-                          flexWrap: 'wrap',
-                          gap: 10
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontSize: 18 }}>🔐</span>
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
-                              {cred.device_name || 'Appareil biométrique'}
-                            </div>
-                            <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
-                              Ajouté le {new Date(cred.created_at).toLocaleDateString('fr-FR')}
-                              {cred.last_used_at && ` • Dernier accès le ${new Date(cred.last_used_at).toLocaleDateString('fr-FR')}`}
-                            </div>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          className="btn btn-outline"
-                          onClick={() => handleRemoveBiometric(cred.id)}
-                          disabled={bioLoading}
-                          style={{ minHeight: 34, padding: '4px 12px', fontSize: 12 }}
-                        >
-                          Retirer
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Bouton d'action principal */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  {biometricCredentials.length === 0 ? (
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={handleRegisterBiometric}
-                      disabled={bioLoading}
-                      style={{ minHeight: 40, padding: '8px 20px', fontSize: 13 }}
-                    >
-                      {bioLoading ? 'Vérification en cours...' : 'Activer'}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn btn-outline"
-                      onClick={handleRegisterBiometric}
-                      disabled={bioLoading}
-                      style={{ minHeight: 38, padding: '6px 16px', fontSize: 12.5 }}
-                    >
-                      {bioLoading ? 'Vérification...' : 'Ajouter un autre appareil'}
-                    </button>
-                  )}
-                </div>
               </div>
             )}
           </div>
 
-          {/* 4. Mes appareils */}
-          <div className="card settings-card" style={{ padding: 'clamp(16px, 3vw, 22px)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  background: 'var(--surface2)',
-                  color: 'var(--text)',
-                  border: '1px solid var(--border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}>
-                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text)' }}>
-                    Mes appareils
-                  </h3>
-                  <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '1px 0 0' }}>
-                    Les appareils où vous avez choisi de rester connecté sans ressaisir de code de sécurité.
-                  </p>
-                </div>
-              </div>
 
-              {trustedDevices.length > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={handleRevokeAllDevices}
-                  disabled={revokingAll}
-                  style={{
-                    fontSize: 12,
-                    padding: '6px 12px',
-                    borderRadius: 6,
-                    minHeight: 36
-                  }}
-                >
-                  {revokingAll ? 'Déconnexion...' : 'Me déconnecter partout'}
-                </button>
-              )}
-            </div>
-
-            {loadingDevices ? (
-              <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-3)', fontSize: 13 }}>
-                Chargement des appareils...
-              </div>
-            ) : trustedDevices.length === 0 ? (
-              <div style={{
-                textAlign: 'center',
-                padding: '20px 14px',
-                border: '1px dashed var(--border)',
-                borderRadius: 8,
-                color: 'var(--text-3)',
-                fontSize: 12.5
-              }}>
-                Aucun appareil enregistré pour le moment.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {trustedDevices.map(device => {
-                  const isCurrent = !!device.is_current;
-                  const isRevokingThis = revokingDeviceId === device.id;
-                  const isMobile = /mobile|phone|android|ios|iphone/i.test(device.device_name || '');
-                  return (
-                    <div
-                      key={device.id}
-                      style={{
-                        padding: '10px 14px',
-                        background: 'var(--surface)',
-                        borderRadius: 8,
-                        border: isCurrent ? '1px solid var(--primary)' : '1px solid var(--border)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        flexWrap: 'wrap',
-                        gap: 10
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 200, flex: '1 1 auto' }}>
-                        <div style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 6,
-                          background: 'var(--surface2)',
-                          color: 'var(--text)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0
-                        }}>
-                          {isMobile ? (
-                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                            </svg>
-                          ) : (
-                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                            </svg>
-                          )}
-                        </div>
-
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>
-                              {device.device_name || 'Appareil'}
-                            </span>
-                            {isCurrent && (
-                              <span style={{
-                                fontSize: 11,
-                                fontWeight: 600,
-                                padding: '1px 6px',
-                                borderRadius: 4,
-                                background: '#f0fdf4',
-                                color: '#166534',
-                                border: '1px solid #bbf7d0',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 4
-                              }}>
-                                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16a34a' }} />
-                                Cet appareil
-                              </span>
-                            )}
-                          </div>
-
-                          <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                            <span>
-                              Ajouté le {device.created_at ? new Date(device.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
-                            </span>
-                            <span>
-                              Expiration : {device.expires_at ? new Date(device.expires_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        className="btn btn-outline"
-                        onClick={() => handleRevokeDevice(device.id)}
-                        disabled={isRevokingThis}
-                        style={{
-                          fontSize: 12,
-                          padding: '4px 10px',
-                          borderRadius: 6,
-                          minHeight: 32
-                        }}
-                      >
-                        {isRevokingThis ? 'Retrait...' : 'Retirer cet appareil'}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
 
 
 
@@ -1750,7 +1606,7 @@ export default function Settings({ toast }) {
             </div>
 
             {/* Error or Alert banner if any */}
-            {activationError && (
+            {activationError && notifStatus.status !== 'active' && (
               <div style={{
                 padding: '12px 14px',
                 borderRadius: 8,
@@ -2034,6 +1890,14 @@ export default function Settings({ toast }) {
                     </span>
                   </div>
                 </div>
+
+                {/* 5. Diagnostic technique d'erreur */}
+                {technicalPushError && (
+                  <div style={{ padding: '10px 12px', borderRadius: 6, background: 'var(--surface2)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>Dernière anomalie technique</div>
+                    <code style={{ fontSize: 11, color: 'var(--text-2)', wordBreak: 'break-all' }}>{technicalPushError}</code>
+                  </div>
+                )}
               </div>
             </details>
           )}
@@ -2092,6 +1956,22 @@ export default function Settings({ toast }) {
               >
                 <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 2 }}>Version</div>
                 <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)' }}>2.4.0</div>
+              </div>
+
+              <div
+                style={{
+                  padding: '8px 12px',
+                  background: 'var(--surface2)',
+                  borderRadius: 6,
+                  border: '1px solid var(--border)'
+                }}
+              >
+                <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 2 }}>Contact support</div>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)' }}>
+                  <a href="mailto:support@gmt-ariana.tn" style={{ color: 'var(--primary)', textDecoration: 'none' }}>
+                    support@gmt-ariana.tn
+                  </a>
+                </div>
               </div>
             </div>
 

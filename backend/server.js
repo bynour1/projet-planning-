@@ -56,6 +56,16 @@ io.use((socket, next) => {
 // Connected users map  { socketId → user }
 const connectedUsers = new Map();
 
+function getUniqueOnlineUsers() {
+  const map = new Map();
+  for (const u of connectedUsers.values()) {
+    if (u?.id) {
+      map.set(u.id, u);
+    }
+  }
+  return Array.from(map.values());
+}
+
 io.on('connection', (socket) => {
   const user = socket.user;
   connectedUsers.set(socket.id, {
@@ -65,8 +75,8 @@ io.on('connection', (socket) => {
     role:   user.role,
   });
 
-  // Broadcast updated online list
-  io.emit('users_online', Array.from(connectedUsers.values()));
+  // Broadcast updated online list (dédupliquée par utilisateur)
+  io.emit('users_online', getUniqueOnlineUsers());
 
   // ── send_message ───────────────────────────────────────────
   socket.on('send_message', async (data) => {
@@ -133,7 +143,7 @@ io.on('connection', (socket) => {
   // ── disconnect ─────────────────────────────────────────────
   socket.on('disconnect', () => {
     connectedUsers.delete(socket.id);
-    io.emit('users_online', Array.from(connectedUsers.values()));
+    io.emit('users_online', getUniqueOnlineUsers());
   });
 });
 

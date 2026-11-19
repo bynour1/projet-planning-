@@ -158,7 +158,15 @@ export function SocketProvider({ children }) {
     });
 
     socket.on('disconnect',   ()      => setConnected(false));
-    socket.on('users_online', (users) => setOnlineUsers(users));
+    socket.on('users_online', (users) => {
+      const map = new Map();
+      if (Array.isArray(users)) {
+        users.forEach(u => {
+          if (u?.id) map.set(u.id, u);
+        });
+      }
+      setOnlineUsers(Array.from(map.values()));
+    });
 
     // ── 1. NOUVEAU MESSAGE CHAT ──────────────────────────────
     socket.on('new_message', (msg) => {

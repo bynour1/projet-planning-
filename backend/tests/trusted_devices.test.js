@@ -114,12 +114,33 @@ describe('Module Appareils de Confiance (utils/trustedDevices.js) — Tests unit
     expect(parseUserAgentDevice(safariIphone)).toContain('iPhone');
   });
 
-  it('getCookieOptions retourne les options sécurisées httpOnly et SameSite=Lax', () => {
+  it('getCookieOptions retourne les options sécurisées httpOnly et SameSite=Lax par défaut', () => {
+    const originalSameSite = process.env.COOKIE_SAMESITE;
+    delete process.env.COOKIE_SAMESITE;
     const opts = getCookieOptions(3600000);
     expect(opts.httpOnly).toBe(true);
     expect(opts.sameSite).toBe('lax');
     expect(opts.path).toBe('/');
     expect(opts.maxAge).toBe(3600000);
+    process.env.COOKIE_SAMESITE = originalSameSite || '';
+  });
+
+  it('getCookieOptions supporte COOKIE_SAMESITE=none et force secure=true (cross-domain Vercel/Render)', () => {
+    const originalSameSite = process.env.COOKIE_SAMESITE;
+    process.env.COOKIE_SAMESITE = 'none';
+    const opts = getCookieOptions(3600000);
+    expect(opts.sameSite).toBe('none');
+    expect(opts.secure).toBe(true);
+    expect(opts.httpOnly).toBe(true);
+    process.env.COOKIE_SAMESITE = originalSameSite || '';
+  });
+
+  it('getCookieOptions supporte COOKIE_SAMESITE=strict', () => {
+    const originalSameSite = process.env.COOKIE_SAMESITE;
+    process.env.COOKIE_SAMESITE = 'strict';
+    const opts = getCookieOptions(3600000);
+    expect(opts.sameSite).toBe('strict');
+    process.env.COOKIE_SAMESITE = originalSameSite || '';
   });
 });
 

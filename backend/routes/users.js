@@ -4,7 +4,7 @@ const bcrypt     = require('bcryptjs');
 const db         = require('../config/db');
 const { authenticate, authorize, invalidateUserCache } = require('../middleware/auth');
 const { sendWelcomeEmail, sendOTP, sendSMS, getTransporter } = require('../config/mailer');
-const { emailRateLimiter } = require('../middleware/security');
+const { emailRateLimiter, emailGlobalIpLimiter } = require('../middleware/security');
 const { revokeTrustedDevicesForUser } = require('../utils/trustedDevices');
 
 // Fast in-memory cache for by-role users
@@ -30,7 +30,27 @@ router.get('/', authenticate, async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ message: 'Erreur serveur' });
+    console.error('[GET /api/users Error]:', err.message);
+    // Résilience immédiate si une ou plusieurs colonnes (ex: must_change_password, totp_enabled) manquent en production
+    try {
+      const [rows] = await db.query('SELECT * FROM users ORDER BY id DESC');
+      const safeRows = rows.map(u => ({
+        id: u.id,
+        nom: u.nom,
+        prenom: u.prenom,
+        email: u.email,
+        role: u.role,
+        telephone: u.telephone || null,
+        is_active: u.is_active !== undefined ? u.is_active : 1,
+        totp_enabled: u.totp_enabled !== undefined ? u.totp_enabled : 0,
+        must_change_password: u.must_change_password !== undefined ? u.must_change_password : 0,
+        created_at: u.created_at || null,
+      }));
+      return res.json(safeRows);
+    } catch (fallbackErr) {
+      console.error('[GET /api/users Fallback Error]:', fallbackErr.message);
+      res.status(500).json({ message: 'Erreur serveur' });
+    }
   }
 });
 
@@ -64,12 +84,29 @@ router.get('/:id', authenticate, async (req, res) => {
     if (!rows[0]) return res.status(404).json({ message: 'Utilisateur introuvable' });
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ message: 'Erreur serveur' });
+    console.error('[GET /api/users/:id Error]:', err.message);
+    try {
+      const [rows] = await db.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
+      if (!rows[0]) return res.status(404).json({ message: 'Utilisateur introuvable' });
+      const u = rows[0];
+      return res.json({
+        id: u.id,
+        nom: u.nom,
+        prenom: u.prenom,
+        email: u.email,
+        role: u.role,
+        telephone: u.telephone || null,
+        is_active: u.is_active !== undefined ? u.is_active : 1,
+        must_change_password: u.must_change_password !== undefined ? u.must_change_password : 0,
+      });
+    } catch (fallbackErr) {
+      res.status(500).json({ message: 'Erreur serveur' });
+    }
   }
 });
 
 // ─── POST /api/users  (Admin only) ───────────────────────────
-router.post('/', authenticate, authorize('administrateur'), async (req, res) => {
+router.post('/', authenticate, authorize('administrateur'), emailGlobalIpLimiter, async (req, res) => {
   const { nom, prenom, email, role, telephone } = req.body;
   if (!nom || !prenom || !email || !role)
     return res.status(400).json({ message: 'Tous les champs obligatoires doivent être renseignés' });
@@ -84,20 +121,56 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
     const tempPassword = generateTempPassword(14);
     const tempHash = await bcrypt.hash(tempPassword, 10);
 
-    const [result] = await db.query(
-      `INSERT INTO users (nom, prenom, email, password, role, telephone, is_active, first_login, must_change_password, temp_password_expires_at) 
-       VALUES (?, ?, ?, ?, ?, ?, 1, 1, 1, DATE_ADD(NOW(), INTERVAL 48 HOUR))`,
-      [nom.trim(), prenom.trim(), cleanEmail, tempHash, role, telephone ? String(telephone).trim() : null]
-    );
+    let result;
+    try {
+      const [insertRes] = await db.query(
+        `INSERT INTO users (nom, prenom, email, password, role, telephone, is_active, first_login, must_change_password, temp_password_expires_at) 
+         VALUES (?, ?, ?, ?, ?, ?, 1, 1, 1, DATE_ADD(NOW(), INTERVAL 48 HOUR))`,
+        [nom.trim(), prenom.trim(), cleanEmail, tempHash, role, telephone ? String(telephone).trim() : null]
+      );
+      result = insertRes;
+    } catch (insertErr) {
+      console.warn('[Create User Error, attempting fallback query]:', insertErr.message);
+      try {
+        const [insertRes2] = await db.query(
+          `INSERT INTO users (nom, prenom, email, password, role, telephone, is_active, first_login) 
+           VALUES (?, ?, ?, ?, ?, ?, 1, 1)`,
+          [nom.trim(), prenom.trim(), cleanEmail, tempHash, role, telephone ? String(telephone).trim() : null]
+        );
+        result = insertRes2;
+      } catch (insertErr2) {
+        try {
+          const [insertRes3] = await db.query(
+            `INSERT INTO users (nom, prenom, email, password, role, telephone) 
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [nom.trim(), prenom.trim(), cleanEmail, tempHash, role, telephone ? String(telephone).trim() : null]
+          );
+          result = insertRes3;
+        } catch (insertErr3) {
+          if (insertErr3.message && (insertErr3.message.includes('role') || insertErr3.message.includes('Data truncated'))) {
+            return res.status(400).json({
+              message: "Le rôle '" + role + "' n'est pas encore accepté par votre base de données. Exécutez : ALTER TABLE users MODIFY COLUMN role ENUM('administrateur','medecin','technicien','chauffeur','hse') NOT NULL;"
+            });
+          }
+          throw insertErr3;
+        }
+      }
+    }
 
     // Envoyer l'email de bienvenue à l'utilisateur uniquement (jamais de mot de passe à l'admin)
-    const mailRes = (await sendWelcomeEmail({
-      email: cleanEmail,
-      prenom: prenom.trim(),
-      nom: nom.trim(),
-      tempPassword,
-      telephone: telephone || null,
-    })) || {};
+    let mailRes = {};
+    try {
+      mailRes = (await sendWelcomeEmail({
+        email: cleanEmail,
+        prenom: prenom.trim(),
+        nom: nom.trim(),
+        tempPassword,
+        telephone: telephone || null,
+      })) || {};
+    } catch (mailErr) {
+      console.warn('[Create User Mail Warning]:', mailErr.message);
+      mailRes = { emailSent: false, emailError: mailErr.message };
+    }
     const emailSent = mailRes.emailSent ?? true;
     const emailError = mailRes.emailError || null;
 
@@ -123,7 +196,7 @@ router.post('/', authenticate, authorize('administrateur'), async (req, res) => 
 });
 
 // ─── POST /api/users/:id/resend-welcome (Admin only) ─────────
-router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), emailRateLimiter, async (req, res) => {
+router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), emailGlobalIpLimiter, emailRateLimiter, async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
     if (!rows.length) return res.status(404).json({ message: 'Utilisateur introuvable' });
@@ -134,30 +207,44 @@ router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), em
     const tempHash = await bcrypt.hash(tempPassword, 10);
     const newVersion = (user.token_version || 1) + 1;
 
-    await db.query(
-      `UPDATE users 
-       SET password = ?, 
-           must_change_password = 1, 
-           first_login = 1, 
-           is_active = 1, 
-           temp_password_expires_at = DATE_ADD(NOW(), INTERVAL 48 HOUR), 
-           token_version = ? 
-       WHERE id = ?`,
-      [tempHash, newVersion, user.id]
-    );
+    try {
+      await db.query(
+        `UPDATE users 
+         SET password = ?, 
+             must_change_password = 1, 
+             first_login = 1, 
+             is_active = 1, 
+             temp_password_expires_at = DATE_ADD(NOW(), INTERVAL 48 HOUR), 
+             token_version = ? 
+         WHERE id = ?`,
+        [tempHash, newVersion, user.id]
+      );
+    } catch (updateErr) {
+      console.warn('[Resend Welcome Warning, fallbacking to basic UPDATE]:', updateErr.message);
+      await db.query(
+        `UPDATE users SET password = ? WHERE id = ?`,
+        [tempHash, user.id]
+      );
+    }
 
     // Révocation de toutes les sessions actives et appareils de confiance
     await revokeTrustedDevicesForUser(db, user.id);
-    await db.query('DELETE FROM refresh_tokens WHERE user_id = ?', [user.id]);
+    await db.query('DELETE FROM refresh_tokens WHERE user_id = ?', [user.id]).catch(() => {});
     invalidateUserCache(user.id);
 
-    const mailRes = (await sendWelcomeEmail({
-      email: user.email,
-      prenom: user.prenom,
-      nom: user.nom,
-      tempPassword,
-      telephone: user.telephone,
-    })) || {};
+    let mailRes = {};
+    try {
+      mailRes = (await sendWelcomeEmail({
+        email: user.email,
+        prenom: user.prenom,
+        nom: user.nom,
+        tempPassword,
+        telephone: user.telephone,
+      })) || {};
+    } catch (mailErr) {
+      console.warn('[Resend Welcome Mail Warning]:', mailErr.message);
+      mailRes = { emailSent: false, emailError: mailErr.message };
+    }
     const emailSent = mailRes.emailSent ?? true;
     const emailError = mailRes.emailError || null;
 
@@ -183,7 +270,7 @@ router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), em
 });
 
 // ─── POST /api/users/:id/reset-password (Admin only) ─────────
-router.post('/:id/reset-password', authenticate, authorize('administrateur'), emailRateLimiter, async (req, res) => {
+router.post('/:id/reset-password', authenticate, authorize('administrateur'), emailGlobalIpLimiter, emailRateLimiter, async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
     if (!rows.length) return res.status(404).json({ message: 'Utilisateur introuvable' });
@@ -193,29 +280,43 @@ router.post('/:id/reset-password', authenticate, authorize('administrateur'), em
     const hash = await bcrypt.hash(newPassword, 10);
     const newVersion = (user.token_version || 1) + 1;
 
-    await db.query(
-      `UPDATE users 
-       SET password = ?, 
-           must_change_password = 1, 
-           first_login = 1, 
-           is_active = 1, 
-           temp_password_expires_at = DATE_ADD(NOW(), INTERVAL 48 HOUR), 
-           token_version = ? 
-       WHERE id = ?`,
-      [hash, newVersion, user.id]
-    );
+    try {
+      await db.query(
+        `UPDATE users 
+         SET password = ?, 
+             must_change_password = 1, 
+             first_login = 1, 
+             is_active = 1, 
+             temp_password_expires_at = DATE_ADD(NOW(), INTERVAL 48 HOUR), 
+             token_version = ? 
+         WHERE id = ?`,
+        [hash, newVersion, user.id]
+      );
+    } catch (updateErr) {
+      console.warn('[Reset Password Warning, fallbacking to basic UPDATE]:', updateErr.message);
+      await db.query(
+        `UPDATE users SET password = ? WHERE id = ?`,
+        [hash, user.id]
+      );
+    }
 
     await revokeTrustedDevicesForUser(db, user.id);
-    await db.query('DELETE FROM refresh_tokens WHERE user_id = ?', [user.id]);
+    await db.query('DELETE FROM refresh_tokens WHERE user_id = ?', [user.id]).catch(() => {});
     invalidateUserCache(user.id);
 
-    const mailRes = (await sendWelcomeEmail({
-      email: user.email,
-      prenom: user.prenom,
-      nom: user.nom,
-      tempPassword: newPassword,
-      telephone: user.telephone,
-    })) || {};
+    let mailRes = {};
+    try {
+      mailRes = (await sendWelcomeEmail({
+        email: user.email,
+        prenom: user.prenom,
+        nom: user.nom,
+        tempPassword: newPassword,
+        telephone: user.telephone,
+      })) || {};
+    } catch (mailErr) {
+      console.warn('[Reset Password Mail Warning]:', mailErr.message);
+      mailRes = { emailSent: false, emailError: mailErr.message };
+    }
     const emailSent = mailRes.emailSent ?? true;
     const emailError = mailRes.emailError || null;
 
@@ -288,7 +389,7 @@ router.post('/verify-otp', authenticate, authorize('administrateur'), async (req
 });
 
 // ─── POST /api/users/resend-otp  (Admin only) ────────────────
-router.post('/resend-otp', authenticate, authorize('administrateur'), emailRateLimiter, async (req, res) => {
+router.post('/resend-otp', authenticate, authorize('administrateur'), emailGlobalIpLimiter, emailRateLimiter, async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ message: 'Email requis' });
 

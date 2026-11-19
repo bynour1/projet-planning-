@@ -65,20 +65,20 @@ describe('Settings page', () => {
     await waitFor(() => expect(mockToast).toHaveBeenCalledWith(expect.stringMatching(/mis à jour/i), 'success'));
   });
 
-  it('renders all 4 security cards in order (Mot de passe, 2FA, Connexion rapide, Mes appareils)', async () => {
+  it('renders security cards in order (Mot de passe, 2FA, Connexion rapide)', async () => {
     renderWithProviders(<Settings toast={mockToast} />);
     await userEvent.click(screen.getByText('Sécurité & Accès'));
 
     expect(screen.getByRole('heading', { level: 3, name: /^Mot de passe$/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 3, name: /^Double authentification$/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 3, name: /^Connexion rapide$/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 3, name: /^Mes appareils$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 3, name: /^Mes appareils$/i })).not.toBeInTheDocument();
   });
 
-  it('renders À propos card in Informations tab and respects admin visibility', async () => {
+  it('renders À propos card in À propos tab and respects admin visibility', async () => {
     // Admin view
     const { unmount } = renderWithProviders(<Settings toast={mockToast} />, { user: MOCK_ADMIN });
-    await userEvent.click(screen.getByRole('button', { name: /^Informations$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^À propos$/i }));
 
     expect(screen.getByRole('heading', { level: 3, name: /^À propos$/i })).toBeInTheDocument();
     expect(screen.getByText(/GMT Ariana — Santé au Travail/i)).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe('Settings page', () => {
 
     // Non-admin view (Medecin)
     renderWithProviders(<Settings toast={mockToast} />, { user: MOCK_MEDECIN });
-    await userEvent.click(screen.getByRole('button', { name: /^Informations$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^À propos$/i }));
 
     expect(screen.getByRole('heading', { level: 3, name: /^À propos$/i })).toBeInTheDocument();
     expect(screen.queryByTestId('admin-system-diagnostics')).not.toBeInTheDocument();
@@ -133,6 +133,144 @@ describe('Settings page', () => {
 
       expect(screen.queryByTestId('admin-advanced-diagnostics')).not.toBeInTheDocument();
       expect(screen.queryByText(/Diagnostic avancé/i)).not.toBeInTheDocument();
+    });
+
+    it('displays "Activées" (green badge) and clears error when subscription exists and is registered on server', async () => {
+      const mockSub = { endpoint: 'https://fcm.googleapis.com/push/123' };
+      const originalNotification = window.Notification;
+      window.Notification = { permission: 'granted', requestPermission: vi.fn().mockResolvedValue('granted') };
+      const originalSW = navigator.serviceWorker;
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue({
+            active: true,
+            pushManager: {
+              getSubscription: vi.fn().mockResolvedValue(mockSub),
+            },
+          }),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        },
+        configurable: true,
+      });
+
+      axios.post.mockImplementation((url) => {
+        if (url === '/api/push/status') {
+          return Promise.resolve({ data: { isSubscribed: true } });
+        }
+        return Promise.resolve({ data: {} });
+      });
+
+      renderWithProviders(<Settings toast={mockToast} />);
+      await userEvent.click(screen.getByRole('button', { name: /Notifications/i }));
+
+      await waitFor(() => {
+        const badge = screen.getByTestId('notif-global-status');
+        expect(badge).toHaveTextContent(/Activées/i);
+      });
+      expect(screen.queryByText(/Registration failed/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Les notifications ne sont pas disponibles/i)).not.toBeInTheDocument();
+
+      window.Notification = originalNotification;
+      Object.defineProperty(navigator, 'serviceWorker', { value: originalSW, configurable: true });
+    });
+
+    it('auto re-registers with /api/push/subscribe when subscription exists in browser but not on server', async () => {
+      const mockSub = { endpoint: 'https://fcm.googleapis.com/push/re-register-me' };
+      const originalNotification = window.Notification;
+      window.Notification = { permission: 'granted', requestPermission: vi.fn().mockResolvedValue('granted') };
+      const originalSW = navigator.serviceWorker;
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue({
+            active: true,
+            pushManager: {
+              getSubscription: vi.fn().mockResolvedValue(mockSub),
+            },
+          }),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        },
+        configurable: true,
+      });
+
+      let subscribeCalled = false;
+      axios.post.mockImplementation((url, body) => {
+        if (url === '/api/push/status') {
+          return Promise.resolve({ data: { isSubscribed: false } });
+        }
+        if (url === '/api/push/subscribe') {
+          subscribeCalled = true;
+          return Promise.resolve({ data: { success: true } });
+        }
+        return Promise.resolve({ data: {} });
+      });
+
+      renderWithProviders(<Settings toast={mockToast} />);
+      await userEvent.click(screen.getByRole('button', { name: /Notifications/i }));
+
+      await waitFor(() => {
+        expect(subscribeCalled).toBe(true);
+        const badge = screen.getByTestId('notif-global-status');
+        expect(badge).toHaveTextContent(/Activées/i);
+      });
+
+      window.Notification = originalNotification;
+      Object.defineProperty(navigator, 'serviceWorker', { value: originalSW, configurable: true });
+    });
+
+    it('shows simple neutral message when subscription fails without technical text for non-admin', async () => {
+      const originalNotification = window.Notification;
+      window.Notification = { permission: 'granted', requestPermission: vi.fn().mockResolvedValue('granted') };
+      const originalSW = navigator.serviceWorker;
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue({
+            active: true,
+            pushManager: {
+              getSubscription: vi.fn().mockResolvedValue(null),
+              subscribe: vi.fn().mockRejectedValue(new Error('Registration failed - push service error')),
+            },
+          }),
+          ready: Promise.resolve({
+            pushManager: {
+              getSubscription: vi.fn().mockResolvedValue(null),
+              subscribe: vi.fn().mockRejectedValue(new Error('Registration failed - push service error')),
+            },
+          }),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        },
+        configurable: true,
+      });
+
+      axios.get.mockImplementation((url) => {
+        if (url === '/api/push/public-key') {
+          return Promise.resolve({ data: { publicKey: 'BEl62iUYgUivxIkv69yViEuiBIa' } });
+        }
+        return Promise.resolve({ data: {} });
+      });
+      axios.post.mockImplementation((url) => {
+        if (url === '/api/push/status') {
+          return Promise.resolve({ data: { isSubscribed: false } });
+        }
+        return Promise.resolve({ data: {} });
+      });
+
+      renderWithProviders(<Settings toast={mockToast} />, { user: MOCK_MEDECIN });
+      await userEvent.click(screen.getByRole('button', { name: /Notifications/i }));
+
+      const enableBtn = await screen.findByRole('button', { name: /Activer les notifications/i });
+      await userEvent.click(enableBtn);
+
+      await waitFor(() => {
+        expect(screen.getAllByText(/Les notifications ne sont pas disponibles pour le moment/i).length).toBeGreaterThan(0);
+      });
+      // No technical error like "Registration failed" displayed for non-admin
+      expect(screen.queryByText(/Registration failed - push service error/i)).not.toBeInTheDocument();
+
+      window.Notification = originalNotification;
+      Object.defineProperty(navigator, 'serviceWorker', { value: originalSW, configurable: true });
     });
   });
 });

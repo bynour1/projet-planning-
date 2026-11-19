@@ -72,19 +72,34 @@ function UserModal({ user: editUser, onSave, onClose }) {
   const initials = `${(form.prenom?.[0]||'').toUpperCase()}${(form.nom?.[0]||'').toUpperCase()}`;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 540, padding: 0, overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px', zIndex: 1100 }}>
+      <div
+        className="modal"
+        style={{
+          maxWidth: 540,
+          width: '100%',
+          maxHeight: '90vh',
+          display: 'flex',
+          flexDirection: 'column',
+          padding: 0,
+          overflow: 'hidden',
+          borderRadius: 16,
+          boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
 
         {/* ── Header coloré avec avatar ── */}
         <div style={{
           background: `linear-gradient(135deg, ${rc.color}22, ${rc.color}08)`,
           borderBottom: `1px solid ${rc.border}`,
-          padding: '20px 24px 16px',
+          padding: '16px 20px',
           display: 'flex', alignItems: 'center', gap: 14,
+          flexShrink: 0,
         }}>
           {/* Avatar dynamique */}
           <div style={{
-            width: 50, height: 50, borderRadius: '50%',
+            width: 46, height: 46, borderRadius: '50%',
             background: rc.bg, border: `2px solid ${rc.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: initials ? 16 : 20, fontWeight: 800, color: rc.color,
@@ -117,8 +132,16 @@ function UserModal({ user: editUser, onSave, onClose }) {
           >✕</button>
         </div>
 
-        {/* ── Corps ── */}
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* ── Corps défilable ── */}
+        <div style={{
+          padding: '16px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 14,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          flex: 1,
+        }}>
 
           {/* Info email */}
           {!isEdit && (
@@ -129,7 +152,7 @@ function UserModal({ user: editUser, onSave, onClose }) {
               border: '1px solid var(--border)', borderRadius: 10,
             }}>
               <span style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.5 }}>
-                Un e-mail officiel GMT Ariana avec identifiant, mot de passe initial et code d'activation sera automatiquement expédié.
+                Un e-mail officiel GMT Ariana avec identifiant et mot de passe provisoire (valable 48h) sera automatiquement expédié.
               </span>
             </div>
           )}
@@ -227,7 +250,7 @@ function UserModal({ user: editUser, onSave, onClose }) {
                 Sécurité & Authentification E-mail
               </strong>
               <span>
-                Pour garantir la sécurité, aucun mot de passe n'est saisi par l'administrateur. Le mot de passe temporaire et le code d'activation sont générés automatiquement par le système et transmis par e-mail au collaborateur.
+                Pour garantir la sécurité, aucun mot de passe n'est saisi par l'administrateur. Un mot de passe provisoire valable 48h est généré automatiquement par le système et transmis par e-mail au collaborateur.
               </span>
             </div>
           )}
@@ -302,8 +325,9 @@ function UserModal({ user: editUser, onSave, onClose }) {
         {/* ── Footer ── */}
         <div style={{
           display: 'flex', justifyContent: 'flex-end', gap: 10,
-          padding: '14px 24px', borderTop: '1px solid var(--border)',
+          padding: '14px 20px', borderTop: '1px solid var(--border)',
           background: 'var(--bg)',
+          flexShrink: 0,
         }}>
           <button className="btn btn-outline" onClick={onClose} style={{ minWidth: 90 }}>
             Annuler
@@ -480,9 +504,15 @@ export default function Users({ toast }) {
   const [filter,  setFilter]  = useState('all');
 
   async function load() {
-    try { const { data } = await axios.get('/api/users'); setUsers(data); }
-    catch { toast('Erreur chargement', 'error'); }
-    finally { setLoading(false); }
+    try {
+      const { data } = await axios.get('/api/users');
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('[Users load error]:', err);
+      if (toast) toast(err.response?.data?.message || 'Erreur chargement', 'error');
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { load(); }, []);

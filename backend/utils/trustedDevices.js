@@ -60,14 +60,20 @@ function parseUserAgentDevice(ua) {
 }
 
 /**
- * Configuration des cookies sécurisés httpOnly, SameSite=Lax.
+ * Configuration des cookies sécurisés httpOnly.
+ * - Architecture recommandée (Vercel rewrite) : Les requêtes passent par le proxy Vercel (/api -> Render),
+ *   faisant des cookies des cookies « first-party ». Dans ce mode, sameSite='lax' fonctionne partout (Safari iOS inclus).
+ * - Architecture cross-domain directe (sans reverse proxy) : Définir COOKIE_SAMESITE=none dans l'environnement.
+ *   Nécessite impérativement secure=true et withCredentials=true côté client.
  */
 function getCookieOptions(maxAgeMs) {
   const isProd = process.env.NODE_ENV === 'production';
+  const customSameSite = (process.env.COOKIE_SAMESITE || '').trim().toLowerCase();
+  const sameSite = (customSameSite === 'none' || customSameSite === 'strict') ? customSameSite : 'lax';
   return {
     httpOnly: true,
-    secure: isProd,
-    sameSite: 'lax',
+    secure: isProd || sameSite === 'none',
+    sameSite,
     maxAge: maxAgeMs,
     path: '/',
   };

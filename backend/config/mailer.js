@@ -5,15 +5,76 @@ const db         = require('../config/db');
 // ─── Regex de détection d'adresses personnelles ────────────────
 const PERSONAL_EMAIL_REGEX = /@(gmail\.com|yahoo\.[a-z]+|hotmail\.[a-z]+|outlook\.[a-z]+)$/i;
 
+// ─── Helpers pour le parsing d'adresses email ───────────────────
+function parseEmailAddress(str) {
+  if (!str || typeof str !== 'string') return { email: '' };
+  const trimmed = str.trim();
+  const angledMatch = trimmed.match(/^(?:["']?([^"']+)["']?\s+)?<([^>]+)>$/);
+  if (angledMatch) {
+    const name = angledMatch[1] ? angledMatch[1].trim() : undefined;
+    const email = angledMatch[2].trim();
+    return name ? { name, email } : { email };
+  }
+  const cleanEmail = trimmed.replace(/^["']|["']$/g, '').trim();
+  return { email: cleanEmail };
+}
+
+function parseRecipients(to) {
+  const list = Array.isArray(to) ? to : (typeof to === 'string' ? to.split(',') : []);
+  return list
+    .map(entry => {
+      const parsed = parseEmailAddress(entry);
+      if (!parsed.email) return null;
+      return parsed.name ? { email: parsed.email, name: parsed.name } : { email: parsed.email };
+    })
+    .filter(Boolean);
+}
+
 // ─── Validation de la configuration email ──────────────────────
 function validateMailerConfig() {
   const isProd = process.env.NODE_ENV === 'production';
   const emailProvider = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
   const isGmailMode = emailProvider === 'gmail';
+  const isBrevoApiMode = emailProvider === 'brevo-api' || emailProvider === 'brevo_api';
+  const isResendMode = emailProvider === 'resend';
   const emailHost = (process.env.EMAIL_HOST || '').trim();
   const emailUser = (process.env.EMAIL_USER || '').trim();
   const emailPass = (process.env.EMAIL_PASS || '').trim();
   const emailFrom = (process.env.EMAIL_FROM || '').trim();
+  const brevoApiKey = (process.env.BREVO_API_KEY || '').trim();
+  const resendApiKey = (process.env.RESEND_API_KEY || '').trim();
+
+  // Mode Brevo API HTTP (HTTPS Port 443 - Contournement du blocage SMTP Render)
+  if (isBrevoApiMode) {
+    if (isProd) {
+      const missing = [];
+      if (!brevoApiKey) missing.push('BREVO_API_KEY');
+      if (!emailFrom) missing.push('EMAIL_FROM');
+
+      if (missing.length > 0) {
+        const errorMsg = `[Mailer FATAL] Variables d'environnement email manquantes en production (mode Brevo API HTTP) : ${missing.join(', ')}`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+    }
+    return;
+  }
+
+  // Mode Resend API HTTP (HTTPS Port 443)
+  if (isResendMode) {
+    if (isProd) {
+      const missing = [];
+      if (!resendApiKey) missing.push('RESEND_API_KEY');
+      if (!emailFrom) missing.push('EMAIL_FROM');
+
+      if (missing.length > 0) {
+        const errorMsg = `[Mailer FATAL] Variables d'environnement email manquantes en production (mode Resend API HTTP) : ${missing.join(', ')}`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+    }
+    return;
+  }
 
   // Mode Gmail dédié : usage interne sans nom de domaine propre
   if (isGmailMode) {
@@ -44,7 +105,7 @@ function validateMailerConfig() {
     return;
   }
 
-  // Comportement standard Brevo / domaine d'entreprise
+  // Comportement standard Brevo / domaine d'entreprise (SMTP)
   if (isProd) {
     const missing = [];
     if (!emailHost) missing.push('EMAIL_HOST');
@@ -69,11 +130,184 @@ function validateMailerConfig() {
   }
 }
 
-// ─── Email transporter (Brevo SMTP, Gmail dédié & Ethereal dev) ──
+// ─── Transports Email (Brevo API HTTP, Resend API HTTP, Brevo SMTP, Gmail SMTP & Ethereal dev) ──
+let brevoApiTransporter = null;
+let resendApiTransporter = null;
 let brevoTransporter = null;
 let gmailTransporter = null;
 let etherealAccount = null;
 let etherealTransporter = null;
+
+function createBrevoApiTransport() {
+  return {
+    isHttpApi: true,
+    provider: 'brevo-api',
+    async verify() {
+      const apiKey = (process.env.BREVO_API_KEY || '').trim();
+      if (!apiKey) {
+        throw new Error('[Brevo API] BREVO_API_KEY non configurée.');
+      }
+      const response = await fetch('https://api.brevo.com/v3/account', {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+          'api-key': apiKey,
+        },
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const errMsg = data.message || `Code HTTP ${response.status}`;
+        const err = new Error(`[Brevo API] Échec de vérification API (HTTP ${response.status}) : ${errMsg}`);
+        err.code = data.code || `HTTP_${response.status}`;
+        err.status = response.status;
+        throw err;
+      }
+      return true;
+    },
+    async sendMail(mailOptions) {
+      const apiKey = (process.env.BREVO_API_KEY || '').trim();
+      if (!apiKey) {
+        throw new Error('[Mailer FATAL] BREVO_API_KEY est obligatoire pour envoyer un email via l\'API Brevo.');
+      }
+
+      const senderParsed = parseEmailAddress(mailOptions.from || process.env.EMAIL_FROM || '');
+      if (!senderParsed.email) {
+        throw new Error('[Brevo API] Adresse expéditeur (from / EMAIL_FROM) invalide ou manquante.');
+      }
+      const sender = senderParsed.name
+        ? { email: senderParsed.email, name: senderParsed.name }
+        : { email: senderParsed.email };
+
+      const recipients = parseRecipients(mailOptions.to);
+      if (!recipients.length) {
+        throw new Error('[Brevo API] Aucun destinataire valide (to) fourni.');
+      }
+
+      const payload = {
+        sender,
+        to: recipients,
+        subject: mailOptions.subject || '(Sans objet)',
+      };
+
+      if (mailOptions.html) {
+        payload.htmlContent = mailOptions.html;
+      }
+      if (mailOptions.text) {
+        payload.textContent = mailOptions.text;
+      }
+      if (!payload.htmlContent && !payload.textContent) {
+        payload.textContent = ' ';
+      }
+
+      if (mailOptions.replyTo) {
+        const replyParsed = parseEmailAddress(mailOptions.replyTo);
+        if (replyParsed.email) {
+          payload.replyTo = replyParsed.name
+            ? { email: replyParsed.email, name: replyParsed.name }
+            : { email: replyParsed.email };
+        }
+      }
+
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': apiKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const errMsg = data.message || data.error || `Erreur HTTP ${response.status}`;
+        const err = new Error(`[Brevo API] ${errMsg}`);
+        err.code = data.code || `HTTP_${response.status}`;
+        err.status = response.status;
+        throw err;
+      }
+
+      return {
+        messageId: data.messageId || `<brevo-${Date.now()}@api>`,
+        response: JSON.stringify(data),
+      };
+    },
+  };
+}
+
+function createResendApiTransport() {
+  return {
+    isHttpApi: true,
+    provider: 'resend',
+    async verify() {
+      const apiKey = (process.env.RESEND_API_KEY || '').trim();
+      if (!apiKey) {
+        throw new Error('[Resend API] RESEND_API_KEY non configurée.');
+      }
+      const response = await fetch('https://api.resend.com/api-keys', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+        },
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const errMsg = data.message || `Code HTTP ${response.status}`;
+        const err = new Error(`[Resend API] Échec de vérification API (HTTP ${response.status}) : ${errMsg}`);
+        err.code = data.name || `HTTP_${response.status}`;
+        err.status = response.status;
+        throw err;
+      }
+      return true;
+    },
+    async sendMail(mailOptions) {
+      const apiKey = (process.env.RESEND_API_KEY || '').trim();
+      if (!apiKey) {
+        throw new Error('[Mailer FATAL] RESEND_API_KEY est obligatoire pour envoyer un email via l\'API Resend.');
+      }
+
+      const sender = mailOptions.from || process.env.EMAIL_FROM;
+      const recipients = parseRecipients(mailOptions.to);
+      if (!recipients.length) {
+        throw new Error('[Resend API] Aucun destinataire valide (to) fourni.');
+      }
+
+      const payload = {
+        from: sender,
+        to: recipients.map(r => r.email),
+        subject: mailOptions.subject || '(Sans objet)',
+        html: mailOptions.html || undefined,
+        text: mailOptions.text || undefined,
+        reply_to: mailOptions.replyTo || undefined,
+      };
+
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const errMsg = data.message || `Erreur HTTP ${response.status}`;
+        const err = new Error(`[Resend API] ${errMsg}`);
+        err.code = data.name || `HTTP_${response.status}`;
+        err.status = response.status;
+        throw err;
+      }
+
+      return {
+        messageId: data.id || `<resend-${Date.now()}@api>`,
+        response: JSON.stringify(data),
+      };
+    },
+  };
+}
 
 function createBrevoTransport() {
   const host = (process.env.EMAIL_HOST || 'smtp-relay.brevo.com').trim();
@@ -110,8 +344,72 @@ async function getTransporterAsync() {
 
   const emailProvider = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
   const isGmailMode = emailProvider === 'gmail';
+  const isBrevoApiMode = emailProvider === 'brevo-api' || emailProvider === 'brevo_api';
+  const isResendMode = emailProvider === 'resend';
   const user = (process.env.EMAIL_USER || '').trim();
   const pass = (process.env.EMAIL_PASS || '').trim();
+  const brevoApiKey = (process.env.BREVO_API_KEY || '').trim();
+  const resendApiKey = (process.env.RESEND_API_KEY || '').trim();
+
+  // Mode Brevo API HTTP (Port 443 HTTPS)
+  if (isBrevoApiMode) {
+    if (brevoApiKey && !brevoApiKey.includes('votre_cle')) {
+      if (!brevoApiTransporter) {
+        brevoApiTransporter = createBrevoApiTransport();
+        try {
+          await brevoApiTransporter.verify();
+          console.log('[Mailer] ✅ Connexion API Brevo HTTP OK (Port 443 HTTPS)');
+        } catch (err) {
+          console.error('[Mailer] ❌ Erreur connexion API Brevo :', {
+            code: err.code || err.status,
+            message: err.message,
+          });
+          if (process.env.NODE_ENV === 'production') {
+            throw err;
+          }
+        }
+      }
+      return {
+        transporter: brevoApiTransporter,
+        isEthereal: false,
+        user: process.env.EMAIL_FROM || 'brevo-api',
+      };
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('[Mailer FATAL] BREVO_API_KEY est obligatoire en production en mode brevo-api.');
+    }
+  }
+
+  // Mode Resend API HTTP (Port 443 HTTPS)
+  if (isResendMode) {
+    if (resendApiKey && !resendApiKey.includes('votre_cle')) {
+      if (!resendApiTransporter) {
+        resendApiTransporter = createResendApiTransport();
+        try {
+          await resendApiTransporter.verify();
+          console.log('[Mailer] ✅ Connexion API Resend HTTP OK (Port 443 HTTPS)');
+        } catch (err) {
+          console.error('[Mailer] ❌ Erreur connexion API Resend :', {
+            code: err.code || err.status,
+            message: err.message,
+          });
+          if (process.env.NODE_ENV === 'production') {
+            throw err;
+          }
+        }
+      }
+      return {
+        transporter: resendApiTransporter,
+        isEthereal: false,
+        user: process.env.EMAIL_FROM || 'resend-api',
+      };
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('[Mailer FATAL] RESEND_API_KEY est obligatoire en production en mode resend.');
+    }
+  }
 
   // Mode Gmail dédié
   if (isGmailMode) {
@@ -173,7 +471,7 @@ async function getTransporterAsync() {
 
   // Interdiction formelle d'Ethereal en production
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('[Mailer FATAL] Ethereal est strictement interdit en production. Configurez Brevo ou le mode Gmail dédié.');
+    throw new Error('[Mailer FATAL] Ethereal est strictement interdit en production. Configurez Brevo API (brevo-api), Brevo SMTP ou le mode Gmail dédié.');
   }
 
   // Passerelle test automatique (Ethereal) autorisée UNIQUEMENT en développement
@@ -205,8 +503,28 @@ async function getTransporterAsync() {
 function getTransporter() {
   const emailProvider = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
   const isGmailMode = emailProvider === 'gmail';
+  const isBrevoApiMode = emailProvider === 'brevo-api' || emailProvider === 'brevo_api';
+  const isResendMode = emailProvider === 'resend';
   const user = (process.env.EMAIL_USER || '').trim();
   const pass = (process.env.EMAIL_PASS || '').trim();
+  const brevoApiKey = (process.env.BREVO_API_KEY || '').trim();
+  const resendApiKey = (process.env.RESEND_API_KEY || '').trim();
+
+  if (isBrevoApiMode) {
+    if (brevoApiTransporter) return brevoApiTransporter;
+    if (brevoApiKey && !brevoApiKey.includes('votre_cle')) {
+      brevoApiTransporter = createBrevoApiTransport();
+      return brevoApiTransporter;
+    }
+  }
+
+  if (isResendMode) {
+    if (resendApiTransporter) return resendApiTransporter;
+    if (resendApiKey && !resendApiKey.includes('votre_cle')) {
+      resendApiTransporter = createResendApiTransport();
+      return resendApiTransporter;
+    }
+  }
 
   if (isGmailMode) {
     if (gmailTransporter) return gmailTransporter;
@@ -230,8 +548,24 @@ function getFromAddress(prefix = 'Administration') {
   const isProd = process.env.NODE_ENV === 'production';
   const emailProvider = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
   const isGmailMode = emailProvider === 'gmail';
+  const isBrevoApiMode = emailProvider === 'brevo-api' || emailProvider === 'brevo_api';
+  const isResendMode = emailProvider === 'resend';
   const emailUser = (process.env.EMAIL_USER || '').trim();
   const fromConfig = (process.env.EMAIL_FROM || '').trim();
+
+  // Mode Brevo API ou Resend : Expéditeur = EMAIL_FROM (adresse vérifiée chez le fournisseur)
+  if (isBrevoApiMode || isResendMode) {
+    if (fromConfig) {
+      if (fromConfig.includes('<') && fromConfig.includes('>')) {
+        return fromConfig;
+      }
+      return `"GMT Ariana — ${prefix}" <${fromConfig}>`;
+    }
+    if (isProd) {
+      throw new Error('[Mailer FATAL] EMAIL_FROM est obligatoire en production en mode API HTTP (adresse vérifiée).');
+    }
+    return `"GMT Ariana — ${prefix}" <no-reply@gmt-ariana.tn>`;
+  }
 
   if (isGmailMode) {
     if (fromConfig) {
@@ -279,9 +613,22 @@ function getReplyToAddress() {
 async function testEmailConnection(toEmail = null) {
   try {
     const { transporter, isEthereal, user } = await getTransporterAsync();
-    await transporter.verify();
+    // En l'absence de destinataire de test, on teste uniquement la connexion / validation des identifiants
+    if (!toEmail) {
+      await transporter.verify();
+    }
     const emailProvider = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
     const isGmailMode = emailProvider === 'gmail';
+    const isBrevoApiMode = emailProvider === 'brevo-api' || emailProvider === 'brevo_api';
+    const isResendMode = emailProvider === 'resend';
+
+    const providerLabel = isBrevoApiMode
+      ? 'Brevo API (HTTPS 443)'
+      : (isResendMode ? 'Resend API (HTTPS 443)' : (isGmailMode ? 'Gmail Dédié (SMTP)' : 'Brevo (SMTP)'));
+
+    const modeName = isEthereal
+      ? 'test_ethereal'
+      : (isBrevoApiMode ? 'brevo_api' : (isResendMode ? 'resend_api' : (isGmailMode ? 'gmail_dedicated' : 'production_smtp')));
 
     if (toEmail) {
       const fromAddr = isEthereal ? `"GMT Ariana — Test" <${user}>` : getFromAddress('Test Système');
@@ -290,13 +637,13 @@ async function testEmailConnection(toEmail = null) {
         from: fromAddr,
         ...(replyTo ? { replyTo } : {}),
         to: toEmail,
-        subject: `✅ Test réussi — GMT Ariana Planning (${isGmailMode ? 'Gmail' : 'Brevo'})`,
+        subject: `✅ Test réussi — GMT Ariana Planning (${providerLabel})`,
         text: 'La configuration email fonctionne parfaitement sur votre serveur !',
         html: `
           <div style="font-family:Arial,sans-serif;max-width:500px;margin:auto;padding:24px;border:1px solid #e2e8f0;border-radius:10px">
             <h2 style="color:#0284c7;margin-top:0">✅ Configuration Email Validée</h2>
             <p>La transmission des e-mails (mots de passe, codes de sécurité, alertes planning) est active et fonctionnelle.</p>
-            <p style="color:#64748b;font-size:12px">Serveur utilisé : ${isEthereal ? 'Passerelle test SMTP Ethereal' : (isGmailMode ? 'Serveur SMTP Gmail Dédié' : 'Serveur SMTP Brevo')}</p>
+            <p style="color:#64748b;font-size:12px">Serveur/Passerelle : ${isEthereal ? 'Passerelle test SMTP Ethereal' : providerLabel}</p>
           </div>
         `,
       });
@@ -307,7 +654,7 @@ async function testEmailConnection(toEmail = null) {
         sent: true,
         messageId: info.messageId,
         previewUrl,
-        mode: isEthereal ? 'test_ethereal' : (isGmailMode ? 'gmail_dedicated' : 'production_smtp'),
+        mode: modeName,
       };
     }
     return {
@@ -315,10 +662,11 @@ async function testEmailConnection(toEmail = null) {
       configured: true,
       message: isEthereal
         ? `Passerelle email active (mode test : ${user}).`
-        : (isGmailMode ? 'Connexion SMTP Gmail validée avec succès.' : 'Connexion SMTP Brevo validée avec succès.'),
+        : `Connexion ${providerLabel} validée avec succès.`,
+      mode: modeName,
     };
   } catch (err) {
-    return { ok: false, configured: false, error: err.message, code: err.code };
+    return { ok: false, configured: false, error: err.message, code: err.code || err.status };
   }
 }
 

@@ -92,3 +92,25 @@ describe('authorize middleware', () => {
     expect(res.status).toHaveBeenCalledWith(403);
   });
 });
+
+describe('Anti-abuse rate limiters', () => {
+  const { webauthnGlobalIpLimiter, emailGlobalIpLimiter } = require('../middleware/security');
+
+  it('webauthnGlobalIpLimiter est un middleware Express valide', async () => {
+    expect(typeof webauthnGlobalIpLimiter).toBe('function');
+    const req = { ip: '127.0.0.1', headers: {} };
+    const res = { setHeader: jest.fn(), status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+    await webauthnGlobalIpLimiter(req, res, next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('emailGlobalIpLimiter est un middleware Express valide', async () => {
+    expect(typeof emailGlobalIpLimiter).toBe('function');
+    const req = { ip: '127.0.0.1', headers: {} };
+    const res = { setHeader: jest.fn(), status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+    await emailGlobalIpLimiter(req, res, next);
+    expect(next).toHaveBeenCalled();
+  });
+});
