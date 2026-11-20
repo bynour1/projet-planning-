@@ -108,6 +108,9 @@ export default function Settings({ toast }) {
   }
 
   const [pwdForm, setPwdForm] = useState({ current_password: '', new_password: '', confirm: '' });
+  const [showCurrentPwd, setShowCurrentPwd] = useState(false);
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [saving,  setSaving]  = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [bioLoading, setBioLoading] = useState(false);
@@ -1316,41 +1319,134 @@ export default function Settings({ toast }) {
             <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label style={{ fontSize: 12 }}>Mot de passe actuel</label>
-                <input
-                  className="input"
-                  type="password"
-                  placeholder="••••••••"
-                  value={pwdForm.current_password}
-                  onChange={e => setPwdForm(p => ({ ...p, current_password: e.target.value }))}
-                  style={{ minHeight: 40 }}
-                  required
-                />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    className="input"
+                    type={showCurrentPwd ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={pwdForm.current_password}
+                    onChange={e => setPwdForm(p => ({ ...p, current_password: e.target.value }))}
+                    style={{ minHeight: 40, paddingRight: 40 }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPwd(p => !p)}
+                    style={{
+                      position: 'absolute',
+                      right: 10,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--text-3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    title={showCurrentPwd ? 'Masquer' : 'Afficher'}
+                    aria-label={showCurrentPwd ? 'Masquer' : 'Afficher'}
+                  >
+                    {showCurrentPwd ? (
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="form-group" style={{ margin: 0 }}>
                 <label style={{ fontSize: 12 }}>Nouveau mot de passe</label>
-                <input
-                  className="input"
-                  type="password"
-                  placeholder="Minimum 6 caractères"
-                  value={pwdForm.new_password}
-                  onChange={e => setPwdForm(p => ({ ...p, new_password: e.target.value }))}
-                  style={{ minHeight: 40 }}
-                  required
-                />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    className="input"
+                    type={showNewPwd ? 'text' : 'password'}
+                    placeholder="Minimum 6 caractères"
+                    value={pwdForm.new_password}
+                    onChange={e => setPwdForm(p => ({ ...p, new_password: e.target.value }))}
+                    style={{ minHeight: 40, paddingRight: 40 }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPwd(p => !p)}
+                    style={{
+                      position: 'absolute',
+                      right: 10,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--text-3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    title={showNewPwd ? 'Masquer' : 'Afficher'}
+                    aria-label={showNewPwd ? 'Masquer' : 'Afficher'}
+                  >
+                    {showNewPwd ? (
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="form-group" style={{ margin: 0 }}>
                 <label style={{ fontSize: 12 }}>Confirmer le nouveau mot de passe</label>
-                <input
-                  className="input"
-                  type="password"
-                  placeholder="Confirmation du mot de passe"
-                  value={pwdForm.confirm}
-                  onChange={e => setPwdForm(p => ({ ...p, confirm: e.target.value }))}
-                  style={{ minHeight: 40 }}
-                  required
-                />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    className="input"
+                    type={showConfirmPwd ? 'text' : 'password'}
+                    placeholder="Confirmation du mot de passe"
+                    value={pwdForm.confirm}
+                    onChange={e => setPwdForm(p => ({ ...p, confirm: e.target.value }))}
+                    style={{ minHeight: 40, paddingRight: 40 }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPwd(p => !p)}
+                    style={{
+                      position: 'absolute',
+                      right: 10,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--text-3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    title={showConfirmPwd ? 'Masquer' : 'Afficher'}
+                    aria-label={showConfirmPwd ? 'Masquer' : 'Afficher'}
+                  >
+                    {showConfirmPwd ? (
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {pwdForm.new_password && (
@@ -1564,112 +1660,6 @@ export default function Settings({ toast }) {
                     {bioLoading ? 'Vérification en cours...' : 'Activer la connexion rapide'}
                   </button>
                 )}
-              </div>
-            )}
-          </div>
-
-          {/* Mes appareils & sessions actives */}
-          <div className="card settings-card" style={{ padding: 'clamp(16px, 3vw, 24px)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
-              <div>
-                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>📱</span>
-                  <span>Mes appareils</span>
-                </h3>
-                <p style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4, marginBottom: 0 }}>
-                  Consultez vos sessions et appareils de confiance enregistrés sur votre compte.
-                </p>
-              </div>
-
-              {trustedDevices.length > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={handleRevokeAllDevices}
-                  disabled={revokingAll}
-                  style={{ color: 'var(--danger)', borderColor: 'var(--danger)', minHeight: 34, fontSize: 12 }}
-                >
-                  {revokingAll ? 'Déconnexion...' : 'Déconnecter tous les appareils'}
-                </button>
-              )}
-            </div>
-
-            {loadingDevices ? (
-              <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
-                Chargement des appareils...
-              </div>
-            ) : trustedDevices.length === 0 ? (
-              <div style={{
-                padding: '16px',
-                borderRadius: 8,
-                background: 'var(--surface2)',
-                border: '1px solid var(--border)',
-                fontSize: 13,
-                color: 'var(--text-3)',
-                textAlign: 'center'
-              }}>
-                Aucun appareil de confiance enregistré pour le moment.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {trustedDevices.map((dev) => (
-                  <div
-                    key={dev.id}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '12px 14px',
-                      borderRadius: 8,
-                      background: 'var(--surface2)',
-                      border: '1px solid var(--border)',
-                      flexWrap: 'wrap',
-                      gap: 10,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 20 }}>
-                        {/iPhone|Android|Mobile/i.test(dev.user_agent || '') ? '📱' : '💻'}
-                      </span>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)' }}>
-                            {dev.device_name || 'Appareil reconnu'}
-                          </span>
-                          {dev.is_current && (
-                            <span style={{
-                              fontSize: 10,
-                              fontWeight: 800,
-                              padding: '1px 6px',
-                              borderRadius: 4,
-                              background: '#dcfce7',
-                              color: '#166534',
-                            }}>
-                              Cet appareil
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>
-                          {dev.last_used_at ? (
-                            `Dernière activité le ${new Date(dev.last_used_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
-                          ) : (
-                            `Enregistré le ${new Date(dev.created_at).toLocaleDateString('fr-FR')}`
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={() => handleRevokeDevice(dev.id)}
-                      disabled={revokingDeviceId === dev.id}
-                      style={{ padding: '4px 10px', fontSize: 11.5, color: 'var(--danger)', borderColor: 'var(--border)' }}
-                    >
-                      {revokingDeviceId === dev.id ? 'Retrait...' : 'Retirer'}
-                    </button>
-                  </div>
-                ))}
               </div>
             )}
           </div>

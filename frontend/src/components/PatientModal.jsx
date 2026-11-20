@@ -181,12 +181,11 @@ export default function PatientModal({ entrepriseId, patient, medecins = [], onC
                 <label className="label">Genre</label>
                 <select
                   className="input"
-                  value={f.genre}
+                  value={f.genre === 'F' ? 'F' : 'M'}
                   onChange={(e) => setF({ ...f, genre: e.target.value })}
                 >
                   <option value="M">Homme (M)</option>
                   <option value="F">Femme (F)</option>
-                  <option value="Autre">Autre</option>
                 </select>
               </div>
             </div>

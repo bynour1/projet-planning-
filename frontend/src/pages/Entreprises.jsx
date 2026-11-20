@@ -2832,9 +2832,19 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
   const TYPE_LABELS = { avis: 'Avis', remarque: 'Remarque', suggestion: 'Suggestion' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        paddingBottom: 80,
+      }}
+    >
       {/* Header */}
-      <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
+      <div style={{ padding: 'clamp(14px, 3vw, 20px)', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
@@ -2939,10 +2949,15 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
             gap: 6,
             marginTop: 14,
             paddingTop: 12,
+            paddingBottom: 6,
             borderTop: '1px solid var(--border)',
             overflowX: 'auto',
             WebkitOverflowScrolling: 'touch',
             scrollbarWidth: 'none',
+            position: 'sticky',
+            top: 0,
+            zIndex: 10,
+            background: 'var(--surface)',
           }}
         >
           {[
@@ -3248,9 +3263,7 @@ function EntrepriseDetail({ entreprise, onClose, onEdit, onQuickBilan, onPlanifi
       </div>
 
       {/* Tab Content */}
-
-      {/* Tab Content */}
-      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: 'clamp(12px, 3vw, 24px)' }}>
+      <div style={{ flex: 1, padding: 'clamp(12px, 3vw, 24px)' }}>
         {/* TAB 0: LISTE DES SALARIÉS / PATIENTS */}
         {activeTab === 'patients' && (
           <div>
@@ -4903,7 +4916,7 @@ export default function Entreprises({ toast }) {
       return null;
     }
     return (
-      <div style={{ height: '100%', overflow: 'hidden' }}>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <EntrepriseDetail
           entreprise={ent}
           toast={toast}

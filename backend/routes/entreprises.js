@@ -4,6 +4,13 @@ const path   = require('path');
 const fs     = require('fs');
 const db     = require('../config/db');
 const { authenticate, authorize } = require('../middleware/auth');
+const {
+  authorizeDocumentAction,
+  canUserAccessCategory,
+  generateSignedDocumentUrl,
+  isHseCategory,
+} = require('../middleware/documentSecurity');
+const { logDocumentAudit } = require('../services/auditService');
 
 const PATIENTS_UPLOADS_DIR = path.join(__dirname, '..', 'uploads', 'patients');
 if (!fs.existsSync(PATIENTS_UPLOADS_DIR)) fs.mkdirSync(PATIENTS_UPLOADS_DIR, { recursive: true });
@@ -890,7 +897,12 @@ router.get('/:id/visites', authenticate, async (req, res) => {
     const [rows] = await db.query('SELECT * FROM entreprises WHERE id=?', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ message: 'Entreprise introuvable' });
 
-    const visites = await getVisitesForEntreprise(req.params.id, rows[0].nom);
+    const allVisites = await getVisitesForEntreprise(req.params.id, rows[0].nom);
+    // Filtrage par rôle : le rôle HSE ne doit voir que les Rapports HSE, sans détails médicaux
+    const visites = req.user.role === 'hse'
+      ? allVisites.filter((v) => v.rapport_type === 'hse' || v.created_by_role === 'hse')
+      : allVisites;
+
     const sumExamines = visites.reduce((acc, v) => acc + (parseInt(v.nb_examines, 10) || 0), 0);
     const effTotal = parseInt(rows[0].effectif_total, 10) || 0;
     const nbVisitesFaites = Math.max(parseInt(rows[0].nb_visites_faites, 10) || 0, sumExamines);
@@ -1785,7 +1797,7 @@ router.post('/:id/patients', authenticate, authorize('administrateur', 'medecin'
       cin?.trim() || null,
       matricule?.trim() || null,
       date_naissance || null,
-      genre || 'M',
+      genre === 'F' ? 'F' : 'M',
       poste?.trim() || null,
       departement?.trim() || null,
       telephone?.trim() || null,
@@ -1879,7 +1891,7 @@ router.put('/:id/patients/:patientId', authenticate, authorize('administrateur',
       cin !== undefined ? (cin ? cin.trim() : null) : rows[0].cin,
       matricule !== undefined ? (matricule ? matricule.trim() : null) : rows[0].matricule,
       date_naissance !== undefined ? (date_naissance || null) : rows[0].date_naissance,
-      genre || null,
+      genre !== undefined ? (genre === 'F' ? 'F' : 'M') : rows[0].genre,
       poste !== undefined ? (poste ? poste.trim() : null) : rows[0].poste,
       departement !== undefined ? (departement ? departement.trim() : null) : rows[0].departement,
       telephone !== undefined ? (telephone ? telephone.trim() : null) : rows[0].telephone,
@@ -1995,7 +2007,7 @@ router.post('/:id/patients/import', authenticate, authorize('administrateur', 'm
       const cin = item.cin ? String(item.cin).trim() : null;
       const matricule = item.matricule ? String(item.matricule).trim() : null;
       const date_naissance = item.date_naissance ? String(item.date_naissance).slice(0, 10) : null;
-      const genre = ['M', 'F', 'Autre'].includes(item.genre) ? item.genre : 'M';
+      const genre = item.genre === 'F' ? 'F' : 'M';
       const poste = item.poste ? String(item.poste).trim() : null;
       const departement = item.departement ? String(item.departement).trim() : null;
       const telephone = item.telephone ? String(item.telephone).trim() : null;
@@ -2082,29 +2094,61 @@ router.post('/:id/patients/import', authenticate, authorize('administrateur', 'm
 });
 
 // ═══════════════════════════════════════════════════════════════
-// DOCUMENTS & IMAGES DES SALARIÉS / PATIENTS
+// DOCUMENTS & IMAGES DES SALARIÉS / PATIENTS (SÉCURISÉ)
 // ═══════════════════════════════════════════════════════════════
 
 // GET /api/entreprises/:id/patients/:patientId/documents
-router.get('/:id/patients/:patientId/documents', authenticate, async (req, res) => {
-  try {
-    const [rows] = await db.query(`
-      SELECT * FROM entreprise_patient_documents 
-      WHERE patient_id = ? AND entreprise_id = ?
-      ORDER BY created_at DESC
-    `, [req.params.patientId, req.params.id]);
-    res.json(rows || []);
-  } catch (err) {
-    console.error('Error fetching patient documents:', err);
-    res.status(500).json({ message: 'Erreur lors de la récupération des documents' });
-  }
-});
+router.get(
+  '/:id/patients/:patientId/documents',
+  authenticate,
+  authorizeDocumentAction('list'),
+  async (req, res) => {
+    try {
+      // 1. Protection IDOR : Vérification entreprise et patient
+      const [patient] = await db.query(
+        'SELECT id FROM entreprise_patients WHERE id = ? AND entreprise_id = ?',
+        [req.params.patientId, req.params.id]
+      );
+      if (!patient[0]) {
+        return res.status(404).json({ message: 'Salarié / patient introuvable pour cette entreprise' });
+      }
 
-// POST /api/entreprises/:id/patients/:patientId/documents (Upload images & docs)
+      // 2. Filtrage côté serveur par rôle :
+      // Le rôle HSE ne doit voir que les Rapports HSE, aucun document médical n'est renvoyé
+      let sql = `
+        SELECT id, patient_id, entreprise_id, nom_original, url, type_mime, taille, categorie, description, created_at
+        FROM entreprise_patient_documents 
+        WHERE patient_id = ? AND entreprise_id = ?
+      `;
+      const params = [req.params.patientId, req.params.id];
+
+      if (req.user.role === 'hse') {
+        sql += " AND LOWER(categorie) IN ('rapport_hse', 'hse', 'etude_poste', 'visite_lieux')";
+      }
+
+      sql += ' ORDER BY created_at DESC';
+
+      const [rows] = await db.query(sql, params);
+
+      // 3. Masquage des chemins internes et génération d'URL signées temporaires (5 minutes)
+      const sanitized = (rows || []).map((doc) => ({
+        ...doc,
+        url: generateSignedDocumentUrl(doc, req.user, req),
+      }));
+
+      res.json(sanitized);
+    } catch (err) {
+      console.error('Error fetching patient documents:', err);
+      res.status(500).json({ message: 'Erreur lors de la récupération des documents' });
+    }
+  }
+);
+
+// POST /api/entreprises/:id/patients/:patientId/documents (Upload sécurisé)
 router.post(
   '/:id/patients/:patientId/documents',
   authenticate,
-  authorize('administrateur', 'medecin', 'technicien', 'hse'),
+  authorizeDocumentAction('upload'),
   (req, res, next) => {
     uploadPatientDoc.array('files', 10)(req, res, (err) => {
       if (err) {
@@ -2114,83 +2158,282 @@ router.post(
     });
   },
   async (req, res) => {
-  const files = req.files;
-  if (!files || files.length === 0) {
-    return res.status(400).json({ message: 'Aucun fichier fourni' });
-  }
-
-  const categorie = req.body.categorie || 'autre';
-  const description = req.body.description ? String(req.body.description).trim() : null;
-
-  try {
-    const [patient] = await db.query('SELECT id FROM entreprise_patients WHERE id = ? AND entreprise_id = ?', [req.params.patientId, req.params.id]);
-    if (!patient[0]) {
-      return res.status(404).json({ message: 'Salarié / patient introuvable' });
+    const files = req.files;
+    if (!files || files.length === 0) {
+      return res.status(400).json({ message: 'Aucun fichier fourni' });
     }
 
-    const insertedDocs = [];
-    for (const file of files) {
-      const url = `/uploads/patients/${file.filename}`;
-      const [result] = await db.query(`
-        INSERT INTO entreprise_patient_documents (
-          patient_id, entreprise_id, nom_fichier, nom_original, url, type_mime, taille, categorie, description
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        req.params.patientId,
-        req.params.id,
-        file.filename,
-        file.originalname,
-        url,
-        file.mimetype,
-        file.size,
-        categorie,
-        description,
-      ]);
+    const categorie = req.body.categorie || 'autre';
+    const description = req.body.description ? String(req.body.description).trim() : null;
 
-      insertedDocs.push({
-        id: result.insertId,
-        patient_id: req.params.patientId,
-        entreprise_id: req.params.id,
-        nom_fichier: file.filename,
-        nom_original: file.originalname,
-        url,
-        type_mime: file.mimetype,
-        taille: file.size,
-        categorie,
-        description,
-        created_at: new Date(),
+    // Contrôle strict de catégorie pour HSE :
+    if (req.user.role === 'hse' && !isHseCategory(categorie)) {
+      return res.status(403).json({
+        message: 'Accès refusé : Le rôle HSE ne peut téléverser que des rapports HSE.',
       });
     }
 
-    res.status(201).json({
-      message: `${files.length} document(s) importé(s) avec succès`,
-      documents: insertedDocs,
-    });
-  } catch (err) {
-    console.error('Error uploading patient documents:', err);
-    res.status(500).json({ message: 'Erreur lors de l\'enregistrement des fichiers' });
-  }
-});
+    try {
+      // Protection IDOR : Vérification que le patient appartient bien à l'entreprise
+      const [patient] = await db.query(
+        'SELECT id FROM entreprise_patients WHERE id = ? AND entreprise_id = ?',
+        [req.params.patientId, req.params.id]
+      );
+      if (!patient[0]) {
+        return res.status(404).json({ message: 'Salarié / patient introuvable pour cette entreprise' });
+      }
 
-// DELETE /api/entreprises/:id/patients/:patientId/documents/:docId (Admin, Médecin, HSE)
-router.delete('/:id/patients/:patientId/documents/:docId', authenticate, authorize('administrateur', 'medecin', 'hse'), async (req, res) => {
-  try {
-    const [rows] = await db.query('SELECT * FROM entreprise_patient_documents WHERE id = ? AND patient_id = ?', [req.params.docId, req.params.patientId]);
-    if (!rows[0]) return res.status(404).json({ message: 'Document introuvable' });
+      const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      const insertedDocs = [];
 
-    // Sécurité anti directory-traversal
-    const safeBasename = path.basename(rows[0].nom_fichier);
-    const filePath = path.join(PATIENTS_UPLOADS_DIR, safeBasename);
-    if (filePath.startsWith(PATIENTS_UPLOADS_DIR) && fs.existsSync(filePath)) {
-      try { fs.unlinkSync(filePath); } catch (e) {}
+      for (const file of files) {
+        // Enregistrement en base
+        const [result] = await db.query(`
+          INSERT INTO entreprise_patient_documents (
+            patient_id, entreprise_id, nom_fichier, nom_original, url, type_mime, taille, categorie, description
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          req.params.patientId,
+          req.params.id,
+          file.filename,
+          file.originalname,
+          '', // Pas d'URL publique directe stockée
+          file.mimetype,
+          file.size,
+          categorie,
+          description,
+        ]);
+
+        const docObj = {
+          id: result.insertId,
+          patient_id: req.params.patientId,
+          entreprise_id: req.params.id,
+          nom_original: file.originalname,
+          type_mime: file.mimetype,
+          taille: file.size,
+          categorie,
+          description,
+          created_at: new Date(),
+        };
+
+        // URL signée temporaire (5 minutes)
+        docObj.url = generateSignedDocumentUrl(docObj, req.user, req);
+
+        // Journal d'audit : enregistrement de l'action 'upload'
+        await logDocumentAudit({
+          userId: req.user.id,
+          userEmail: req.user.email,
+          userRole: req.user.role,
+          action: 'upload',
+          documentId: result.insertId,
+          documentName: file.originalname,
+          documentCategory: categorie,
+          patientId: req.params.patientId,
+          entrepriseId: req.params.id,
+          ip: clientIp,
+          userAgent: req.headers['user-agent'],
+        });
+
+        insertedDocs.push(docObj);
+      }
+
+      res.status(201).json({
+        message: `${files.length} document(s) importé(s) avec succès`,
+        documents: insertedDocs,
+      });
+    } catch (err) {
+      console.error('Error uploading patient documents:', err);
+      res.status(500).json({ message: 'Erreur lors de l\'enregistrement des fichiers' });
     }
-
-    await db.query('DELETE FROM entreprise_patient_documents WHERE id = ?', [req.params.docId]);
-    res.json({ message: 'Document supprimé avec succès' });
-  } catch (err) {
-    console.error('Error deleting patient document:', err);
-    res.status(500).json({ message: 'Erreur lors de la suppression du document' });
   }
-});
+);
+
+// GET /api/entreprises/:id/patients/:patientId/documents/:docId/view — Consultation / Prévisualisation sécurisée
+router.get(
+  '/:id/patients/:patientId/documents/:docId/view',
+  authenticate,
+  authorizeDocumentAction('view'),
+  async (req, res) => {
+    try {
+      // 1. Protection IDOR
+      const [rows] = await db.query(
+        'SELECT * FROM entreprise_patient_documents WHERE id = ? AND patient_id = ? AND entreprise_id = ?',
+        [req.params.docId, req.params.patientId, req.params.id]
+      );
+      const doc = rows[0];
+      if (!doc) {
+        return res.status(404).json({ message: 'Document introuvable pour ce patient' });
+      }
+
+      // 2. Contrôle d'autorisation par catégorie
+      if (!canUserAccessCategory(req.user.role, doc.categorie)) {
+        return res.status(403).json({
+          message: 'Accès refusé : Votre rôle n\'est pas autorisé à consulter ce document.',
+        });
+      }
+
+      // 3. Fichier physique sécurisé anti directory-traversal
+      const filename = doc?.nom_fichier || doc?.nom_original || '';
+      if (!filename) {
+        return res.status(404).json({ message: 'Fichier physique introuvable' });
+      }
+      const safeBasename = path.basename(filename);
+      const filePath = path.join(PATIENTS_UPLOADS_DIR, safeBasename);
+      const resolved = path.resolve(filePath);
+
+      if (!resolved.startsWith(path.resolve(PATIENTS_UPLOADS_DIR)) || !fs.existsSync(resolved)) {
+        return res.status(404).json({ message: 'Fichier physique introuvable' });
+      }
+
+      // 4. Journal d'audit : action 'consultation'
+      const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      await logDocumentAudit({
+        userId: req.user.id,
+        userEmail: req.user.email,
+        userRole: req.user.role,
+        action: 'consultation',
+        documentId: doc.id,
+        documentName: doc.nom_original,
+        documentCategory: doc.categorie,
+        patientId: doc.patient_id,
+        entrepriseId: doc.entreprise_id,
+        ip: clientIp,
+        userAgent: req.headers['user-agent'],
+      });
+
+      res.setHeader('Content-Type', doc.type_mime || 'application/octet-stream');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.nom_original)}"`);
+      return res.sendFile(resolved);
+    } catch (err) {
+      console.error('Error viewing patient document:', err);
+      res.status(500).json({ message: 'Erreur lors de la consultation du document' });
+    }
+  }
+);
+
+// GET /api/entreprises/:id/patients/:patientId/documents/:docId/download — Téléchargement sécurisé
+router.get(
+  '/:id/patients/:patientId/documents/:docId/download',
+  authenticate,
+  authorizeDocumentAction('download'),
+  async (req, res) => {
+    try {
+      // 1. Protection IDOR
+      const [rows] = await db.query(
+        'SELECT * FROM entreprise_patient_documents WHERE id = ? AND patient_id = ? AND entreprise_id = ?',
+        [req.params.docId, req.params.patientId, req.params.id]
+      );
+      const doc = rows[0];
+      if (!doc) {
+        return res.status(404).json({ message: 'Document introuvable pour ce patient' });
+      }
+
+      // 2. Contrôle d'autorisation par catégorie
+      if (!canUserAccessCategory(req.user.role, doc.categorie)) {
+        return res.status(403).json({
+          message: 'Accès refusé : Votre rôle n\'est pas autorisé à télécharger ce document.',
+        });
+      }
+
+      // 3. Fichier physique sécurisé anti directory-traversal
+      const filename = doc?.nom_fichier || doc?.nom_original || '';
+      if (!filename) {
+        return res.status(404).json({ message: 'Fichier physique introuvable' });
+      }
+      const safeBasename = path.basename(filename);
+      const filePath = path.join(PATIENTS_UPLOADS_DIR, safeBasename);
+      const resolved = path.resolve(filePath);
+
+      if (!resolved.startsWith(path.resolve(PATIENTS_UPLOADS_DIR)) || !fs.existsSync(resolved)) {
+        return res.status(404).json({ message: 'Fichier physique introuvable' });
+      }
+
+      // 4. Journal d'audit : action 'telechargement'
+      const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      await logDocumentAudit({
+        userId: req.user.id,
+        userEmail: req.user.email,
+        userRole: req.user.role,
+        action: 'telechargement',
+        documentId: doc.id,
+        documentName: doc.nom_original,
+        documentCategory: doc.categorie,
+        patientId: doc.patient_id,
+        entrepriseId: doc.entreprise_id,
+        ip: clientIp,
+        userAgent: req.headers['user-agent'],
+      });
+
+      res.setHeader('Content-Type', doc.type_mime || 'application/octet-stream');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.nom_original)}"`);
+      return res.sendFile(resolved);
+    } catch (err) {
+      console.error('Error downloading patient document:', err);
+      res.status(500).json({ message: 'Erreur lors du téléchargement du document' });
+    }
+  }
+);
+
+// DELETE /api/entreprises/:id/patients/:patientId/documents/:docId (Suppression sécurisée)
+router.delete(
+  '/:id/patients/:patientId/documents/:docId',
+  authenticate,
+  authorizeDocumentAction('delete'),
+  async (req, res) => {
+    try {
+      // 1. Protection IDOR : vérification id, patient_id et entreprise_id
+      const [rows] = await db.query(
+        'SELECT * FROM entreprise_patient_documents WHERE id = ? AND patient_id = ? AND entreprise_id = ?',
+        [req.params.docId, req.params.patientId, req.params.id]
+      );
+      const doc = rows[0];
+      if (!doc) return res.status(404).json({ message: 'Document introuvable' });
+
+      // 2. Contrôle d'autorisation par catégorie pour la suppression
+      if (!canUserAccessCategory(req.user.role, doc.categorie)) {
+        return res.status(403).json({
+          message: 'Accès refusé : Vous n\'êtes pas autorisé à supprimer ce document.',
+        });
+      }
+
+      // 3. Sécurité anti directory-traversal et suppression physique
+      const filename = doc?.nom_fichier || doc?.nom_original || '';
+      if (filename) {
+        const safeBasename = path.basename(filename);
+        const filePath = path.join(PATIENTS_UPLOADS_DIR, safeBasename);
+        const resolved = path.resolve(filePath);
+        if (resolved.startsWith(path.resolve(PATIENTS_UPLOADS_DIR)) && fs.existsSync(resolved)) {
+          try { fs.unlinkSync(resolved); } catch (e) {}
+        }
+      }
+
+      // 4. Suppression en base
+      await db.query('DELETE FROM entreprise_patient_documents WHERE id = ?', [req.params.docId]);
+
+      // 5. Journal d'audit : action 'suppression'
+      const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      await logDocumentAudit({
+        userId: req.user.id,
+        userEmail: req.user.email,
+        userRole: req.user.role,
+        action: 'suppression',
+        documentId: doc.id,
+        documentName: doc.nom_original,
+        documentCategory: doc.categorie,
+        patientId: doc.patient_id,
+        entrepriseId: doc.entreprise_id,
+        ip: clientIp,
+        userAgent: req.headers['user-agent'],
+      });
+
+      res.json({ message: 'Document supprimé avec succès' });
+    } catch (err) {
+      console.error('Error deleting patient document:', err);
+      res.status(500).json({ message: 'Erreur lors de la suppression du document' });
+    }
+  }
+);
 
 module.exports = router;

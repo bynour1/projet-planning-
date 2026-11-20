@@ -173,6 +173,8 @@ app.use(cookieParser);
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
+app.set('trust proxy', 1);
+
 // Anti brute-force rate limiter for auth
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -195,22 +197,33 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
-// Serve uploaded files statically
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// 🔒 SÉCURITÉ : Suppression du dossier statique public sur /uploads
+// Tout accès direct sans authentification est interdit (accès via route authentifiée ou URL signée de 5 minutes)
+app.use('/uploads', (req, res) => {
+  // Redirection des anciens chemins d'avatars vers la route dédiée
+  if (req.path.startsWith('/avatars/')) {
+    const filename = path.basename(req.path);
+    return res.redirect(302, `/api/auth/avatar/${filename}`);
+  }
+  return res.status(401).json({
+    message: 'Accès non autorisé : l\'accès direct aux fichiers téléversés est interdit. Veuillez utiliser les routes d\'accès sécurisées ou une URL signée.',
+  });
+});
 
 // ─── Documentation Swagger / OpenAPI ───────────────────────────
 const { setupSwagger } = require('./config/swagger');
 setupSwagger(app);
 
 // ─── Routes ───────────────────────────────────────────────────
-app.use('/api/auth',     require('./routes/auth'));
-app.use('/api/users',    require('./routes/users'));
-app.use('/api/planning', require('./routes/planning'));
-app.use('/api/events',   require('./routes/events'));
-app.use('/api/clino',    require('./routes/clino'));
+app.use('/api/auth',        require('./routes/auth'));
+app.use('/api/users',       require('./routes/users'));
+app.use('/api/planning',    require('./routes/planning'));
+app.use('/api/events',      require('./routes/events'));
+app.use('/api/clino',       require('./routes/clino'));
 app.use('/api/chat',        require('./routes/chat'));
 app.use('/api/routines',    require('./routes/routines'));
 app.use('/api/entreprises', require('./routes/entreprises'));
+app.use('/api/documents',   require('./routes/documents'));
 
 app.use('/api/stats', require('./routes/stats'));
 app.use('/api/search', require('./routes/search'));

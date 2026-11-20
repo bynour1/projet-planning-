@@ -13,7 +13,16 @@ app.use(cors({
 app.use(cookieParser);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// 🔒 SÉCURITÉ : Suppression du dossier statique public sur /uploads
+app.use('/uploads', (req, res) => {
+  if (req.path.startsWith('/avatars/')) {
+    const filename = path.basename(req.path);
+    return res.redirect(302, `/api/auth/avatar/${filename}`);
+  }
+  return res.status(401).json({
+    message: 'Accès non autorisé : l\'accès direct aux fichiers téléversés est interdit. Veuillez utiliser les routes sécurisées ou une URL signée.',
+  });
+});
 
 // Mock io so routes that do req.app.get('io') don't crash
 app.set('io', { emit: () => {} });
@@ -30,6 +39,7 @@ app.use('/api/clino',       require('./routes/clino'));
 app.use('/api/chat',        require('./routes/chat'));
 app.use('/api/routines',    require('./routes/routines'));
 app.use('/api/entreprises', require('./routes/entreprises'));
+app.use('/api/documents',   require('./routes/documents'));
 app.use('/api/stats',       require('./routes/stats'));
 app.use('/api/search',      require('./routes/search'));
 app.use('/api/push',        require('./routes/push'));

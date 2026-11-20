@@ -100,6 +100,14 @@ const upload = multer({
   },
 });
 
+function formatAvatarUrl(avatar) {
+  if (!avatar) return null;
+  if (typeof avatar === 'string' && avatar.startsWith('/uploads/avatars/')) {
+    return avatar.replace('/uploads/avatars/', '/api/auth/avatar/');
+  }
+  return avatar;
+}
+
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
@@ -212,7 +220,7 @@ router.post('/login', async (req, res) => {
             prenom:        user.prenom,
             email:         user.email,
             role:          user.role,
-            avatar:        user.avatar,
+            avatar:        formatAvatarUrl(user.avatar),
             has_biometric: hasBiometric,
             first_login:   !!user.first_login,
             totp_enabled:  true,
@@ -273,7 +281,7 @@ router.post('/login', async (req, res) => {
         prenom:        user.prenom,
         email:         user.email,
         role:          user.role,
-        avatar:        user.avatar,
+        avatar:        formatAvatarUrl(user.avatar),
         has_biometric: hasBiometric,
         first_login:   !!user.first_login,
         totp_enabled:  !!user.totp_enabled,
@@ -464,7 +472,7 @@ router.post('/2fa/enable', authenticateOrSetupTempToken, totpUserActionLimiter, 
         prenom: freshUser.prenom,
         email: freshUser.email,
         role: freshUser.role,
-        avatar: freshUser.avatar,
+        avatar: formatAvatarUrl(freshUser.avatar),
         first_login: !!freshUser.first_login,
         totp_enabled: true,
       };
@@ -598,7 +606,7 @@ router.post('/2fa/verify', totpVerifyLimiter, async (req, res) => {
         prenom:        user.prenom,
         email:         user.email,
         role:          user.role,
-        avatar:        user.avatar,
+        avatar:        formatAvatarUrl(user.avatar),
         has_biometric: hasBiometric,
         first_login:   !!user.first_login,
         totp_enabled:  true,
@@ -1056,7 +1064,7 @@ router.post('/biometric/login/verify', webauthnGlobalIpLimiter, webauthnVerifyLi
         prenom: storedCred.prenom,
         email: storedCred.u_email,
         role: storedCred.role,
-        avatar: storedCred.avatar,
+        avatar: formatAvatarUrl(storedCred.avatar),
         has_biometric: true,
         first_login: !!storedCred.first_login,
         totp_enabled: !!storedCred.totp_enabled,
@@ -1072,12 +1080,44 @@ router.post('/biometric/login/verify', webauthnGlobalIpLimiter, webauthnVerifyLi
 router.post('/avatar', authenticate, upload.single('avatar'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'Fichier image manquant' });
-    const avatarUrl = '/uploads/avatars/' + req.file.filename;
+    const avatarUrl = '/api/auth/avatar/' + req.file.filename;
     await db.query('UPDATE users SET avatar = ? WHERE id = ?', [avatarUrl, req.user.id]);
     res.json({ avatar: avatarUrl, message: 'Photo de profil mise à jour' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: err.message || 'Erreur serveur lors du téléversement' });
+  }
+});
+
+// GET /api/auth/avatar/:filename — Route dédiée pour servir les avatars sans passer par /uploads
+router.get('/avatar/:filename', (req, res) => {
+  try {
+    const safeFilename = path.basename(req.params.filename);
+    const filePath = path.join(avatarDir, safeFilename);
+    const resolved = path.resolve(filePath);
+
+    if (!resolved.startsWith(path.resolve(avatarDir)) || !fs.existsSync(resolved)) {
+      return res.status(404).json({ message: 'Avatar introuvable' });
+    }
+
+    const ext = path.extname(safeFilename).toLowerCase();
+    const mimeTypes = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml',
+    };
+    const contentType = mimeTypes[ext] || 'image/png';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.sendFile(resolved);
+  } catch (err) {
+    console.error('Error serving avatar:', err);
+    res.status(500).json({ message: 'Erreur lors de la récupération de l\'avatar' });
   }
 });
 
@@ -1110,7 +1150,7 @@ router.get('/me', authenticate, async (req, res) => {
       prenom:        user.prenom,
       email:         user.email,
       role:          user.role,
-      avatar:        user.avatar,
+      avatar:        formatAvatarUrl(user.avatar),
       totp_enabled:  !!user.totp_enabled,
       has_biometric: hasBiometric,
       first_login:   !!user.first_login,
@@ -1265,7 +1305,7 @@ router.post('/force-change-password', authenticateOrFirstLoginTempToken, async (
         prenom: user.prenom,
         email: user.email,
         role: user.role,
-        avatar: user.avatar,
+        avatar: formatAvatarUrl(user.avatar),
         first_login: false,
         must_change_password: false,
         totp_enabled: !!user.totp_enabled,
