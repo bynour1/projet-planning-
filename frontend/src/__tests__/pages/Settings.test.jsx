@@ -75,6 +75,28 @@ describe('Settings page', () => {
     expect(screen.queryByRole('heading', { level: 3, name: /^Mes appareils$/i })).not.toBeInTheDocument();
   });
 
+  it('opens confirmation modal and logs out all other sessions on confirm', async () => {
+    axios.post = vi.fn().mockResolvedValueOnce({ data: { message: 'Toutes vos autres sessions ont été déconnectées avec succès.' } });
+    renderWithProviders(<Settings toast={mockToast} />);
+    await userEvent.click(screen.getByText('Sécurité & Accès'));
+
+    const logoutBtn = screen.getByRole('button', { name: /Me déconnecter partout/i });
+    expect(logoutBtn).toBeInTheDocument();
+    await userEvent.click(logoutBtn);
+
+    // Modal dialog opens
+    expect(screen.getByText('Déconnexion de tous les appareils')).toBeInTheDocument();
+    expect(screen.getByText(/Voulez-vous vraiment déconnecter votre compte de tous vos autres appareils/i)).toBeInTheDocument();
+
+    // Click confirm in modal
+    await userEvent.click(screen.getByRole('button', { name: /^Confirmer$/i }));
+
+    await waitFor(() => {
+      expect(axios.post).toHaveBeenCalledWith('/api/auth/logout-all');
+      expect(mockToast).toHaveBeenCalledWith(expect.stringMatching(/déconnectées avec succès/i), 'success');
+    });
+  });
+
   it('renders À propos card in À propos tab and respects admin visibility', async () => {
     // Admin view
     const { unmount } = renderWithProviders(<Settings toast={mockToast} />, { user: MOCK_ADMIN });

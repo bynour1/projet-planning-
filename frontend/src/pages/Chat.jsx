@@ -104,127 +104,6 @@ function isDifferentDay(d1, d2) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   IA — Simulateur médical intelligent (sans clé API)
-═══════════════════════════════════════════════════════ */
-const AI_RESPONSES = [
-  // ─── Salutations ───
-  {
-    keywords: ['bonjour', 'salut', 'hello', 'bonsoir', 'coucou', 'salem', 'salam'],
-    response: "Bonjour ! 👋 Je suis l'assistant IA médical de **GMT Ariana Santé au Travail**.\n\nJe peux vous assister en temps réel pour :\n• 💊 **Médicaments & Posologies** (Doliprane, Spasfon, Ibuprofène, etc.)\n• 📋 **Comptes-rendus & Fiches d'aptitude** médicales\n• 🩺 **Visites de médecine du travail** (embauche, périodique, reprise)\n• 🏢 **Entreprises conventionnées & suivi des effectifs**\n• 🚗 **Unité Clino Mobile & Examens** (ECG, visiotest, audiométrie)\n• 🚨 **Protocoles d'urgence et numéros SAMU (190)**\n\nComment puis-je vous aider aujourd'hui ?",
-  },
-
-  // ─── Médicaments spécifiques ───
-  {
-    keywords: ['doliprane', 'dolipranne', 'paracetamol', 'paracetamol', 'efferalgan', 'dafalgan', 'panadol', 'perfalgan'],
-    response: "💊 **Doliprane (Paracétamol)** :\n\n• **Classe thérapeutique :** Antalgique (contre la douleur) et antipyrétique (contre la fièvre).\n• **Indications :** Soulage les douleurs légères à modérées (maux de tête, douleurs dentaires, courbatures, états grippaux, règles douloureuses) et fait baisser la fièvre.\n• **Posologie Adulte :**\n  - **500 mg à 1 g par prise**, à renouveler toutes les **4 à 6 heures** si nécessaire.\n  - **Dose maximale quotidienne :** Ne jamais dépasser **3 g par jour** (ou 4 g/jour uniquement sur avis médical formel).\n• **Précautions & Contre-indications :**\n  - ⚠️ Contre-indiqué en cas d'insuffisance hépatique sévère (maladie grave du foie) ou d'allergie au paracétamol.\n  - ⚠️ Risque grave de toxicité pour le foie en cas de surdosage.\n  - ⚠️ Ne pas cumuler avec d'autres médicaments contenant déjà du paracétamol (ex: Fervex, Actifed).",
-  },
-  {
-    keywords: ['ibuprofene', 'ibuprofène', 'advil', 'nurofen', 'antarene', 'antarène', 'profenid', 'profénid', 'ketoprofene', 'kétoprofène', 'ains'],
-    response: "💊 **Ibuprofène / AINS (Anti-inflammatoire non stéroïdien)** :\n\n• **Classe :** AINS, antalgique et antipyrétique.\n• **Indications :** Traitement des douleurs inflammatoires (articulaires, lombalgies, tendinites, céphalées, douleurs dentaires) et fièvre.\n• **Posologie Adulte :** 200 mg à 400 mg par prise **au cours d'un repas**, max 1200 mg par 24h. Espacez les prises d'au moins 6 heures.\n• **Contre-indications majeures :**\n  - ⚠️ Ulcère de l'estomac ou antécédent d'hémorragie digestive.\n  - ⚠️ Insuffisance rénale, hépatique ou cardiaque sévère.\n  - ⚠️ Grossesse (contre-indiqué formellement à partir du 6ème mois).\n  - ⚠️ Ne jamais associer deux AINS en même temps (ex: Ibuprofène + Aspirine ou Voltarène).",
-  },
-  {
-    keywords: ['spasfon', 'phloroglucinol', 'spasme', 'maux de ventre', 'ventre'],
-    response: "💊 **Spasfon (Phloroglucinol)** :\n\n• **Classe :** Antispasmodique musculotrope.\n• **Indications :** Traitement symptomatique des douleurs spasmodiques du tube digestif (maux de ventre, coliques), des voies biliaires et urinaires (coliques néphrétiques) et gynécologiques (règles douloureuses).\n• **Posologie Adulte :** 2 comprimés ou 2 lyocs par prise au moment des crises, jusqu'à 3 fois par jour (max 6 cp/jour).\n• **Tolérance :** Bien toléré, sans effet atropinique.",
-  },
-  {
-    keywords: ['amoxicilline', 'amoxicilline', 'augmentin', 'clamoxyl', 'antibiotique', 'antibiotiques', 'infection'],
-    response: "💊 **Amoxicilline / Augmentin (Antibiotique Bêta-lactamine)** :\n\n• **Classe :** Antibiotique de la famille des pénicillines.\n• **Indications :** Traitement des infections bactériennes confirmées (angines bactériennes, sinusites, otites, bronchites, infections dentaires et urinaires).\n• **Règles d'utilisation :**\n  - ⚠️ Inefficace contre les virus (grippe, rhume, bronchite virale simple).\n  - ⚠️ Prescription médicale stricte requise.\n  - ⚠️ Toujours terminer la durée complète prescrite même en cas d'amélioration rapide pour éviter les résistances bactériennes.\n  - ⚠️ Contre-indiqué en cas d'allergie connue aux pénicillines.",
-  },
-  {
-    keywords: ['aspirine', 'aspegic', 'aspégic', 'kardegic', 'kardégic', 'acetylsalicylique'],
-    response: "💊 **Aspirine (Acide acétylsalicylique)** :\n\n• **Classe :** AINS, antalgique, antipyrétique et antiagrégant plaquettaire.\n• **Indications :** Douleurs et fièvre (à dose antalgique 500mg-1g) ou prévention cardiovasculaire (à faible dose 75-160mg sous forme Kardégic).\n• **Précautions :** Risque de saignement, ulcère gastrique. Contre-indiqué en cas d'hémophilie ou d'ulcère évolutif.",
-  },
-  {
-    keywords: ['solupred', 'prednisolone', 'cortancyl', 'corticoide', 'corticoïde', 'corticoides'],
-    response: "💊 **Solupred / Prednisolone (Corticoïde par voie orale)** :\n\n• **Classe :** Anti-inflammatoire stéroïdien puissant.\n• **Indications :** Traitement des affections inflammatoires sévères (crises d'asthme, réactions allergiques aiguës, sinusites aiguës sévères, poussées articulaires).\n• **Conseils de prise :** À prendre le matin au petit-déjeuner pour respecter le rythme hormonal naturel et limiter les troubles du sommeil.",
-  },
-  {
-    keywords: ['ventoline', 'salbutamol', 'asthme', 'bronchodilatateur'],
-    response: "🫁 **Ventoline (Salbutamol)** :\n\n• **Classe :** Bronchodilatateur bêta-2 mimétique d'action rapide.\n• **Indications :** Traitement d'urgence des crises d'asthme et des épisodes de gêne respiratoire obstructive.\n• **Utilisation :** 1 à 2 bouffées par inhalation. En cas de crise sévère ne cédant pas sous 10 minutes, renouveler et appeler le SAMU (190).",
-  },
-  {
-    keywords: ['medicament', 'médicament', 'traitement', 'ordonnance', 'posologie', 'dose'],
-    response: "💊 **Guide Général des Médicaments Courants :**\n\n• **Anti-douleur / Fièvre :** Paracétamol (Doliprane) en 1ère intention (500mg-1g, max 3-4g/j).\n• **Anti-inflammatoire :** Ibuprofène (200-400mg au cours des repas).\n• **Antispasmodique :** Spasfon (2 cp par prise si douleurs abdominales).\n• **Antibiotiques / Corticoïdes :** Strictement sur prescription médicale.\n\n*N'hésitez pas à me demander des précisions sur un médicament spécifique (ex: Doliprane, Spasfon, Ibuprofène).* 🩺",
-  },
-
-  // ─── Médecine du Travail & Visites ───
-  {
-    keywords: ['compte-rendu', 'compte rendu', 'rapport', 'résumé', 'résumer', 'fiche', 'aptitude', 'inaptitude'],
-    response: "Voici la structure standard d'une **Fiche d'Aptitude / Compte-rendu Médical du Travail** :\n\n**Fiche Médicale d'Aptitude**\n🏢 **Entreprise** : [Nom de l'entreprise conventionnée]\n👤 **Salarié** : [Nom & Prénom] — Poste : [Intitulé du poste]\n🩺 **Médecin examinateur** : [Dr. Nom]\n📅 **Date** : [Date du jour]\n\n**Type d'examen :**\n[ ] Visite d'embauche  [ ] Visite périodique  [ ] Visite de reprise  [ ] Visite spontanée\n\n**Examens complémentaires réalisés :**\n• Visiotest / Acuité visuelle : Normal\n• Audiométrie : Normal\n• ECG de repos : Sans anomalie\n• Bandelette urinaire : Négative\n\n**Conclusion Médicale :**\n✅ **APTE** au poste de travail sans restriction\n*(ou Apte avec aménagements / Inapte temporaire)*",
-  },
-  {
-    keywords: ['visite', 'embauche', 'périodique', 'reprise', 'spontanée'],
-    response: "📋 **Protocole des Visites Médicales du Travail** :\n\n1. **Visite d'embauche** : Obligatoire avant l'embauche ou avant la fin de la période d'essai pour vérifier l'adéquation au poste.\n2. **Visite périodique** : Surveillance annuelle ou biennale selon les risques professionnels (bruit, produits chimiques, travail de nuit).\n3. **Visite de reprise** : Après un arrêt de travail pour accident du travail ou maladie > 21 jours.\n4. **Visite occasionnelle / spontanée** : À la demande du salarié ou de l'employeur.",
-  },
-  {
-    keywords: ['entreprise', 'convention', 'conventionné', 'conventionnée', 'société', 'adhérent', 'contrat'],
-    response: "🏢 **Gestion des Entreprises Conventionnées** :\n\n• **Suivi des effectifs** : Planification des visites périodiques annuelles par groupe d'employés.\n• **Fiche d'entreprise** : Évaluation des risques professionnels et des postes à risque.\n• **Interventions sur site** : Déplacement de l'équipe médicale ou de l'unité mobile Clino sur les locaux de l'entreprise.\n• **Rapports annuels** : Synthèse d'activité remise à la direction de l'entreprise partenaire.",
-  },
-  {
-    keywords: ['clino', 'camion', 'mobile', 'tournée', 'chauffeur'],
-    response: "🚗 **Unité Médicale Clino Mobile** :\n\nL'unité mobile est équipée pour réaliser les examens sur site d'entreprise :\n• 👁️ **Visiotest** (acuité, champ visuel, vision des couleurs)\n• 👂 **Audiométrie en cabine insonorisée** (dépistage de surdité professionnelle)\n• ❤️ **Électrocardiogramme (ECG)**\n• 🫁 **Spirométrie / EFR** (capacité respiratoire)\n\n*Pensez à vérifier l'alimentation électrique et la stabilité du véhicule avant le début des consultations.*",
-  },
-  {
-    keywords: ['ecg', 'visiotest', 'audiométrie', 'spirométrie', 'examen', 'audiometrie', 'radio'],
-    response: "🩺 **Examens Complémentaires en Santé au Travail** :\n\n• **ECG** : Recommandé pour les postes de sécurité, chauffeurs, travaux en hauteur et surveillance cardiovasculaire.\n• **Audiogramme** : Indispensable pour exposition au bruit > 85 dB(A).\n• **Visiotest** : Contrôle vision de près/loin, phories et stéréoscopie (travail sur écran, conduite d'engins).\n• **Spirométrie** : Suivi des salariés exposés aux poussières, solvants, fumées.",
-  },
-  {
-    keywords: ['planning', 'planification', 'agenda', 'rendez-vous', 'rdv', 'horaire', 'retard'],
-    response: "📅 **Organisation Optimale du Planning Médical** :\n\n• **Durée standard** : 15 à 20 min par consultation de médecine du travail.\n• **Regroupement** : Programmer les visites d'une même entreprise sur des demi-journées dédiées pour limiter les temps d'attente.\n• **Tampon** : Prévoir 30 minutes de battement en milieu de matinée pour les urgences ou retards.\n• **Rappels** : Confirmer la liste des salariés 48h à l'avance avec le DRH de l'entreprise.",
-  },
-
-  // ─── Symptômes & Urgences ───
-  {
-    keywords: ['symptôme', 'symptomes', 'douleur', 'fièvre', 'toux', 'mal de tete', 'céphalée', 'tension', 'fatigue', 'malaise'],
-    response: "⚠️ **Rappel Déontologique :** Informations à titre indicatif, ne remplace pas un examen clinique approfondi.\n\n🔍 **Signes d'alerte en milieu professionnel :**\n• **Douleur thoracique constrictive** → Risque coronarien aigu → SAMU 190\n• **Déficit neurologique brutal (AVC)** → FAST (Visage, Bras, Parole) → Urgence absolue 190\n• **Céphalée aiguë + HTA sévère** → Repos immédiat, prise de tension\n• **Malaise vagal / Hypoglycémie** → Allonger jambes surélevées, resucrage si conscient",
-  },
-  {
-    keywords: ['urgence', 'urgences', 'samu', 'secours', '190', 'police', 'pompier', '198', '197', 'blessure', 'accident'],
-    response: "🚨 **Numéros d'Urgence & Secours (Tunisie)** :\n\n• 🚑 **SAMU** : **190**\n• 🚒 **Protection Civile / Pompiers** : **198**\n• 🚓 **Police Secours** : **197**\n• 🏥 **Centre Anti-Poisons** : **71 335 500**\n• 🏥 **Urgences Ariana** : **71 715 000**\n\n**Protocole immédiat en cas d'accident sur site :**\n1. Protéger la victime et les témoins (supprimer le danger)\n2. Alerter le SAMU (190) en précisant la localisation exacte et l'état de conscience\n3. Secourir selon gestes de premiers secours (PLS si inconscient qui respire).",
-  },
-  {
-    keywords: ['merci', 'thanks', 'parfait', 'super', 'excellent', 'bravo', 'top'],
-    response: "Je vous en prie ! 😊 Toujours à votre disposition pour vous assister dans vos missions médicales et administratives. N'hésitez pas !",
-  },
-  {
-    keywords: ['aide', 'help', 'que peux-tu', 'fonctionnalité', 'commandes', 'menu', 'quoi faire'],
-    response: "🤖 **Guide de l'Assistant IA Médical :**\n\nVous pouvez me demander n'importe quand :\n\n• 💊 *« C'est quoi Doliprane ? »* ou *« Posologie Ibuprofène »*\n• 📋 *« Modèle de Fiche d'aptitude »* ou *« Compte-rendu »*\n• 🩺 *« Visite d'embauche »* ou *« Visite de reprise »*\n• 🏢 *« Entreprises conventionnées »*\n• 🚗 *« Clino Mobile et examens »* (ECG, audio, visiotest)\n• 🚨 *« Urgences et numéros SAMU »*\n• 📅 *« Optimisation planning »*\n\n💡 *Astuce : Vous pouvez aussi taper `@ia votre question` dans la zone de texte à tout moment !*",
-  },
-];
-
-function normalizeStr(str) {
-  return (str || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function getAIResponse(question) {
-  const normQ = normalizeStr(question);
-  
-  // 1. Direct match in keyword database
-  for (const entry of AI_RESPONSES) {
-    if (entry.keywords.some(k => {
-      const normK = normalizeStr(k);
-      return normQ.includes(normK) || (normK.length >= 4 && normQ.replace(/([a-z])\1+/g, '$1').includes(normK.replace(/([a-z])\1+/g, '$1')));
-    })) {
-      return entry.response;
-    }
-  }
-
-  // 2. Intelligent dynamic fallback for questions about medications or symptoms
-  if (normQ.includes('c est quoi') || normQ.includes('qu est ce que') || normQ.includes('a quoi sert') || normQ.includes('comment prendre') || normQ.includes('definition')) {
-    const subject = question.replace(/(c'est quoi|qu'est-ce que|a quoi sert|comment prendre|définition de|definition de|parle moi de)\s*/gi, '').trim();
-    return `ℹ️ **Information Médicale sur : ${subject || question}**\n\n• **Conseil :** Pour toute utilisation de médicament ou analyse d'un symptôme (${subject || 'terme recherché'}), veillez à vérifier la posologie adaptée auprès du médecin du travail ou de votre pharmacien.\n• **Règle générale :** Ne dépassez jamais les doses prescrites et signalez toute allergie ou antécédent médical.\n\n💡 Pour voir les fiches complètes déjà disponibles, demandez-moi : *Doliprane*, *Ibuprofène*, *Spasfon*, *Amoxicilline*, *Fiche d'aptitude*, *Clino Mobile*, ou tapez **"aide"**.`;
-  }
-
-  return `Je comprends votre question : "${question}"\n\nEn tant qu'assistant IA médical de **GMT Ariana**, je suis spécialisé en médecine du travail, pharmacologie courante (Doliprane, Ibuprofène, etc.), examens cliniques et protocoles d'entreprises conventionnées.\n\n💡 Essayez de me demander : *C'est quoi Doliprane ?*, *un modèle de compte-rendu*, *des informations sur une visite d'embauche*, ou tapez **"aide"** pour voir toutes mes capacités.`;
-}
-
-/* ═══════════════════════════════════════════════════════
    EMOJI REACTIONS
 ═══════════════════════════════════════════════════════ */
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '👏', '🔥'];
@@ -274,36 +153,6 @@ function FileMessage({ content, isMine }) {
   );
 }
 
-function escapeHtml(str) {
-  return String(str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-function MarkdownText({ text }) {
-  const lines = String(text || '').split('\n');
-  return (
-    <div style={{ lineHeight: 1.6 }}>
-      {lines.map((line, i) => {
-        const safe = escapeHtml(line);
-        const bold = safe.replace(/\*\*(.+?)\*\*/g, (_, m) => `<strong>${m}</strong>`);
-        if (safe.startsWith('• ') || safe.startsWith('- ')) {
-          return (
-            <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
-              <span style={{ opacity: 0.6 }}>•</span>
-              <span dangerouslySetInnerHTML={{ __html: bold.replace(/^[•\-] /, '') }} />
-            </div>
-          );
-        }
-        if (line === '') return <div key={i} style={{ height: 6 }} />;
-        return <div key={i} dangerouslySetInnerHTML={{ __html: bold }} />;
-      })}
-    </div>
-  );
-}
 
 /* ═══════════════════════════════════════════════════════
    MAIN CHAT COMPONENT
@@ -318,10 +167,6 @@ export default function Chat({ toast }) {
   const [typingUsers, setTyping]      = useState([]);
   const [uploading,   setUploading]   = useState(false);
   const [uploadProg,  setUploadProg]  = useState(0);
-
-  // IA
-  const [aiMode,      setAiMode]      = useState(false);
-  const [aiLoading,   setAiLoading]   = useState(false);
 
   // Réactions { msgId: { emoji: count } }
   const [reactions,   setReactions]   = useState({});
@@ -396,11 +241,9 @@ export default function Chat({ toast }) {
   /* ── Input ── */
   function handleInput(e) {
     setText(e.target.value);
-    if (!aiMode) {
-      emit('typing', true);
-      clearTimeout(typingTimer.current);
-      typingTimer.current = setTimeout(() => emit('typing', false), 1500);
-    }
+    emit('typing', true);
+    clearTimeout(typingTimer.current);
+    typingTimer.current = setTimeout(() => emit('typing', false), 1500);
   }
 
   /* ── Envoyer ── */
@@ -409,45 +252,6 @@ export default function Chat({ toast }) {
     if (!text.trim()) return;
 
     const raw = text.trim();
-    const isAiTrigger = aiMode || /^(@ia|@ai|\/ia|\/ai|\/assistant)\b/i.test(raw);
-
-    if (isAiTrigger) {
-      const cleanQuestion = raw.replace(/^(@ia|@ai|\/ia|\/ai|\/assistant)\s*/i, '') || raw;
-      // Message user dans le chat local
-      const userMsg = {
-        id: `local-${Date.now()}`,
-        user_id: user?.id,
-        nom: `${user?.prenom} ${user?.nom}`,
-        role: user?.role,
-        content: cleanQuestion,
-        type: 'text',
-        created_at: new Date().toISOString(),
-        isLocal: true,
-      };
-      setMessages(p => [...p, userMsg]);
-      setText('');
-      setAiLoading(true);
-
-      // Simuler un délai de réflexion IA
-      setTimeout(() => {
-        const answer = getAIResponse(cleanQuestion);
-        const aiMsg = {
-          id: `ai-${Date.now()}`,
-          user_id: 'ai',
-          nom: 'Assistant IA',
-          role: 'ia',
-          content: answer,
-          type: 'text',
-          created_at: new Date().toISOString(),
-          isAI: true,
-        };
-        setMessages(p => [...p, aiMsg]);
-        setAiLoading(false);
-      }, 400);
-      return;
-    }
-
-    // Message normal
     const payload = replyTo
       ? { content: raw, replyTo: { id: replyTo.id, nom: replyTo.nom, content: replyTo.content } }
       : { content: raw };
@@ -719,7 +523,7 @@ export default function Chat({ toast }) {
               </span>
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
-              Messagerie d'équipe sécurisée · Documents & Assistant Médical IA (@ia)
+              Messagerie d'équipe sécurisée · Documents & Partages
             </div>
           </div>
           {/* Bouton recherche */}
@@ -731,13 +535,13 @@ export default function Chat({ toast }) {
           >
             <IconSearch size={14} color={searchOpen ? '#fff' : 'var(--text-2)'} />
           </button>
-          {/* Bouton Infos / Membres / IA sur mobile */}
+          {/* Bouton Infos / Membres sur mobile */}
           <button
             type="button"
             onClick={() => setShowInfo(o => !o)}
             className="btn btn-outline btn-sm"
             style={{ padding: '5px 10px', fontSize: 12, borderRadius: 8, fontWeight: 700 }}
-            title="Membres en ligne & Assistant IA"
+            title="Membres en ligne & Documents"
           >
             {showInfo ? '✕' : 'Infos'}
           </button>
@@ -789,7 +593,7 @@ export default function Chat({ toast }) {
 
           {filteredMessages.map((msg, i) => {
             const mine       = isMine(msg);
-            const color      = msg.isAI ? '#6366f1' : roleColor(msg.role);
+            const color      = roleColor(msg.role);
             const prevMsg    = i > 0 ? filteredMessages[i - 1] : null;
             const isNewDay   = !prevMsg || isDifferentDay(msg.created_at, prevMsg.created_at);
             const showHeader = isNewDay || !prevMsg || prevMsg.user_id !== msg.user_id;
@@ -855,7 +659,7 @@ export default function Chat({ toast }) {
                   {/* Avatar */}
                   {!mine && showHeader && (
                     <div style={{ width: 30, height: 30, borderRadius: '50%', background: color + '22', color, fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      {msg.isAI ? '🤖' : getInitials(msg.nom)}
+                      {getInitials(msg.nom)}
                     </div>
                   )}
                   {!mine && !showHeader && <div style={{ width: 30, flexShrink: 0 }} />}
@@ -865,18 +669,11 @@ export default function Chat({ toast }) {
                     {showHeader && (
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color }}>
-                          {msg.isAI ? '🤖 Assistant IA' : (mine ? 'Vous' : msg.nom)}
+                          {mine ? 'Vous' : msg.nom}
                         </span>
-                        {!msg.isAI && (
-                          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 10, fontWeight: 700, background: color + '22', color }}>
-                            {roleBadge(msg.role)}
-                          </span>
-                        )}
-                        {msg.isAI && (
-                          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 10, fontWeight: 700, background: '#6366f122', color: '#6366f1' }}>
-                            IA
-                          </span>
-                        )}
+                        <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 10, fontWeight: 700, background: color + '22', color }}>
+                          {roleBadge(msg.role)}
+                        </span>
                       </div>
                     )}
 
@@ -885,11 +682,9 @@ export default function Chat({ toast }) {
                       <div style={{
                         padding: (isFile || isLocation) ? '6px 8px' : '9px 13px',
                         borderRadius: mine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                        background: msg.isAI
-                          ? 'linear-gradient(135deg,#6366f115,#8b5cf615)'
-                          : mine ? 'var(--primary)' : 'var(--surface)',
-                        color: mine && !msg.isAI ? '#fff' : 'var(--text)',
-                        border: msg.isAI ? '1px solid #6366f130' : mine ? 'none' : '1px solid var(--border)',
+                        background: mine ? 'var(--primary)' : 'var(--surface)',
+                        color: mine ? '#fff' : 'var(--text)',
+                        border: mine ? 'none' : '1px solid var(--border)',
                         fontSize: 14, lineHeight: 1.5, boxShadow: 'var(--shadow)', maxWidth: 340,
                       }}>
                         {/* Citation (reply) */}
@@ -904,8 +699,6 @@ export default function Chat({ toast }) {
                           <FileMessage content={msg.content} isMine={mine} />
                         ) : isLocation ? (
                           <LocationMessage content={msg.content} isMine={mine} />
-                        ) : msg.isAI ? (
-                          <MarkdownText text={msg.content} />
                         ) : (replyData ? (
                           (() => {
                             try {
@@ -925,23 +718,21 @@ export default function Chat({ toast }) {
                             style={actionBtnStyle}>😀</button>
 
                           {/* Reply */}
-                          {!msg.isAI && (
-                            <button type="button" title="Répondre"
-                              onClick={() => { setReplyTo({ id: msg.id, nom: msg.nom || 'Vous', content: msg.content }); inputRef.current?.focus(); }}
-                              style={actionBtnStyle}>↩</button>
-                          )}
+                          <button type="button" title="Répondre"
+                            onClick={() => { setReplyTo({ id: msg.id, nom: msg.nom || 'Vous', content: msg.content }); inputRef.current?.focus(); }}
+                            style={actionBtnStyle}>↩</button>
                           {/* Copy */}
                           <button type="button" title="Copier"
                             onClick={() => copyMessage(msg.content)}
                             style={actionBtnStyle}>📋</button>
                           {/* Pin (admin only) */}
-                          {isAdmin && !msg.isAI && (
+                          {isAdmin && (
                             <button type="button" title={pinnedMsg?.id === msg.id ? 'Désépingler' : 'Épingler'}
                               onClick={() => pinMessage(msg)}
                               style={{ ...actionBtnStyle, color: pinnedMsg?.id === msg.id ? '#f59e0b' : undefined }}>📌</button>
                           )}
                           {/* Delete */}
-                          {(mine || isAdmin) && !msg.isAI && (
+                          {(mine || isAdmin) && (
                             <button type="button" title="Supprimer"
                               onClick={() => handleDelete(msg.id)}
                               style={{ ...actionBtnStyle, color: 'var(--danger)' }}>✕</button>
@@ -1004,21 +795,8 @@ export default function Chat({ toast }) {
             );
           })}
 
-          {/* Indicateur IA qui "réfléchit" */}
-          {aiLoading && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#6366f122', color: '#6366f1', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>🤖</div>
-              <div style={{ display: 'flex', gap: 3, padding: '10px 14px', background: 'var(--surface)', borderRadius: '14px 14px 14px 4px', border: '1px solid #6366f130' }}>
-                {[0, 1, 2].map(i => (
-                  <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#6366f1', animation: `bounce 1s ${i * 0.2}s infinite` }} />
-                ))}
-              </div>
-              <span style={{ fontSize: 11, color: 'var(--text-3)' }}>L'IA réfléchit…</span>
-            </div>
-          )}
-
           {/* Typing */}
-          {typingUsers.length > 0 && !aiMode && (
+          {typingUsers.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ display: 'flex', gap: 3, padding: '8px 12px', background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--border)' }}>
                 {[0, 1, 2].map(i => (
@@ -1059,14 +837,6 @@ export default function Chat({ toast }) {
 
         {/* ── Barre de saisie moderne ── */}
         <form onSubmit={handleSend} style={{ padding: '8px 12px', borderTop: '1px solid var(--border)', background: 'var(--surface)', position: 'relative' }}>
-          {/* Mode IA indicator */}
-          {aiMode && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: 'var(--primary)', padding: '4px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 6 }}>
-              <span><strong>Mode Assistant IA activé</strong></span>
-              <button type="button" onClick={() => setAiMode(false)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Désactiver</button>
-            </div>
-          )}
-
           {/* Hidden file & camera inputs */}
           <input ref={fileInputRef} type="file" style={{ display: 'none' }}
             accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
@@ -1127,21 +897,6 @@ export default function Chat({ toast }) {
                     </svg>
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>Position</span>
-                </button>
-
-                {/* AI Assistant Tile */}
-                <button type="button" onClick={() => { setActionsMenuOpen(false); setAiMode(o => !o); }}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: aiMode ? 'var(--primary)' : 'var(--surface-2)', color: aiMode ? '#fff' : 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)' }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="11" width="18" height="10" rx="2"/>
-                      <circle cx="12" cy="5" r="2"/>
-                      <path d="M12 7v4"/>
-                      <line x1="8" y1="16" x2="8" y2="16.01"/>
-                      <line x1="16" y1="16" x2="16.01" y2="16"/>
-                    </svg>
-                  </div>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>IA {aiMode ? '(On)' : ''}</span>
                 </button>
               </div>
             </>
@@ -1214,7 +969,7 @@ export default function Chat({ toast }) {
                   transition: 'all .15s',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                 }}
-                title="Ajouter photo, fichier, GPS, IA"
+                title="Ajouter photo, fichier, position"
               >
                 {actionsMenuOpen ? '✕' : '+'}
               </button>
@@ -1234,7 +989,7 @@ export default function Chat({ toast }) {
                   ref={inputRef}
                   value={text}
                   onChange={handleInput}
-                  placeholder={aiMode ? "Posez votre question à l'IA…" : "Votre message…"}
+                  placeholder="Votre message…"
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                   style={{
                     flex: 1,
@@ -1380,26 +1135,6 @@ export default function Chat({ toast }) {
           })()}
         </div>
 
-        {/* Assistant IA — info */}
-        <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', background: aiMode ? 'var(--surface-2)' : 'transparent' }}>
-          <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--primary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-            Assistant IA
-          </div>
-          <button type="button"
-            onClick={() => { setAiMode(o => !o); inputRef.current?.focus(); }}
-            style={{
-              width: '100%', padding: '7px 10px', borderRadius: 8, cursor: 'pointer',
-              background: aiMode ? 'var(--primary)' : 'var(--surface-2)',
-              color: aiMode ? '#fff' : 'var(--text)',
-              border: '1px solid var(--border)',
-              fontWeight: 600, fontSize: 12, transition: 'all .2s',
-            }}>
-            {aiMode ? 'Assistant IA activé — Cliquer pour désactiver' : 'Activer l\'assistant IA'}
-          </button>
-          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.5 }}>
-            Posez des questions médicales, demandez un compte-rendu, des informations sur les traitements…
-          </div>
-        </div>
 
         {/* Documents acceptés */}
         <div style={{ padding: '12px 14px' }}>

@@ -6,6 +6,7 @@ const { authenticate, authorize, invalidateUserCache } = require('../middleware/
 const { sendWelcomeEmail, sendOTP, sendSMS, getTransporter } = require('../config/mailer');
 const { emailRateLimiter, emailGlobalIpLimiter } = require('../middleware/security');
 const { revokeTrustedDevicesForUser } = require('../utils/trustedDevices');
+const { invalidateAllUserSessions } = require('../services/sessionSecurityService');
 
 // Fast in-memory cache for by-role users
 const roleCache = new Map();
@@ -205,7 +206,9 @@ router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), em
     // Générer nouveau mot de passe provisoire (14 caractères, invalide l'ancien)
     const tempPassword = generateTempPassword(14);
     const tempHash = await bcrypt.hash(tempPassword, 10);
-    const newVersion = (user.token_version || 1) + 1;
+
+    const io = req.app.get('io');
+    const { newVersion } = await invalidateAllUserSessions({ userId: user.id, io });
 
     try {
       await db.query(
@@ -226,11 +229,6 @@ router.post('/:id/resend-welcome', authenticate, authorize('administrateur'), em
         [tempHash, user.id]
       );
     }
-
-    // Révocation de toutes les sessions actives et appareils de confiance
-    await revokeTrustedDevicesForUser(db, user.id);
-    await db.query('DELETE FROM refresh_tokens WHERE user_id = ?', [user.id]).catch(() => {});
-    invalidateUserCache(user.id);
 
     let mailRes = {};
     try {
@@ -278,7 +276,9 @@ router.post('/:id/reset-password', authenticate, authorize('administrateur'), em
 
     const newPassword = req.body?.password || generateTempPassword(14);
     const hash = await bcrypt.hash(newPassword, 10);
-    const newVersion = (user.token_version || 1) + 1;
+
+    const io = req.app.get('io');
+    const { newVersion } = await invalidateAllUserSessions({ userId: user.id, io });
 
     try {
       await db.query(
@@ -299,10 +299,6 @@ router.post('/:id/reset-password', authenticate, authorize('administrateur'), em
         [hash, user.id]
       );
     }
-
-    await revokeTrustedDevicesForUser(db, user.id);
-    await db.query('DELETE FROM refresh_tokens WHERE user_id = ?', [user.id]).catch(() => {});
-    invalidateUserCache(user.id);
 
     let mailRes = {};
     try {
@@ -421,6 +417,10 @@ router.put('/:id', authenticate, authorize('administrateur'), async (req, res) =
       'UPDATE users SET nom=?, prenom=?, email=?, role=?, telephone=?, is_active=? WHERE id=?',
       [nom, prenom, email, role, telephone || null, is_active ? 1 : 0, req.params.id]
     );
+    if (is_active !== undefined && (is_active === 0 || is_active === false || is_active === '0')) {
+      const io = req.app.get('io');
+      await invalidateAllUserSessions({ userId: req.params.id, io });
+    }
     invalidateUserCache(req.params.id);
     invalidateRolesCache();
     res.json({ message: 'Utilisateur mis à jour' });

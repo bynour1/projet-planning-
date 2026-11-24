@@ -92,14 +92,17 @@ describe('Chat page', () => {
     expect(input.value).toBe('');
   });
 
-  it('triggers AI response when typing @ia prefix', async () => {
+  it('sends messages starting with @ia as normal chat messages via socket', async () => {
+    const mockEmit = vi.fn();
     axios.get.mockResolvedValueOnce({ data: [] });
-    renderWithProviders(<Chat toast={mockToast} />);
+    renderWithProviders(<Chat toast={mockToast} />, {
+      socketOverrides: { emit: mockEmit, on: vi.fn().mockReturnValue(() => {}) },
+    });
     await waitFor(() => screen.getByPlaceholderText(/votre message/i));
     const input = screen.getByPlaceholderText(/votre message/i);
     await userEvent.type(input, '@ia bonjour');
     await userEvent.click(screen.getByRole('button', { name: /envoyer/i }));
-    await waitFor(() => expect(screen.getByText(/assistant IA médical/i)).toBeInTheDocument(), { timeout: 3000 });
+    expect(mockEmit).toHaveBeenCalledWith('send_message', { content: '@ia bonjour' });
   });
 
   it('renders date separators between messages from different days', async () => {

@@ -237,7 +237,10 @@ export function SocketProvider({ children }) {
     // ── 5. DÉCONNEXION DE SÉCURITÉ (Mot de passe modifié sur un autre appareil) ──
     socket.on('force_logout_user', (data) => {
       if (user && user.id === data?.userId) {
-        toast('🔒 Votre mot de passe a été modifié. Cette session a été déconnectée par mesure de sécurité.', 'warning', 7000);
+        if (data?.exceptSocketId && socket.id === data.exceptSocketId) {
+          return; // Ne pas déconnecter l'appareil courant ayant initié le changement
+        }
+        toast(data?.message || '🔒 Votre mot de passe a été modifié ou vos sessions ont été déconnectées.', 'warning', 7000);
         if (logout) logout();
       }
     });

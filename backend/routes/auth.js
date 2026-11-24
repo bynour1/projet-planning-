@@ -51,6 +51,7 @@ const {
   rotateRefreshToken,
   getCookieOptions,
 } = require('../utils/trustedDevices');
+const { invalidateAllUserSessions } = require('../services/sessionSecurityService');
 
 // ─── Cache mémoire des jetons temporaires 2FA consommés (usage unique strict) ───
 const consumedTempTokens = new Map(); // jti -> timestamp
@@ -759,18 +760,28 @@ router.delete('/biometric/credentials/:id', authenticate, async (req, res) => {
 // Génère les options FIDO2 d'enregistrement d'une nouvelle clé biométrique
 router.post('/biometric/register/options', authenticate, webauthnGlobalIpLimiter, webauthnOptionsLimiter, async (req, res) => {
   try {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(401).json({ message: 'Le mot de passe actuel est requis pour autoriser l\'enregistrement d\'une nouvelle empreinte.' });
+    }
+
+    const [userRows] = await db.query(
+      'SELECT id, email, nom, prenom, password FROM users WHERE id = ?',
+      [req.user.id]
+    );
+    const user = userRows[0];
+    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable' });
+
+    const isMatch = await bcrypt.compare(String(password), user.password || '');
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Mot de passe incorrect' });
+    }
+
     const config = getWebAuthnConfig();
     const [existingCreds] = await db.query(
       'SELECT id, transports FROM webauthn_credentials WHERE user_id = ?',
       [req.user.id]
     );
-
-    const [userRows] = await db.query(
-      'SELECT id, email, nom, prenom FROM users WHERE id = ?',
-      [req.user.id]
-    );
-    const user = userRows[0];
-    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable' });
 
     const options = await generateRegistrationOptions({
       rpName: config.rpName,
@@ -1175,30 +1186,47 @@ router.post('/change-password', authenticate, async (req, res) => {
     if (!valid)
       return res.status(401).json({ message: 'Mot de passe actuel incorrect' });
 
-    const newVersion = (rows[0].token_version || 1) + 1;
     const hash = await bcrypt.hash(new_password, 10);
-    await db.query('UPDATE users SET password = ?, token_version = ?, first_login = 0, biometric_credential = NULL WHERE id = ?', [hash, newVersion, req.user.id]);
-    await db.query('DELETE FROM webauthn_credentials WHERE user_id = ?', [req.user.id]);
 
-    // Révocation de tous les appareils de confiance et sessions actives lors du changement de mot de passe
-    await revokeTrustedDevicesForUser(db, req.user.id);
+    // Invalider toutes les autres sessions (incrémente token_version, révoque tous les refresh tokens, déconnecte les autres sockets, supprime push des autres)
+    const io = req.app.get('io');
+    const { newVersion } = await invalidateAllUserSessions({
+      userId: req.user.id,
+      io,
+      exceptSocketId: req.headers['x-socket-id'],
+      currentPushEndpointHash: req.headers['x-push-endpoint-hash'],
+    });
+
+    // Mettre à jour le mot de passe (conserve les connexions rapides biométriques)
+    await db.query('UPDATE users SET password = ?, token_version = ?, first_login = 0 WHERE id = ?', [hash, newVersion, req.user.id]);
+
+    // Émettre un nouveau refresh token pour l'appareil courant qui reste connecté
+    const refreshData = await createRefreshToken(db, req.user.id, false, req.headers['user-agent']);
+    res.cookie('refresh_token', refreshData.rawRefreshToken, getCookieOptions(refreshData.maxAgeMs));
     res.clearCookie('trusted_device', getCookieOptions(0));
 
-    // Force disconnect all other devices/sockets in real time
-    const io = req.app.get('io');
-    if (io) {
-      io.emit('force_logout_user', { userId: req.user.id });
-    }
-
-    // Generate new valid token for current device
+    // Générer un nouveau JWT pour l'appareil courant avec la nouvelle version
     const newToken = jwt.sign(
       { id: req.user.id, email: req.user.email, role: req.user.role, nom: req.user.nom, prenom: req.user.prenom, token_version: newVersion },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
 
-    res.json({ message: 'Mot de passe mis à jour avec succès. Tous les autres appareils ont été déconnectés.', token: newToken });
+    res.json({
+      success: true,
+      message: 'Mot de passe mis à jour avec succès. Tous vos autres appareils ont été déconnectés.',
+      token: newToken,
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        role: req.user.role,
+        nom: req.user.nom,
+        prenom: req.user.prenom,
+        token_version: newVersion,
+      },
+    });
   } catch (err) {
+    console.error('[change-password error]:', err);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -1237,25 +1265,21 @@ router.post('/force-change-password', authenticateOrFirstLoginTempToken, async (
       consumeTempToken(req.user.jti);
     }
 
-    const newVersion = (user.token_version || 1) + 1;
     const hash = await bcrypt.hash(new_password, 10);
+    const io = req.app.get('io');
+    const { newVersion } = await invalidateAllUserSessions({
+      userId: user.id,
+      io,
+      exceptSocketId: req.headers['x-socket-id'],
+      currentPushEndpointHash: req.headers['x-push-endpoint-hash'],
+    });
+
     await db.query(
-      'UPDATE users SET password = ?, token_version = ?, must_change_password = 0, first_login = 0, temp_password_expires_at = NULL, biometric_credential = NULL WHERE id = ?',
+      'UPDATE users SET password = ?, token_version = ?, must_change_password = 0, first_login = 0, temp_password_expires_at = NULL WHERE id = ?',
       [hash, newVersion, user.id]
     );
-    await db.query('DELETE FROM webauthn_credentials WHERE user_id = ?', [user.id]);
 
-    // Révocation de toutes les sessions existantes et appareils de confiance
-    await revokeTrustedDevicesForUser(db, user.id);
-    await db.query('DELETE FROM refresh_tokens WHERE user_id = ?', [user.id]);
     res.clearCookie('trusted_device', getCookieOptions(0));
-    res.clearCookie('refresh_token', getCookieOptions(0));
-    invalidateUserCache(user.id);
-
-    const io = req.app.get('io');
-    if (io) {
-      io.emit('force_logout_user', { userId: user.id });
-    }
 
     // Si la 2FA est obligatoire pour ce rôle, enchaîne sur l'activation de la 2FA
     const requiredRoles = (process.env.REQUIRE_2FA_ROLES || '')
@@ -1471,27 +1495,27 @@ router.post('/reset-password', async (req, res) => {
     const email = resetRow.email;
     const hash = await bcrypt.hash(targetPassword, 10);
 
-    // Récupérer l'utilisateur pour incrémenter la version de token
+    // Récupérer l'utilisateur pour incrémenter la version de token et révoquer sessions
     const [userRows] = await db.query('SELECT id, token_version FROM users WHERE email = ?', [email]);
     const userId = userRows[0]?.id;
-    const newVersion = ((userRows[0]?.token_version) || 1) + 1;
 
-    // Mise à jour du mot de passe et révocation des anciennes sessions
-    await db.query('UPDATE users SET password = ?, token_version = ?, first_login = 0, is_active = 1, biometric_credential = NULL WHERE email = ?', [hash, newVersion, email]);
+    let newVersion = 2;
+    if (userId) {
+      const io = req.app.get('io');
+      const resSession = await invalidateAllUserSessions({
+        userId,
+        io,
+      });
+      newVersion = resSession.newVersion;
+    }
+
+    // Mise à jour du mot de passe (conserve les empreintes biométriques)
+    await db.query('UPDATE users SET password = ?, token_version = ?, first_login = 0, is_active = 1 WHERE email = ?', [hash, newVersion, email]);
     // Usage unique : marquage comme utilisé
     await db.query('UPDATE password_resets SET used = 1 WHERE id = ?', [resetRow.id]);
 
-    if (userId) {
-      await revokeTrustedDevicesForUser(db, userId);
-      await db.query('DELETE FROM webauthn_credentials WHERE user_id = ?', [userId]);
-      res.clearCookie('trusted_device', getCookieOptions(0));
-      res.clearCookie('refresh_token', getCookieOptions(0));
-      invalidateUserCache(userId);
-      const io = req.app.get('io');
-      if (io) {
-        io.emit('force_logout_user', { userId });
-      }
-    }
+    res.clearCookie('trusted_device', getCookieOptions(0));
+    res.clearCookie('refresh_token', getCookieOptions(0));
 
     res.json({ message: 'Mot de passe réinitialisé avec succès ! Toutes les anciennes sessions ont été déconnectées. Vous pouvez maintenant vous connecter.' });
   } catch (err) {
@@ -1565,6 +1589,55 @@ router.post('/logout', async (req, res) => {
     res.json({ success: true, message: 'Déconnexion réussie' });
   } catch {
     res.json({ success: true });
+  }
+});
+
+// POST /api/auth/logout-all (authentifié)
+// Déconnecte toutes les autres sessions sans changer le mot de passe
+router.post('/logout-all', authenticate, async (req, res) => {
+  try {
+    const io = req.app.get('io');
+    const { newVersion } = await invalidateAllUserSessions({
+      userId: req.user.id,
+      io,
+      exceptSocketId: req.headers['x-socket-id'],
+      currentPushEndpointHash: req.headers['x-push-endpoint-hash'],
+    });
+
+    // Émettre un nouveau refresh token pour l'appareil courant qui reste connecté
+    const refreshData = await createRefreshToken(db, req.user.id, false, req.headers['user-agent']);
+    res.cookie('refresh_token', refreshData.rawRefreshToken, getCookieOptions(refreshData.maxAgeMs));
+
+    // Générer un nouveau JWT pour l'appareil courant avec la nouvelle version
+    const newToken = jwt.sign(
+      {
+        id: req.user.id,
+        email: req.user.email,
+        role: req.user.role,
+        nom: req.user.nom,
+        prenom: req.user.prenom,
+        token_version: newVersion,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    res.json({
+      success: true,
+      message: 'Toutes vos autres sessions ont été déconnectées avec succès.',
+      token: newToken,
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        role: req.user.role,
+        nom: req.user.nom,
+        prenom: req.user.prenom,
+        token_version: newVersion,
+      },
+    });
+  } catch (err) {
+    console.error('[logout-all error]:', err);
+    res.status(500).json({ message: 'Erreur lors de la déconnexion globale' });
   }
 });
 

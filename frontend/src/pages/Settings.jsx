@@ -3,6 +3,7 @@ import axios from 'axios';
 import { startRegistration } from '@simplewebauthn/browser';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 function getDeviceFriendlyName() {
   const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
@@ -139,6 +140,8 @@ export default function Settings({ toast }) {
   const [loadingDevices, setLoadingDevices] = useState(false);
   const [revokingDeviceId, setRevokingDeviceId] = useState(null);
   const [revokingAll, setRevokingAll] = useState(false);
+  const [loggingOutAll, setLoggingOutAll] = useState(false);
+  const [showLogoutAllModal, setShowLogoutAllModal] = useState(false);
 
   const [biometricCredentials, setBiometricCredentials] = useState([]);
   const [loadingBioCreds, setLoadingBioCreds] = useState(false);
@@ -669,9 +672,15 @@ export default function Settings({ toast }) {
     if (!window.PublicKeyCredential) {
       return toast("Votre navigateur ou appareil ne supporte pas l'authentification biométrique (WebAuthn)", "error");
     }
+
+    const currentPwd = window.prompt("Pour autoriser l'enregistrement d'une nouvelle empreinte, veuillez saisir votre mot de passe actuel :");
+    if (!currentPwd) {
+      return;
+    }
+
     setBioLoading(true);
     try {
-      const { data: options } = await axios.post('/api/auth/biometric/register/options');
+      const { data: options } = await axios.post('/api/auth/biometric/register/options', { password: currentPwd });
       const regResponse = await startRegistration({ optionsJSON: options });
 
       const defaultDeviceName = getDeviceFriendlyName();
@@ -733,6 +742,25 @@ export default function Settings({ toast }) {
       toast(err.response?.data?.message || 'Erreur lors de la suppression de l\'appareil', 'error');
     } finally {
       setBioLoading(false);
+    }
+  }
+
+  async function handleLogoutAllOtherSessions() {
+    setShowLogoutAllModal(false);
+    setLoggingOutAll(true);
+    try {
+      const { data } = await axios.post('/api/auth/logout-all');
+      if (data?.token) {
+        try {
+          sessionStorage.setItem('pm_token', data.token);
+        } catch {}
+        axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+      }
+      toast(data?.message || 'Toutes vos autres sessions ont été déconnectées avec succès.', 'success');
+    } catch (err) {
+      toast(err.response?.data?.message || 'Erreur lors de la déconnexion globale', 'error');
+    } finally {
+      setLoggingOutAll(false);
     }
   }
 
@@ -1663,6 +1691,58 @@ export default function Settings({ toast }) {
               </div>
             )}
           </div>
+
+          {/* 4. Déconnexion globale de toutes les autres sessions */}
+          <div className="card settings-card" style={{ padding: 'clamp(16px, 3vw, 22px)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  background: 'var(--surface2)',
+                  color: 'var(--danger)',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text)' }}>
+                    Sessions & Sécurité
+                  </h3>
+                  <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '1px 0 0' }}>
+                    Déconnexion à distance de vos autres appareils
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: 12.5, color: 'var(--text-2)', marginBottom: 14, lineHeight: 1.5 }}>
+              Vous pensez avoir oublié une session ouverte sur un autre appareil ? Déconnectez instantanément toutes vos autres sessions actives tout en restant connecté sur cet appareil.
+            </p>
+
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setShowLogoutAllModal(true)}
+              disabled={loggingOutAll}
+              style={{
+                minHeight: 38,
+                padding: '8px 18px',
+                fontSize: 13,
+                color: 'var(--danger)',
+                borderColor: 'var(--border)'
+              }}
+            >
+              {loggingOutAll ? 'Déconnexion en cours...' : 'Me déconnecter partout'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -2552,6 +2632,17 @@ export default function Settings({ toast }) {
             </form>
           </div>
         </div>
+      )}
+
+      {/* ─── MODAL 4: CONFIRMATION DÉCONNEXION DE PARTOUT ─── */}
+      {showLogoutAllModal && (
+        <ConfirmDialog
+          title="Déconnexion de tous les appareils"
+          message="Voulez-vous vraiment déconnecter votre compte de tous vos autres appareils ? Toutes les autres sessions actives seront immédiatement fermées. Vous resterez connecté sur cet appareil."
+          danger
+          onConfirm={handleLogoutAllOtherSessions}
+          onCancel={() => setShowLogoutAllModal(false)}
+        />
       )}
 
     </div>

@@ -159,12 +159,12 @@ describe('Gestion des Challenges à usage unique et TTL', () => {
 });
 
 describe('Flux d\'enregistrement WebAuthn (Registration)', () => {
-  it('génère des options d\'enregistrement FIDO2 pour un utilisateur authentifié', async () => {
+  it('génère des options d\'enregistrement FIDO2 pour un utilisateur authentifié après confirmation du mot de passe', async () => {
     db.query.mockImplementation(async (sql) => {
       if (sql.includes('SELECT id, transports FROM webauthn_credentials')) {
         return [[], {}];
       }
-      if (sql.includes('SELECT id, email, nom, prenom FROM users')) {
+      if (sql.includes('FROM users')) {
         return [[TEST_USER], {}];
       }
       return [[], {}];
@@ -172,13 +172,38 @@ describe('Flux d\'enregistrement WebAuthn (Registration)', () => {
 
     const res = await request(app)
       .post('/api/auth/biometric/register/options')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ password: 'Password123!' });
 
     expect(res.status).toBe(200);
     expect(res.body.challenge).toBeDefined();
     expect(res.body.rp).toBeDefined();
     expect(res.body.user).toBeDefined();
     expect(res.body.authenticatorSelection.userVerification).toBe('required');
+  });
+
+  it('refuse l\'enregistrement d\'une empreinte sans le mot de passe actuel ou avec un mauvais mot de passe', async () => {
+    // Sans mot de passe
+    const resNoPwd = await request(app)
+      .post('/api/auth/biometric/register/options')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({});
+    expect(resNoPwd.status).toBe(401);
+    expect(resNoPwd.body.message).toMatch(/mot de passe/i);
+
+    // Avec mauvais mot de passe
+    db.query.mockImplementation(async (sql) => {
+      if (sql.includes('FROM users')) {
+        return [[TEST_USER], {}];
+      }
+      return [[], {}];
+    });
+    const resBadPwd = await request(app)
+      .post('/api/auth/biometric/register/options')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ password: 'WrongPassword!' });
+    expect(resBadPwd.status).toBe(401);
+    expect(resBadPwd.body.message).toMatch(/incorrect/i);
   });
 
   it('refuse l\'enregistrement sans authentification (401)', async () => {
